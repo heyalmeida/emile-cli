@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Emile CLI — Agente de codificação no terminal</title>
+    <meta
+      name="description"
+      content="Emile CLI é um agente de codificação premium para terminal, com suporte a Requesty/OpenRouter, prompt caching, plans mode, skills e MCP."
+    />
+    <meta property="og:title" content="Emile CLI — Agente de codificação no terminal" />
+    <meta property="og:description" content="Emile CLI é um agente de codificação premium para terminal, com suporte a Requesty/OpenRouter, prompt caching, plans mode, skills e MCP." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://github.com/mc33p/emile-cli" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: "#07111f",
+              panel: "#0d1b2f",
+              cyan: "#22d3ee",
+              mint: "#34d399",
+              indigo: "#6366f1"
+            },
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+              mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"]
+            },
+            boxShadow: {
+              glow: "0 0 80px rgba(34, 211, 238, 0.18)"
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      html { scroll-behavior: smooth; }
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 34rem),
+          radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.18), transparent 28rem),
+          radial-gradient(circle at 50% 100%, rgba(52, 211, 153, 0.12), transparent 30rem),
+          #07111f;
+      }
+      .terminal-grid {
+        background-image:
+          linear-gradient(rgba(34, 211, 238, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(34, 211, 238, 0.08) 1px, transparent 1px);
+        background-size: 28px 28px;
+      }
+      .glass {
+        background: rgba(13, 27, 47, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        backdrop-filter: blur(18px);
+      }
+    </style>
+  </head>
+
+  <body class="font-sans text-slate-100 antialiased">
+    <header class="relative overflow-hidden">
+      <div class="mx-auto max-w-7xl px-6 pt-12 pb-20 sm:px-8 lg:px-10">
+        <nav class="flex items-center justify-between">
+          <div class="flex items-center gap-3 cursor-pointer" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" aria-label="Emile CLI home">
+            <span class="grid h-10 w-10 place-items-center rounded-2xl bg-cyan/10 text-xl font-black text-cyan shadow-glow">E</span>
+            <span>
+              <span class="block text-sm font-semibold tracking-[0.22em] text-cyan">EMILE</span>
+              <span class="block text-xs text-slate-400">CLI coding agent</span>
+            </span>
+          </div>
+
+          <div class="hidden items-center gap-8 text-sm text-slate-300 md:flex">
+            <a href="#como-funciona" class="transition hover:text-cyan">Como funciona</a>
+            <a href="#recursos" class="transition hover:text-cyan">Recursos</a>
+            <a href="#comandos" class="transition hover:text-cyan">Comandos</a>
+            <a href="#arquitetura" class="transition hover:text-cyan">Arquitetura</a>
+          </div>
+
+          <button
+            onclick="document.getElementById('comecar').scrollIntoView({behavior: 'smooth'})"
+            class="rounded-full border border-cyan/30 bg-cyan/10 px-5 py-2.5 text-sm font-semibold text-cyan transition hover:bg-cyan/20"
+          >
+            Ver início rápido
+          </button>
+        </nav>
+
+        <div class="mt-20 grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div>
+            <div class="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm text-emerald-200">
+              <span class="h-2 w-2 rounded-full bg-emerald-300"></span>
+              Agente de desenvolvimento para terminal
+            </div>
+
+            <h1 class="max-w-4xl text-5xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Codifique com um agente de IA diretamente no seu <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan to-mint">CLI</span>.
+            </h1>
+
+            <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+              O <strong>Emile CLI</strong> transforma prompts em ações de desenvolvimento: lê arquivos,
+              edita código, executa comandos, organiza tarefas, usa skills especializadas e conecta ferramentas
+              externas via MCP.
+            </p>
+
+            <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+              <a
+                href="#comecar"
+                class="rounded-full bg-cyan px-6 py-3 text-center font-bold text-ink shadow-glow transition hover:bg-cyan/80"
+              >
+                Começar agora
+              </a>
+              <button
+                onclick="document.getElementById('recursos').scrollIntoView({behavior: 'smooth'})"
+                class="rounded-full border border-slate-600 bg-slate-800/40 px-6 py-3 text-center font-bold text-slate-100 transition hover:border-cyan/60 hover:text-cyan"
+              >
+                Explorar recursos
+              </button>
+            </div>
+          </div>
+
+          <div class="relative">
+            <div class="absolute -inset-4 rounded-[2rem] bg-cyan/10 blur-3xl"></div>
+            <div class="terminal-grid relative overflow-hidden rounded-[2rem] border border-slate-700 bg-slate-950/85 p-4 shadow-2xl">
+              <div class="flex items-center gap-2 border-b border-slate-800 pb-4">
+                <span class="h-3 w-3 rounded-full bg-rose-400"></span>
+                <span class="h-3 w-3 rounded-full bg-amber-300"></span>
+                <span class="h-3 w-3 rounded-full bg-emerald-300"></span>
+                <span class="ml-3 font-mono text-xs text-slate-400">emile — agent loop</span>
+              </div>
+
+              <pre class="mt-5 overflow-x-auto text-sm leading-7 text-slate-300"><code><span class="text-cyan">┌──────────────────────────────┐</span>
+<span class="text-cyan">│</span>  EMILE CLI  v1.0.0          <span class="text-cyan">│</span>
+<span class="text-cyan">│</span>  Developer coding agent      <span class="text-cyan">│</span>
+<span class="text-cyan">└──────────────────────────────┘</span>
+
+  Connecting to MCP servers...
+  MCP servers ready.
+
+  Configuration
+  provider     requesty
+  model        claude-3-5-sonnet
+  cache        enabled
+  effort       medium
+  skills       all
+
+  session session_abc123  msgs 0
+  <span class="text-mint">></span> Crie uma página em HTML com Tailwind
+
+  Thinking...
+  2 tools executed: readFile(1), writeFile(1)
+    > list .
+    > write index.html
+
+  Session saved.</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="como-funciona" class="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+        <div class="max-w-3xl">
+          <p class="text-sm font-bold uppercase tracking-[0.28em] text-cyan">Como funciona</p>
+          <h2 class="mt-4 text-3xl font-black text-white sm:text-5xl">Do prompt à ação no projeto.</h2>
+          <p class="mt-5 text-lg leading-8 text-slate-300">
+            O Emile mantém uma conversa com modelos de IA compatíveis com a API OpenAI e usa ferramentas locais
+            para inspecionar e alterar o workspace de forma controlada.
+          </p>
+        </div>
+
+        <div class="mt-12 grid gap-6 md:grid-cols-3">
+          <article class="glass rounded-3xl p-6">
+            <div class="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-cyan/10 text-cyan">1</div>
+            <h3 class="text-xl font-bold text-white">Você envia um prompt</h3>
+            <p class="mt-3 text-slate-400">
+              Pode iniciar pela CLI com um comando ou abrir uma sessão interativa e conversar como faria com um colega.
+            </p>
+          </article>
+
+          <article class="glass rounded-3xl p-6">
+            <div class="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-indigo/10 text-indigo">2</div>
+            <h3 class="text-xl font-bold text-white">O agente planeja e usa ferramentas</h3>
+            <p class="mt-3 text-slate-400">
+              Emile lê o projeto, escolhe ferramentas, executa comandos, cria ou edita arquivos e mostra diffs no terminal.
+            </p>
+          </article>
+
+          <article class="glass rounded-3xl p-6">
+            <div class="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-mint/10 text-mint">3</div>
+            <h3 class="text-xl font-bold text-white">O resultado fica salvo</h3>
+            <p class="mt-3 text-slate-400">
+              Conversas são armazenadas em histórico local para continuar sessões, revisar decisões e retomar contextos.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="recursos" class="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+        <div class="glass rounded-[2rem] p-8 sm:p-10">
+          <div class="grid gap-10 lg:grid-cols-2 lg:items-center">
+            <div>
+              <p class="text-sm font-bold uppercase tracking-[0.28em] text-cyan">Recursos principais</p>
+              <h2 class="mt-4 text-3xl font-black text-white sm:text-5xl">Projetado para desenvolvimento real.</h2>
+              <p class="mt-5 text-lg leading-8 text-slate-300">
+                O projeto combina automação de arquivos, suporte a modelos externos, habilidades especializadas e MCP
+                em um fluxo de terminal simples.
+              </p>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">Requesty e OpenRouter</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Configuração flexível de provider e modelo via wizard interativo.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">Prompt caching</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Cache automático no Requesty para reduzir repetição em sessões longas.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">Reasoning effort</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Controle de esforço de raciocínio: low, medium, high, max e outros.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">Plans mode</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Fluxo com aprovação antes de executar planos e acompanhar tarefas.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">Skills</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Instruções especializadas por domínio: frontend, backend, testes, segurança e mais.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+                <h3 class="font-bold text-white">MCP</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-400">Conecta servidores MCP e expõe ferramentas externas ao agente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+        <div class="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <p class="text-sm font-bold uppercase tracking-[0.28em] text-cyan">Ferramentas locais</p>
+            <h2 class="mt-4 text-3xl font-black text-white sm:text-5xl">O agente pode agir no workspace.</h2>
+            <p class="mt-5 text-lg leading-8 text-slate-300">
+              As ferramentas internas permitem inspeção e alteração de arquivos com diffs visíveis no terminal.
+            </p>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">readFile</p>
+              <p class="mt-3 text-slate-300">Lê arquivos do projeto para entender estrutura, código e configurações.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">writeFile</p>
+              <p class="mt-3 text-slate-300">Cria ou sobrescreve arquivos, exibindo um diff da mudança.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">editFile</p>
+              <p class="mt-3 text-slate-300">Substitui blocos exatos de conteúdo para edições pontuais.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">listDir</p>
+              <p class="mt-3 text-slate-300">Lista arquivos e diretórios para navegação no projeto.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">runCommand</p>
+              <p class="mt-3 text-slate-300">Executa comandos no terminal do workspace para validar mudanças.</p>
+            </div>
+            <div class="rounded-3xl border border-slate-700 bg-slate-900/50 p-6">
+              <p class="font-mono text-sm text-cyan">MCP tools</p>
+              <p class="mt-3 text-slate-300">Ferramentas de servidores externos são chamadas com prefixo de servidor.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="comandos" class="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+        <div class="glass rounded-[2rem] p-8 sm:p-10">
+          <div class="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+            <div>
+              <p class="text-sm font-bold uppercase tracking-[0.28em] text-cyan">Uso rápido</p>
+              <h2 class="mt-4 text-3xl font-black text-white sm:text-5xl">Execute como CLI.</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+                O pacote expõe o binário <strong>emile</strong> e também pode ser iniciado via script do npm.
+              </p>
+            </div>
+
+            <button
+              onclick="document.getElementById('arquitetura').scrollIntoView({behavior: 'smooth'})"
+              class="rounded-full border border-cyan/30 bg-cyan/10 px-5 py-3 text-sm font-bold text-cyan transition hover:bg-cyan/20"
+            >
+              Ver arquitetura
+            </button>
+          </div>
+
+          <div class="mt-10 overflow-hidden rounded-3xl border border-slate-700 bg-slate-950">
+            <div class="flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-5 py-4">
+              <span class="font-mono text-sm text-slate-400">terminal</span>
+              <span class="rounded-full bg-cyan/10 px-3 py-1 text-xs font-bold text-cyan">bash</span>
+            </div>
+            <pre class="overflow-x-auto p-5 font-mono text-sm leading-7 text-slate-200"><code><span class="text-slate-500"># Instalar dependências</span>
+npm install
+
+<span class="text-slate-500"># Iniciar o CLI</span>
+npm start
+
+<span class="text-slate-500"># Ou usar diretamente, se o pacote estiver linkado</span>
+emile "Crie uma página HTML com Tailwind sobre o projeto"
+
+<span class="text-slate-500"># Usar modo de planos</span>
+emile --plans "Refatore a arquitetura de ferramentas"
+
+<span class="text-slate-500"># Selecionar habilidades específicas</span>
+emile --skills clean-code,testing-patterns "Adicione testes"</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="arquitetura" class="mx-auto max-w-7xl px-6 py-16 sm:px-8 lg:px-10">
+        <div class="max-w-3xl">
+          <p class="text-sm font-bold uppercase tracking-[0.28em] text-cyan">Arquitetura</p>
+          <h2 class="mt-4 text-3xl font-black text-white sm:text-5xl">Um loop simples, extensível e observável.</h2>
+        </div>
+
+        <div class="mt-10 grid gap-4 lg:grid-cols-5 lg:items-stretch">
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <p class="font-mono text-sm text-cyan">CLI</p>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Recebe prompts, comandos, histórico e opções de execução.</p>
+          </div>
+          <div class="hidden rounded-full border border-slate-700 bg-slate-900/60 lg:grid lg:place-items-center">
+            <span class="text-cyan">→</span>
+          </div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <p class="font-mono text-sm text-cyan">Agent</p>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Monta system prompt, chama o modelo e processa tool calls.</p>
+          </div>
+          <div class="hidden rounded-full border border-slate-700 bg-slate-900/60 lg:grid lg:place-items-center">
+            <span class="text-cyan">→</span>
+          </div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <p class="font-mono text-sm text-cyan">Tools + MCP</p>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Executa ações locais e ferramentas de servidores MCP conectados.</p>
+          </div>
+        </div>
+
+        <div class="mt-4 grid gap-4 md:grid-cols-3">
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <h3 class="font-bold text-white">API compatível</h3>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Usa a biblioteca OpenAI com baseURL configurável para Requesty ou OpenRouter.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <h3 class="font-bold text-white">Skills compiladas</h3>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Carrega SKILL.md do workspace e injeta instruções relevantes no prompt do sistema.</p>
+          </div>
+          <div class="rounded-3xl border border-slate-700 bg-slate-900/60 p-6">
+            <h3 class="font-bold text-white">Histórico local</h3>
+            <p class="mt-3 text-sm leading-6 text-slate-400">Salva sessões com resumo para alternar, limpar ou retomar conversas.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="comecar" class="mx-auto max-w-7xl px-6 py-20 sm:px-8 lg:px-10">
+        <div class="overflow-hidden rounded-[2rem] border border-cyan/20 bg-gradient-to-br from-cyan/10 via-slate-900 to-indigo/10 p-8 sm:p-12">
+          <div class="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+            <div>
+              <h2 class="text-3xl font-black text-white sm:text-5xl">Pronto para usar o Emile?</h2>
+              <p class="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
+                Configure sua chave de API, escolha o modelo e peça tarefas diretamente no terminal. O Emile cuida
+                do contexto, das ferramentas e do histórico da sessão.
+              </p>
+            </div>
+
+            <div class="rounded-3xl border border-slate-700 bg-slate-950/70 p-6">
+              <h3 class="font-bold text-white">Começar rápido</h3>
+              <ol class="mt-4 space-y-3 text-sm leading-6 text-slate-300">
+                <li class="flex gap-3"><span class="text-cyan">1.</span> Rode <code class="rounded bg-slate-800 px-2 py-0.5 text-cyan">npm start</code>.</li>
+                <li class="flex gap-3"><span class="text-cyan">2.</span> Use <code class="rounded bg-slate-800 px-2 py-0.5 text-cyan">/connect</code> para configurar a API.</li>
+                <li class="flex gap-3"><span class="text-cyan">3.</span> Envie um prompt ou use <code class="rounded bg-slate-800 px-2 py-0.5 text-cyan">--plans</code>.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-slate-800/80 py-10">
+      <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 text-sm text-slate-500 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+        <p>© 2025 Emile CLI. Premium coding agent para terminal.</p>
+        <p class="font-mono text-cyan">requesty · openrouter · mcp · skills</p>
+      </div>
+    </footer>
+  </body>
+</html>
