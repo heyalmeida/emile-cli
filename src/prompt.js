@@ -12,6 +12,8 @@ const BASE_INSTRUCTIONS = `You are Émile, an advanced agentic AI coding assista
 - Language: Always communicate and respond entirely in the language used by the user.
 
 === CODING & TASK EXECUTION ===
+- Read-Before-Write Protocol: Antes de criar ou modificar qualquer arquivo com \`writeFile\` ou \`editFile\`, você DEVE obrigatoriamente inspecionar os diretórios relevantes com \`listDir\` ou \`findFiles\` e ler os arquivos existentes com \`readFile\` ou buscar com \`grepSearch\`.
+- Proibição de Presunção: Nunca assuma a estrutura de um projeto ou o conteúdo de um arquivo sem antes confirmar com as ferramentas de inspeção.
 - Code Integrity: Always provide complete code implementations and drop-in edits. NEVER use placeholders or ellipses (e.g. "// Rest of the code...") as they break the user's files.
 - Standards: Strive for clean, modular, and testable code. Follow standard software engineering best practices for the language and framework in use.
 - Verification: Always run commands or compile tests to verify your changes. Check command execution results to verify correctness—never assume success.
@@ -27,6 +29,75 @@ const BASE_INSTRUCTIONS = `You are Émile, an advanced agentic AI coding assista
 `;
 
 /**
+ * Loads .gitignore patterns along with default ignore paths.
+ */
+function getIgnorePatterns(rootDir) {
+  const defaults = ['node_modules', '.git', 'dist', 'build', '.emile', '.next', 'coverage', '.DS_Store', 'package-lock.json'];
+  const gitignorePath = path.join(rootDir, '.gitignore');
+  if (fs.existsSync(gitignorePath)) {
+    try {
+      const content = fs.readFileSync(gitignorePath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const cleanPattern = trimmed.replace(/^\//, '').replace(/\/$/, '');
+          if (cleanPattern && !defaults.includes(cleanPattern)) {
+            defaults.push(cleanPattern);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  return defaults;
+}
+
+/**
+ * Recursively scans directory tree up to maxDepth (default: 3 levels).
+ */
+function buildTree(dirPath, rootDir, ignorePatterns, maxDepth = 3, currentDepth = 1, counter = { count: 0 }, maxItems = 150) {
+  if (currentDepth > maxDepth || counter.count >= maxItems) return '';
+
+  let lines = [];
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    const validEntries = entries.filter(entry => {
+      const name = entry.name;
+      return !ignorePatterns.some(pattern => name === pattern || (pattern.startsWith('*') && name.endsWith(pattern.slice(1))));
+    });
+
+    validEntries.sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1;
+      if (!a.isDirectory() && b.isDirectory()) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    for (let i = 0; i < validEntries.length; i++) {
+      if (counter.count >= maxItems) {
+        lines.push(`${'  '.repeat(currentDepth - 1)}... (max files limit reached)`);
+        break;
+      }
+
+      const entry = validEntries[i];
+      counter.count++;
+
+      const indent = '  '.repeat(currentDepth - 1);
+      const icon = entry.isDirectory() ? '[DIR]' : '[FILE]';
+      lines.push(`${indent}${icon} ${entry.name}`);
+
+      if (entry.isDirectory()) {
+        const subPath = path.join(dirPath, entry.name);
+        const subTree = buildTree(subPath, rootDir, ignorePatterns, maxDepth, currentDepth + 1, counter, maxItems);
+        if (subTree) lines.push(subTree);
+      }
+    }
+  } catch { /* ignore permission errors */ }
+
+  return lines.join('\n');
+}
+
+/**
  * Compiles a snapshot of the workspace to inject into the system prompt for immediate awareness.
  * @returns {string} Compiled workspace context text
  */
@@ -35,16 +106,11 @@ function compileWorkspaceContext() {
   let context = '\n=== WORKSPACE CONTEXT ===\n';
 
   try {
-    // 1. Scan directory structure (up to 30 items)
+    // 1. Scan directory structure recursively (up to 3 levels)
     if (fs.existsSync(rootDir)) {
-      const items = fs.readdirSync(rootDir, { withFileTypes: true });
-      const files = items.slice(0, 30).map(item => {
-        return `${item.isDirectory() ? '[DIR]' : '[FILE]'} ${item.name}`;
-      });
-      context += `Root Directory Contents:\n${files.join('\n')}\n`;
-      if (items.length > 30) {
-        context += `... and ${items.length - 30} more items.\n`;
-      }
+      const ignorePatterns = getIgnorePatterns(rootDir);
+      const treeText = buildTree(rootDir, rootDir, ignorePatterns, 3);
+      context += `Project Directory Structure (up to 3 levels deep):\n${treeText || '(empty)'}\n`;
     }
 
     // 2. Read package.json (first 50 lines) if exists

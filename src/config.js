@@ -40,7 +40,7 @@ const savedConfig = loadUserConfig() || {};
 
 export const config = {
   provider: savedConfig.provider || process.env.EMILE_PROVIDER || 'requesty',
-  apiKey: savedConfig.apiKey || process.env.REQUESTY_API_KEY || process.env.OPENROUTER_API_KEY || '',
+  apiKey: savedConfig.apiKey || process.env.REQUESTY_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY || '',
   defaultModel: savedConfig.model || process.env.EMILE_DEFAULT_MODEL || 'anthropic/claude-3-5-sonnet',
   defaultEffort: savedConfig.effort || process.env.EMILE_DEFAULT_EFFORT || 'low',
   workspaceDir,

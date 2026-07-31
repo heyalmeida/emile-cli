@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
-import pc from 'picocolors';
+
 import { config } from './config.js';
 
 /**
@@ -142,7 +142,6 @@ export function compileSkills(requestedNames = []) {
 
   if (!requestedNames || requestedNames.length === 0 || requestedNames.includes('all')) {
     const autoDetected = detectWorkspaceSkills();
-    console.log(pc.gray(`  [Skills] Auto-detected skills: ${autoDetected.join(', ')}`));
     activeNames = autoDetected;
   }
 

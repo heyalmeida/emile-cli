@@ -13,10 +13,10 @@ export async function initializeMcp() {
   const serverNames = Object.keys(mcpServers);
 
   if (serverNames.length === 0) {
-    return;
+    return { connected: 0, totalTools: 0, details: [] };
   }
 
-  console.log(`[MCP] Connecting to ${serverNames.length} MCP server(s)...`);
+  const details = [];
 
   for (const serverName of serverNames) {
     const serverDef = mcpServers[serverName];
@@ -41,11 +41,15 @@ export async function initializeMcp() {
       const tools = toolsResult.tools || [];
       
       activeServers.set(serverName, { client, transport, tools });
-      console.log(`[MCP] Connected to "${serverName}" successfully (${tools.length} tools).`);
+      details.push({ name: serverName, tools: tools.length, ok: true });
     } catch (err) {
-      console.error(`[MCP Error] Failed to connect to server "${serverName}": ${err.message}`);
+      details.push({ name: serverName, tools: 0, ok: false, error: err.message });
     }
   }
+
+  const connected = details.filter(d => d.ok).length;
+  const totalTools = details.reduce((sum, d) => sum + d.tools, 0);
+  return { connected, totalTools, details };
 }
 
 /**
