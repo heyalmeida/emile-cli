@@ -192,6 +192,16 @@ Before starting any task, resolve the branch:
 4. **`development` is the integration parent.** Every active feature branch must be based on the current `development` tip and should be merged back through a pull request. `main` is reserved for released/integrated states.
 5. **One product domain per branch.** If the task expands into a different domain mid-flight, finish or stash the current work and switch to the corresponding canonical branch.
 
+### 8.1.1 Documentation branch
+
+All documentation changes must be committed on `docs/documentation`, created
+from `development`. This includes `README.md`, `CONTRIBUTING.md`, `docs/`,
+`features/`, `specs/`, `CHANGELOG.md`, and process-rule files such as
+`.clinerules`/`AGENTS.md`. A product branch may contain source code and tests,
+but must not commit documentation files. After the product branch is merged
+into `development`, the documentation branch is merged separately when its
+content is ready.
+
 ### 8.2 Commit discipline
 
 - **Commit as soon as a coherent unit of the feature is done** — don't pile up the entire feature into one giant commit at the end.
@@ -204,7 +214,8 @@ Before starting any task, resolve the branch:
   Refs: specs/2026-08-25-editfile-ambiguous-match
   ```
 - **Unrelated changes found while working** (e.g., a bug spotted in another module): do NOT commit them together with the feature. Either report them to the user as findings, or handle them on their own branch/commit after the current feature is done.
-- **Files shared across concerns** (e.g., `CHANGELOG.md`): commit them with the feature that motivated the change — one CHANGELOG entry per feature, not one commit with several features' entries.
+- **Documentation files** (`README.md`, `CONTRIBUTING.md`, `docs/`, `features/`, `specs/`, `CHANGELOG.md` and process rules): switch to `docs/documentation` and commit them there. Do not mix documentation commits into a product branch.
+- **Source files shared across concerns**: commit them with the feature that motivated the change — one coherent unit per commit, not one commit with several unrelated features.
 - **At the end of the task:** leave the branch ready for review/merge. Do not merge or delete it unless the user asks.
 
 ---
@@ -221,6 +232,7 @@ Mandatory closing checklist:
 - [ ] Was Rule 2 executed (all relevant docs updated)?
 - [ ] If it's a new feature: was the `features/` registry created and the `features/README.md` index updated (Rule 7)?
 - [ ] Did `CHANGELOG.md` receive the entry for the change?
+- [ ] Were documentation files committed on `docs/documentation`, separate from the product branch?
 - [ ] Are all touched Mermaid diagrams still valid?
 - [ ] Was the work committed on a feature branch with ONLY the files of that feature (Rule 8)?
 - [ ] Was no gate disabled and no relevant limitation hidden in the handoff?

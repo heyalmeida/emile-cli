@@ -16,6 +16,7 @@ Goal: install the Software Engineering concepts that govern the project.
 - [x] ADR-0001 (tech stack) + `CHANGELOG.md` + `CONTRIBUTING.md`
 - [x] Retroactive registry of existing features in `features/` (agent loop, tools, MCP, skills, plans mode, sessions, compression, UI and quality gates)
 - [x] Branch topology normalized: `development` is the integration parent, active branches use stable product-domain names, and legacy refs are archived under `archive/legacy/`
+- [x] Dedicated `docs/documentation` branch created for documentation-only commits, separate from product-code branches
 
 **Success criterion:** every future change is born from a spec and ends with synced docs + CHANGELOG, on a feature branch with scoped commits.
 

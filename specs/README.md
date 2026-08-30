@@ -70,4 +70,4 @@ The status is recorded in the `Status:` field of each `spec.md` header.
 6. **One spec per concern:** prefer several small, focused specs over a monolithic one.
 7. **Quality and security from the spec:** classify the risk and document threat surfaces (command execution, file writes, paths, LLM inputs), negative criteria and verification per [Code Quality and Security](../docs/code-quality-and-security.md).
 8. **Evidence, not checkbox:** `tasks.md` records commands, results, limitations and smoke tests; a check without evidence doesn't close an acceptance criterion.
-9. **Git discipline:** implementation happens on the spec's feature branch (e.g., `feat/tui-overhaul`), committing only the files belonging to that spec (Rule 8 of `.clinerules`).
+9. **Git discipline:** implementation happens on the spec's product branch (e.g., `feat/ux-ui`), while documentation artifacts and closeout files are committed separately on `docs/documentation` (Rule 8 of `.clinerules`).
