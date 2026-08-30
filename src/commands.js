@@ -1,5 +1,5 @@
 import { select, password, text, confirm, isCancel, cancel } from '@clack/prompts';
-import { C, printRulesInfo } from './ui/index.js';
+import { C, printRulesInfo, promptModelPicker } from './ui/index.js';
 import { saveUserConfig, config } from './config.js';
 import { resetClient } from './api/index.js';
 import { loadRules, MAX_RULES_CHARS } from './rules.js';
@@ -183,12 +183,11 @@ export async function runModelWizard() {
     }
   }
 
-  const modelChoice = await select({
+  const modelChoice = await promptModelPicker(optionsList, {
     message: 'Select the model you want to use:',
-    options: optionsList,
   });
 
-  if (isCancel(modelChoice)) {
+  if (modelChoice === null || isCancel(modelChoice)) {
     cancel('Model selection cancelled.');
     return;
   }
