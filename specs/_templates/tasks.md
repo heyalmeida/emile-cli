@@ -37,7 +37,7 @@
 - [ ] T3.3 — Record the entry in `CHANGELOG.md`
 - [ ] T3.4 — Revalidate touched Mermaid blocks
 - [ ] T3.5 — Update the spec status to `implemented`
-- [ ] T3.6 — Commit the documentation sync on the feature branch (only the files of this feature — Rule 8)
+- [ ] T3.6 — Switch to `docs/documentation` and commit the documentation sync there (only explicit documentation paths — Rule 8)
 - [ ] T3.7 — Record in the handoff limitations, non-executed verifications and residual risk
 
 ---

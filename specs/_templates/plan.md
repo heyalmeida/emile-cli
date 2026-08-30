@@ -65,8 +65,9 @@
 
 | Item | Answer |
 |------|--------|
-| **Feature branch** | e.g., `feat/tui-overhaul` (create from `main` if missing — Rule 8 of `.clinerules`) |
-| **Commit plan** | Which coherent units, which files per commit (never `git add .`) |
+| **Feature branch** | e.g., `feat/ux-ui` (create from `development` if missing — Rule 8 of `.clinerules`) |
+| **Documentation branch** | `docs/documentation` for README, docs, specs, features, CHANGELOG and process rules |
+| **Commit plan** | Code/tests on the product branch; documentation on `docs/documentation`; stage only explicit paths (never `git add .`) |
 
 ## 10. Failures, Partial State and Rollback
 

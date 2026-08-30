@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Documentation branch workflow** (`specs/2026-08-30-documentation-branch`): created `docs/documentation`, mapped every catalog feature to its canonical code branch and separated documentation commits from product implementation branches.
 - **Development-first Git workflow** (`specs/2026-08-30-branch-topology-migration`): active work now uses stable product-domain branches rooted at `development`, while legacy incident-oriented refs are preserved under `archive/legacy/`.
 - **Retroactive feature registry** (`IMPROVEMENTS.md` §8.4): documented the agent loop, built-in tools, plans mode and context compression and indexed the complete shipped-feature catalog.
 - **Resilient MCP transports** (`IMPROVEMENTS.md` §§5.1, 5.3–5.4): first connections now require one-time approval, unexpected disconnects retry three times with bounded backoff, and `stdio`, SSE and streamable HTTP transports are supported with secret-safe validation.

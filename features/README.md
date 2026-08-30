@@ -28,18 +28,21 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 
 ## Feature Index
 
-| Feature | Status | Source spec |
-|---------|--------|----------------|
-| [Terminal UI (TUI)](./terminal-ui.md) | active | `specs/2026-08-25-tui-overhaul` + `2026-08-25-tui-premium` + `2026-08-25-tui-open-boxes` + `2026-08-25-prompt-multiline-fix` + `2026-08-25-dynamic-terminal-title` |
-| [Agent Loop](./agent-loop.md) | active | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` |
-| [Built-in Tools](./built-in-tools.md) | active | `specs/2026-08-25-project-structure` |
-| [Plans Mode](./plans-mode.md) | active | `specs/2026-08-30-plans-compression-resilience` |
-| [Context Compression](./context-compression.md) | active | `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` |
-| [Model System](./model-system.md) | active | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-dynamic-model-catalog-ui` |
-| [Project Rules (`.emilerules`)](./project-rules.md) | active | `specs/2026-08-25-rules-system` |
-| [Session Resilience](./session-resilience.md) | active | `specs/2026-08-30-session-resilience` |
-| [Multi-level Undo](./multilevel-undo.md) | active | `specs/2026-08-30-multilevel-undo` |
-| [Error UX](./error-ux.md) | active | `specs/2026-08-30-error-ux` |
-| [MCP Integration](./mcp-integration.md) | active | `specs/2026-08-30-mcp-tool-visibility` |
-| [Skills System](./skills-system.md) | active | `specs/2026-08-30-skill-relevance` |
-| [Open-source Quality Gates](./open-source-readiness.md) | active | `specs/2026-08-30-open-source-readiness` |
+| Feature | Status | Code branch | Source spec |
+|---------|--------|-------------|------------|
+| [Terminal UI (TUI)](./terminal-ui.md) | active | `feat/ux-ui` | `specs/2026-08-25-tui-overhaul` + `2026-08-25-tui-premium` + `2026-08-25-tui-open-boxes` + `2026-08-25-prompt-multiline-fix` + `2026-08-25-dynamic-terminal-title` |
+| [Agent Loop](./agent-loop.md) | active | `feat/agent-loop` | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` |
+| [Built-in Tools](./built-in-tools.md) | active | `feat/tools-system` | `specs/2026-08-25-project-structure` |
+| [Plans Mode](./plans-mode.md) | active | `feat/plans-mode` | `specs/2026-08-30-plans-compression-resilience` |
+| [Context Compression](./context-compression.md) | active | `feat/context-compression` | `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` |
+| [Model System](./model-system.md) | active | `feat/model-system` | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-dynamic-model-catalog-ui` |
+| [Project Rules (`.emilerules`)](./project-rules.md) | active | `feat/project-rules` | `specs/2026-08-25-rules-system` |
+| [Session Resilience](./session-resilience.md) | active | `feat/session-system` | `specs/2026-08-30-session-resilience` |
+| [Multi-level Undo](./multilevel-undo.md) | active | `feat/cli-commands` | `specs/2026-08-30-multilevel-undo` |
+| [Error UX](./error-ux.md) | active | `feat/ux-ui` | `specs/2026-08-30-error-ux` |
+| [MCP Integration](./mcp-integration.md) | active | `feat/mcp-system` | `specs/2026-08-30-mcp-tool-visibility` |
+| [Skills System](./skills-system.md) | active | `feat/skills-system` | `specs/2026-08-30-skill-relevance` |
+| [Open-source Quality Gates](./open-source-readiness.md) | active | `chore/quality-gates` | `specs/2026-08-30-open-source-readiness` |
+
+All documentation, including this registry and the source specs, is committed
+on `docs/documentation` rather than on the code branch listed above.
