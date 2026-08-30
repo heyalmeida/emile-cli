@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-30-model-search-picker` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 2 — UI and provider model discovery |
 | **Related documents** | [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [Visual identity](../../docs/visual-identity.md), [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) |
 

@@ -50,6 +50,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Command divider** | `printUserMessage` | User message as the chapter marker: `── <message> ────` (fg text, muted dashes, truncated); resets the turn's tool counter |
 | **Open boxes** | `boxTopOpen`/`boxBottomOpen` | **Top and bottom borders only** — no left/right rails. Content indents 4 spaces (`BOX_INDENT`). Border ANSI parts are composed separately: never nest a styled label inside `C.muted(...)` or the label's RESET kills the border color |
 | **Input prompt** | `promptInput` | Boxed writing field with slash-command autocomplete, ↑/↓ history; one blank line above the block. **The field draws one explicit row per wrapped line** (each row ≤ terminal width — the terminal must never auto-wrap, or the redraw math corrupts the screen); cursor column is always clamped within its row |
+| **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
 | **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
 | **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
 | **Tool lines** | `printToolSummary` | Grid-aligned single lines (no box): `● <label 8ch> <dim arg>`; bullet+label carry the semantic tone of the operation (table below); args truncated to the terminal width |
@@ -94,6 +95,8 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Element | Pattern |
 |----------|--------|
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
+| Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
+| Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
 | Risk confirmation | @clack `confirm` defaulting to **no** (fail-closed) |

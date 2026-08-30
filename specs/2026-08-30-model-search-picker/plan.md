@@ -3,11 +3,11 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-08-30-model-search-picker` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 
 ## 1. Technical Approach
 
-Keep provider/catalog data in `src/commands.js` and introduce a single-responsibility `src/ui/model-picker.js` for the interactive picker. Export a pure `filterModelOptions()` helper from that module so substring matching and the seven-item bound are deterministic and testable. The picker will use Node's keypress events/raw mode, redraw only its own bounded block, and provide a non-TTY fallback through the existing `select()` prompt with the same seven-item cap.
+Keep provider/catalog data in `src/commands.js` and introduce a single-responsibility `src/ui/model-picker.js` for the interactive picker. Export a pure `filterModelOptions()` helper from that module so substring matching and the seven-item bound are deterministic and testable. The picker will use Node's keypress events/raw mode, redraw only its own bounded block, and return a safe cancellation in non-TTY contexts instead of blocking for input.
 
 `runModelWizard()` will initialize OpenRouter as today, build normalized options, and call the picker. The custom model option remains available after filtered results. No new provider endpoint is assumed.
 

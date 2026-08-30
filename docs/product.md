@@ -27,7 +27,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 - **US-03:** As a dev, I want to approve or block shell command execution, to stay in control of my machine.
 - **US-04:** As a dev, I want to undo the agent's file changes (`/undo`), to quickly revert mistakes.
 - **US-05:** As a dev, I want to resume previous conversations per workspace, to pick up where I left off.
-- **US-06:** As a dev, I want to choose model and reasoning effort per run, to balance cost and quality.
+- **US-06:** As a dev, I want to search and choose a model and reasoning effort per run, to balance cost and quality without scanning a huge provider list.
 - **US-07:** As a dev, I want to see the session's estimated cost and tokens, to control spending.
 - **US-08:** As a dev, I want the implementation plan presented for my approval before any writes (plans mode), to review strategy before code.
 - **US-09:** As a dev, I want to connect external tools via MCP, to extend the agent without touching the CLI's code.
@@ -49,7 +49,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-05** | Execution gate: safe mode with a safe-command whitelist, `--no-safe` and `--dry-run` | ✅ |
 | **RF-06** | `/undo [N]` to revert the agent's last or last N file modifications (undo stack) | ✅ |
 | **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, and reasoning omitted by default | ✅ |
-| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and model selection (`-m`, `/model`) | ✅ |
+| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
 | **RF-10** | Plans mode (`-p`): agent previews the task, asks for approval before model execution, drafts a plan, then executes | ✅ |
 | **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
