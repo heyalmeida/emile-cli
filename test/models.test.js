@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { formatCatalogModelLabel } from '../src/commands.js';
+import { fmtK } from '../src/ui/theme.js';
 
 test('formats catalog model metadata without control characters', () => {
   const label = formatCatalogModelLabel('provider/model\nname', {
@@ -23,6 +24,13 @@ test('formats million-token context windows with an M suffix', () => {
 
   assert.match(label, /1M ctx/);
   assert.doesNotMatch(label, /1000k ctx/);
+});
+
+test('formats large token counts in the input footer with compact M units', () => {
+  assert.equal(fmtK(1_000_000), '1M');
+  assert.equal(fmtK(1_048_576), '1M');
+  assert.equal(fmtK(1_500_000), '1.5M');
+  assert.equal(fmtK(128_000), '128k');
 });
 
 test('bounds malformed catalog ids and metadata to a safe label', () => {
