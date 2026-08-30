@@ -16,15 +16,15 @@
 - [x] T1.1 — Update `.clinerules` with the documentation branch policy.
 - [x] T1.2 — Synchronize contributor, README, SDD, glossary, changelog and feature-index documentation.
 - [x] T1.3 — Verify every feature maps to an existing canonical code branch; all 13 catalog entries are covered.
-- [ ] T1.4 — Commit only documentation files on `docs/documentation`.
-- [ ] T1.5 — Publish and track `origin/docs/documentation`.
+- [x] T1.4 — Commit only documentation files on `docs/documentation`; commit `31eec14` contains no `src/`, `test/` or `bin/` path.
+- [x] T1.5 — Publish and track `origin/docs/documentation`.
 
 ## Phase 2 — Testing, Security and Verification
 
-- [ ] T2.1 — Verify no source or test file is staged.
-- [ ] T2.2 — Verify branch ancestry, feature coverage and remote tracking.
-- [ ] T2.3 — Run `git diff --check` and verify clean status.
-- [ ] T2.4 — Verify all acceptance criteria one by one.
+- [x] T2.1 — Verify no source or test file is staged; the staged-path audit passed.
+- [x] T2.2 — Verify branch ancestry, feature coverage and remote tracking; all 13 feature mappings resolve to existing branches and the docs branch tracks its origin.
+- [x] T2.3 — Run `git diff --check` and verify clean status after the documentation commit.
+- [x] T2.4 — Verify all acceptance criteria one by one; results are recorded below.
 
 ## Phase 3 — Documentation and Closing
 
@@ -38,14 +38,14 @@
 
 | AC | Status | Evidence (how it was verified) |
 |----|--------|--------------------------------|
-| AC-01 | ⏳ | `docs/documentation` exists locally at the `development` baseline; publication is pending. |
+| AC-01 | ✅ | `docs/documentation` was created from `development` at `090aed7`. |
 | AC-02 | ✅ | `.clinerules` and contributor documentation route documentation commits to `docs/documentation`. |
 | AC-03 | ✅ | `features/README.md` maps all 13 catalog features to canonical code branches. |
 | AC-04 | ✅ | README, CONTRIBUTING, SDD README/templates, glossary, roadmap and `.clinerules` are consistent. |
-| AC-05 | ⏳ | Pending commit and remote tracking verification. |
+| AC-05 | ✅ | `origin/docs/documentation` exists and tracks local `docs/documentation` at `31eec14`. |
 
 ## Commit Log
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| | | |
+| `31eec14` | `docs(workflow): centralize documentation commits` | Workflow docs, feature mapping and SDD record |
