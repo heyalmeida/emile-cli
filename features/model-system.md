@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` |
+| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-08-30-readable-token-units` |
 | **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop / API / UI (`src/models.js`, `src/api/`, `src/agent/`, `src/ui/model-picker.js`) |
 
@@ -32,6 +32,7 @@ flowchart LR
 |------|---------|
 | **Model metadata** | `src/models.js` → dynamic OpenRouter catalog + `MODEL_INFO` fallback through `getModelInfo()`; safe default 128k / $3/$15; `/model` waits for and searches live/cache OpenRouter entries |
 | **Model picker** | `src/ui/model-picker.js` → sanitized incremental substring filter, maximum seven visible rows, keyboard navigation and cancellation; non-OpenRouter providers search their curated lists |
+| **Token display** | `src/ui/theme.js` → shared compact formatter uses `M` for counts at or above one million and `k` below that boundary; used by the input footer and status bar |
 | **Effort gating** | OpenRouter uses `reasoning.effort`; Requesty Anthropic-family models use `thinking.budget_tokens` (512–16,384); generic models use `reasoning_effort`; unsupported fields are omitted |
 | **Context honesty** | Pre-call estimate (`chars / 4`) prefixed with `~`; measured usage unprefixed; limit from MODEL_INFO |
 | **Context compression** | Full payload compresses at 80% of the active catalog window; secondary system summaries are counted, same-session retry requires >40% post-compression history growth, and failed summarization drops oldest complete groups toward 70% |
@@ -68,3 +69,4 @@ flowchart LR
 | 2026-08-30 | Added native Anthropic thinking budget mapping for Requesty Anthropic-family models | `specs/2026-08-30-anthropic-thinking-budget` / CHANGELOG |
 | 2026-08-30 | Replaced the unbounded `/model` select with incremental id/label search, seven visible results, keyboard navigation and safe manual-entry fallback | `specs/2026-08-30-model-search-picker` / CHANGELOG |
 | 2026-08-30 | Model picker context metadata uses `M` for million-token windows and keeps `k` for smaller windows | `specs/2026-08-30-model-context-display` / CHANGELOG |
+| 2026-08-30 | Input footer and status bar use compact `M` units for million-token counts | `specs/2026-08-30-readable-token-units` / CHANGELOG |

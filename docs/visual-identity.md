@@ -60,7 +60,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
-| **Status bar / footer** | — | Context (tokens), model and estimated cost |
+| **Status bar / footer** | `fmtK` | Context (tokens), model and estimated cost; counts at or above one million use compact `M` units (`1M`, `1.5M`) and smaller counts use `k` |
 
 **Semantic tool colors** (tool lines):
 

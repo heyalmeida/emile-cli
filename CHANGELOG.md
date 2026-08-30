@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
 
 ### Changed
+- **Compact token units** (`specs/2026-08-30-readable-token-units`): the input footer and status bar now display million-token contexts as `M` (for example, `1M`) instead of values such as `1000k`.
 - **Readable model context labels** (`specs/2026-08-30-model-context-display`): model picker metadata now displays million-token windows as `1M ctx` instead of `1000k ctx`, while smaller windows retain the `k` format.
 - **Searchable `/model` picker** (`specs/2026-08-30-model-search-picker`): replaced the unbounded provider list with case-insensitive incremental search, at most seven visible results, keyboard navigation, cancellation-safe terminal cleanup and the existing manual model-entry path. OpenRouter uses its live/cache catalog; other providers search their curated options.
 - **Branch cleanup** (`specs/2026-08-30-branch-retirement`): removed obsolete archive and migration refs from the active branch list after confirming canonical branches had no unmerged commits; `main`, `development` and all canonical domain branches remain.

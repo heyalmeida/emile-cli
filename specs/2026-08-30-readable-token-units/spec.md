@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-30-readable-token-units` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 2 — Model picker and input usability |
 | **Related documents** | [PRD](../../docs/product.md), [Visual identity](../../docs/visual-identity.md), [Model System](../../features/model-system.md) |
 
