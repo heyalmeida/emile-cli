@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-30-model-context-display` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 2 — Model picker usability |
 | **Related documents** | [PRD](../../docs/product.md), [Visual identity](../../docs/visual-identity.md), [Model System](../../features/model-system.md) |
 

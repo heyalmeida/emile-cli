@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` |
+| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` |
 | **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop / API / UI (`src/models.js`, `src/api/`, `src/agent/`, `src/ui/model-picker.js`) |
 
@@ -67,3 +67,4 @@ flowchart LR
 | 2026-08-30 | `/model` uses the live OpenRouter catalog with context/pricing labels and safe curated fallback for other providers | `specs/2026-08-30-dynamic-model-catalog-ui` / CHANGELOG |
 | 2026-08-30 | Added native Anthropic thinking budget mapping for Requesty Anthropic-family models | `specs/2026-08-30-anthropic-thinking-budget` / CHANGELOG |
 | 2026-08-30 | Replaced the unbounded `/model` select with incremental id/label search, seven visible results, keyboard navigation and safe manual-entry fallback | `specs/2026-08-30-model-search-picker` / CHANGELOG |
+| 2026-08-30 | Model picker context metadata uses `M` for million-token windows and keeps `k` for smaller windows | `specs/2026-08-30-model-context-display` / CHANGELOG |

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-08-30-model-context-display` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 
 ## 1. Technical Approach
 
