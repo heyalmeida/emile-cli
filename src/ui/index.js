@@ -19,6 +19,7 @@ export { printHelp } from './help.js';
 export { printDiffBlock } from './diff-block.js';
 export { printConversationHistory } from './history-replay.js';
 export { promptInput } from './prompt-input.js';
+export { MODEL_PICKER_LIMIT, filterModelOptions, promptModelPicker, sanitizeModelPickerText } from './model-picker.js';
 export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';

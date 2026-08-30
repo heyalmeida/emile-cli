@@ -1,5 +1,5 @@
 import { select, password, text, confirm, isCancel, cancel } from '@clack/prompts';
-import { C, printRulesInfo } from './ui/index.js';
+import { C, printRulesInfo, promptModelPicker } from './ui/index.js';
 import { saveUserConfig, config } from './config.js';
 import { resetClient } from './api/index.js';
 import { loadRules, MAX_RULES_CHARS } from './rules.js';
@@ -183,12 +183,11 @@ export async function runModelWizard() {
     }
   }
 
-  const modelChoice = await select({
+  const modelChoice = await promptModelPicker(optionsList, {
     message: 'Select the model you want to use:',
-    options: optionsList,
   });
 
-  if (isCancel(modelChoice)) {
+  if (modelChoice === null || isCancel(modelChoice)) {
     cancel('Model selection cancelled.');
     return;
   }
@@ -219,8 +218,11 @@ export async function runModelWizard() {
 /** Formats remote catalog data as a readable, bounded select label. */
 export function formatCatalogModelLabel(model, info = getModelInfo(model)) {
   const id = String(model || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, 80);
-  const context = Number.isFinite(Number(info?.context)) && Number(info.context) > 0
-    ? `${Math.round(Number(info.context) / 1000)}k ctx`
+  const contextValue = Number(info?.context);
+  const context = Number.isFinite(contextValue) && contextValue > 0
+    ? contextValue >= 1_000_000
+      ? `${Math.round(contextValue / 1_000_000)}M ctx`
+      : `${Math.round(contextValue / 1000)}k ctx`
     : 'context n/a';
   const input = Number.isFinite(Number(info?.inputPrice)) ? Number(info.inputPrice).toFixed(2) : 'n/a';
   const output = Number.isFinite(Number(info?.outputPrice)) ? Number(info.outputPrice).toFixed(2) : 'n/a';
