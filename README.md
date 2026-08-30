@@ -110,7 +110,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | Command | Description |
 |---------|-------------|
 | `/connect` | Reconfigure API provider and key |
-| `/model` | Switch the active model |
+| `/model` | Search and switch the active model; type to filter by model id/name, with up to 7 results visible |
 | `/switch` `/sessions` | Resume a previous session |
 | `/sessions clean <days>` | Delete saved sessions older than the specified number of days |
 | `/new` `/clear` | Start a fresh session |
@@ -234,7 +234,7 @@ To apply your own always-on preferences to a workspace, create `.emilerules` at 
 | Provider | Base URL | Notes |
 |----------|----------|-------|
 | Requesty | `https://router.requesty.ai/v1` | Default; supports prompt caching |
-| OpenRouter | `https://openrouter.ai/api/v1` | Broad model catalog |
+| OpenRouter | `https://openrouter.ai/api/v1` | Broad live/cache-backed model catalog; searchable from `/model` |
 | OpenCode | `https://api.opencode.ai/v1` | OpenAI-compatible gateway |
 | OpenCode Go | `https://opencode.ai/zen/go/v1` | Curated open-source models |
 
@@ -252,6 +252,7 @@ emile-cli/
 │   ├── cli.js              # Command parsing, REPL loop, slash commands
 │   ├── config.js           # Config load/save, env var resolution
 │   ├── models.js           # Dynamic OpenRouter model catalog + static fallback
+│   ├── ui/model-picker.js  # Bounded incremental /model search UI
 │   ├── prompt.js           # System prompt assembly
 │   ├── rules.js            # Optional user-authored project rules discovery
 │   ├── skills.js           # YAML skill parsing + keyword matching
