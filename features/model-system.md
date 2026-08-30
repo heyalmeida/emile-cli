@@ -1,0 +1,66 @@
+# Feature: Model System (metadata, effort, context tracking, cache)
+
+| Field | Value |
+|-------|-------|
+| **Status** | `active` |
+| **Delivery date** | 2026-08-25 |
+| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` |
+| **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19 |
+| **Owner/Area** | Agent Loop / API (`src/models.js`, `src/api/`, `src/agent/`) |
+
+---
+
+## Description
+
+The model knowledge and session-telemetry system: a dynamic catalog with static fallbacks answers context windows, pricing and reasoning capability; reasoning effort is normalized and capability-gated before reaching the API; context tracking distinguishes the pre-call estimate from measured API usage; and history compression scales to 80% of that same model window instead of treating every paid/free route alike. The conversation prefix remains byte-stable per session to maximize provider prompt-cache hits, with the hit rate visible in the status bar and `/cost`.
+
+## How It Works
+
+```mermaid
+flowchart LR
+    T["models.js<br/>dynamic catalog + fallback"] --> API["api/client.js<br/>effort gating"]
+    T --> AGENT["agent/<br/>cost + context limit"]
+    T --> COMPRESS["agent/compression.js<br/>80% context gate"]
+    SP["Frozen system prompt<br/>(per plansMode+skills key)"] --> PREFIX["Byte-stable prefix<br/>→ provider cache hits"]
+    API --> U["usage chunk<br/>prompt/completion/cached tokens"]
+    U --> SB["Session bar + /cost<br/>~estimate · cache N%"]
+```
+
+## Technical Details
+
+| Item | Detail |
+|------|---------|
+| **Model metadata** | `src/models.js` → dynamic OpenRouter catalog + `MODEL_INFO` fallback through `getModelInfo()`; safe default 128k / $3/$15; `/model` waits for and displays live OpenRouter entries |
+| **Effort gating** | OpenRouter uses `reasoning.effort`; Requesty Anthropic-family models use `thinking.budget_tokens` (512–16,384); generic models use `reasoning_effort`; unsupported fields are omitted |
+| **Context honesty** | Pre-call estimate (`chars / 4`) prefixed with `~`; measured usage unprefixed; limit from MODEL_INFO |
+| **Context compression** | Full payload compresses at 80% of the active catalog window; secondary system summaries are counted, same-session retry requires >40% post-compression history growth, and failed summarization drops oldest complete groups toward 70% |
+| **Cache stability** | System prompt frozen per `(plansMode, skills)` key — workspace snapshot does not change mid-session |
+| **Cache telemetry** | `cached_tokens` accumulated from usage (defensive field fallbacks); `cache: N%` segment in the status bar/footer; hit rate in `/cost` |
+
+## Where It Lives in the Code
+
+| Layer | Main paths |
+|--------|---------------------|
+| Metadata table | `src/models.js` |
+| API call + retry | `src/api/client.js` (`reasoning_effort` gate, `getRetryDelayMs`) |
+| Agent loop + context policy | `src/agent/agent.js`, `src/agent/session-stats.js`, `src/agent/compression.js` |
+| Rendering | `src/ui/status-bar.js`, `src/ui/prompt-input.js`, `src/cli.js` (`/cost`) |
+
+## Known Limitations
+
+- Offline catalog cache and static fallback metadata are best-effort and can go stale; startup refreshes the live catalog when available.
+- The workspace snapshot in the system prompt is frozen until plans mode or skills change (deliberate cache trade-off).
+- Providers that don't report cached tokens show no cache percentage.
+- Context estimation uses the existing four-characters-per-token approximation; no provider-specific tokenizer or mid-tool-loop compression is implemented.
+- If both summarization and safe truncation cannot reduce the history, the request continues with the existing warning and remains subject to the provider's context error handling.
+
+## Change History
+
+| Date | Change | Reference |
+|------|---------|------------|
+| 2026-08-25 | Created: MODEL_INFO table, gated effort, honest context tracking, cache-stable prefix, cache telemetry; IMPROVEMENTS § 1.2/1.3/3.2/3.4 resolved | `specs/2026-08-25-model-system` / CHANGELOG |
+| 2026-08-25 | Dynamic model catalog: metadata resolved live from the OpenRouter public endpoint by model id (persisted cache + static fallback), fixing reasoning mislabels (GLM 5.x, stealth models) and staleness | `specs/2026-08-25-dynamic-model-catalog` / CHANGELOG |
+| 2026-08-25 | Context-aware compression: 80% of the active model window, full-payload estimate, secondary-system-message accounting and >40% growth hysteresis | `specs/2026-08-25-context-aware-compression` / CHANGELOG |
+| 2026-08-30 | Plans preflight approval and 70% oldest-group truncation fallback when context summarization fails | `specs/2026-08-30-plans-compression-resilience` / CHANGELOG |
+| 2026-08-30 | `/model` uses the live OpenRouter catalog with context/pricing labels and safe curated fallback for other providers | `specs/2026-08-30-dynamic-model-catalog-ui` / CHANGELOG |
+| 2026-08-30 | Added native Anthropic thinking budget mapping for Requesty Anthropic-family models | `specs/2026-08-30-anthropic-thinking-budget` / CHANGELOG |

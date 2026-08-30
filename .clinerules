@@ -1,0 +1,228 @@
+# EMILE-CLI — MANDATORY AI RULES (Cline / Codex CLI)
+
+> **CRITICAL NOTICE:** This file is loaded automatically by Cline (as `.clinerules`) and by Codex CLI (as `AGENTS.md`, a symlink to this file) in EVERY session. The rules below are **mandatory and non-negotiable**. They take priority over any default AI preference. Token usage is deliberate, **optimized and cache-aware**: read what is necessary, with depth and discernment, making the most of prompt caching — **volume is not quality**. Reading 100% of everything is sometimes waste; skimming what matters is negligence.
+
+---
+
+## RULE 0 — SUPREME PRINCIPLE
+
+**Documentation is the source of truth. Code that contradicts documentation is a bug — in one of the two.** If you detect a divergence, stop and fix the wrong side (or raise the issue) before proceeding.
+
+### Workspace authority hierarchy
+
+1. `.clinerules` / `AGENTS.md` (same source via symlink)
+2. emile-cli documentation and ADRs in `docs/`
+3. Active spec and plan in `specs/`, as long as they don't contradict ADRs without registering a new decision
+4. README.md and user-facing documentation
+5. Generic rules, agents, workflows and skills in `.agent/` (generic kit — NOT product documentation)
+6. Examples, tutorials and external code
+
+A lower layer can **never** relax security, quality, stack or process defined above. Agents must not re-ask choices already documented nor swap the stack for a generic preference; they should only interrupt when there is a real conflict, decisive missing information, or material scope expansion.
+
+---
+
+## RULE 1 — MANDATORY CONTEXT READING (before ANY task)
+
+**Read in an optimized and selective way — never shallow on what matters, never exhaustive on what doesn't.**
+
+Before writing any line of code, editing any file, or answering any technical question, you **MUST** read:
+
+1. **Mandatory core (every session, every task — full read):**
+   - `README.md` — overview, CLI reference and index
+   - `docs/product.md` — PRD (scope, user stories, RF-01 through RF-12)
+   - The **active spec** in `specs/` related to the task (if one exists)
+
+2. **Read by relevance (read the sections pertinent to the task, in full — skip only what genuinely doesn't apply):**
+   - `docs/architecture.md` — before any structural decision, module or agent loop change
+   - `docs/visual-identity.md` — before touching ANYTHING that renders to the terminal (colors, boxes, spinner, prompts, layout)
+   - `docs/code-quality-and-security.md` — before any code creation or change
+   - `docs/glossary.md` — before using domain terms (plans mode, skills, MCP, cache, effort)
+   - `docs/adr/` — the ADRs relevant to the topic (0001 at minimum)
+   - `docs/roadmap.md` — before proposing priorities or new work fronts
+
+3. **Allowed (and encouraged) optimization:**
+   - Use **targeted search** (grep/specific sections) to locate the exact piece of information inside a long document, instead of re-reading the whole file
+   - If a document was read **in this same session** and hasn't changed since, don't re-read it — the context is already loaded
+   - Prioritize depth in the documents that govern the decision at hand; the rest serve as spot verification
+
+4. **Token cache efficiency (prompt caching):** LLM providers charge far less for **cached** input tokens (stable conversation prefix). To maximize cache hits and reduce the real session cost:
+   - **Read early, read once:** do context reads at the **beginning** of the task. Content read early stays in the stable prefix and is reused by cache in subsequent calls; reading whole files late wastes the savings
+   - **Batch independent reads into a single call:** when several files are needed, request them all at once (same response), in stable order, instead of interleaving reads with reasoning and edits
+   - **Stable content first, volatile later:** documentation and specs (stable) at the beginning of the conversation; code iterations and experiments (volatile) at the end
+   - **Surgical edits, never full rewrites:** when editing files, replace only the changed snippet (small `old_text`/`new_text`) instead of rewriting the whole file — this reduces output tokens and avoids repopulating context
+   - **Don't rotate context unnecessarily:** finish related tasks in the same session; every "fresh start" pays the full (uncached) input price again
+   - **Stable read order:** when reading the same docs across consecutive tasks, read them in the same order — identical prefixes maximize cache hits
+
+5. **Golden rule:** if the information needed to decide correctly hasn't been read yet, you are **not authorized** to implement. Don't assume, don't invent: look it up in the documentation (or ask). What is never acceptable is deciding by assumption to "save" tokens — the savings come from *intelligently selecting what to read* and from *leveraging cache*, never from *ignoring what is decisive*.
+
+---
+
+## RULE 2 — MANDATORY DOCUMENTATION SYNC (after ANY change)
+
+**No task is complete until the documentation reflects reality.** Before declaring "done", verify and execute:
+
+| Change type | Mandatory action |
+|---|---|
+| Any code/docs change | New entry in `CHANGELOG.md` (Keep a Changelog, `[Unreleased]` section) |
+| New behavior, scope or requirement | Update `docs/product.md` (RFs, user stories, scope) |
+| New architectural or technical decision | Create a new ADR in `docs/adr/NNNN-name.md` (sequential numbering) |
+| Module, responsibility or agent-loop flow change | Update `docs/architecture.md` |
+| Colors, components, layout, typography or terminal UI change | Update `docs/visual-identity.md` |
+| New domain term | Update `docs/glossary.md` |
+| Performance/security/gate change | Update `docs/code-quality-and-security.md` and, if it affects contributors, `CONTRIBUTING.md` |
+| Phase or deliverable change | Update `docs/roadmap.md` |
+| New flag, slash command or tool | Update `README.md` (CLI reference / Slash commands / Built-in tools) |
+
+**Cross-consistency:** when changing any document, check whether other documents reference the changed information. Relative links must remain valid.
+
+---
+
+## RULE 3 — SPEC-DRIVEN DEVELOPMENT (SDD)
+
+**All implementation work is born from a spec.** No spec, no code. The process is defined in [`specs/README.md`](specs/README.md) and must be followed to the letter:
+
+1. **SPEC** — write `specs/YYYY-MM-DD-name/spec.md` (the WHAT: requirements and acceptance criteria) from the template in `specs/_templates/`
+2. **PLAN** — write `plan.md` (the HOW: technical approach, impacted files, decisions)
+3. **TASKS** — write `tasks.md` (the DOING: small, verifiable tasks traceable to the ACs)
+4. **IMPLEMENT** — execute, marking `- [x]` in `tasks.md` as each task is verified
+5. **VERIFY** — validate every acceptance criterion with recorded evidence
+6. **DOCS SYNC** — Rule 2 + feature registry entry in `features/` (Rule 7)
+
+**Allowed exceptions (no spec):** trivial typo fix, purely editorial comment/doc adjustments. When in doubt, create the spec — small, focused specs are the standard, not the exception.
+
+**Scope change during implementation:** update the `spec.md` first (with justification), then the code. Never the other way around.
+
+---
+
+## RULE 4 — CODE ORGANIZATION (src/)
+
+**Structural conventions of emile-cli:**
+
+1. **One module, one responsibility** — every file in `src/` has a role documented in `docs/architecture.md` (module table). Don't mix responsibilities.
+2. **Pure ES modules, no build step** — the project runs `node bin/emile.js` directly. No TypeScript, bundlers or transpilation without an approved ADR.
+3. **UI isolated in `src/ui.js`** — all terminal rendering (colors, boxes, layout, prompts) lives in the UI layer and uses the `C` palette exported per `docs/visual-identity.md`. Other modules **never** call picocolors directly for user output — use `C.*` for visual consistency.
+4. **Dynamic imports in `src/cli.js`** — heavy dependencies are imported dynamically to optimize startup; preserve this pattern when adding modules.
+5. **Security in `src/tools.js` handlers** — every file write goes through `resolveSafePath` (path traversal protection); every shell command goes through the safe mode and dry-run gates. Never create a path that bypasses these controls.
+6. **File name = module name** — short, descriptive kebab-case/camelCase; exported functions in camelCase, constants in UPPER_SNAKE or camelCase per existing convention.
+
+---
+
+## RULE 5 — DOCUMENTATION QUALITY (Mermaid and Markdown)
+
+When creating or editing any Mermaid block:
+
+- **Labels containing parentheses, brackets or commas MUST use double quotes:** `A["Agent loop (streaming)"]` — never `A[Agent loop (streaming)]`
+- **Line breaks in labels:** use `<br/>`, never `\n`
+- Verify the block parses (valid syntax) before finishing the task
+
+When creating or editing Markdown tables: ensure the same number of columns in every row. Relative links must point to existing files.
+
+---
+
+## RULE 6 — CODE QUALITY AND SECURITY (SHIFT LEFT)
+
+**Quality and security are implementation conditions, not an optional review at the end.** emile-cli is an agent that **runs shell commands and writes files** — the threat surface is real. Every code change follows the gates below.
+
+### 6.1 Before editing
+
+1. Classify the risk as **low, medium or high** per [`docs/code-quality-and-security.md`](docs/code-quality-and-security.md). When in doubt, use the higher level.
+2. Inspect who imports the file, what it imports and the consumers of the changed contract. Update consumers within the same task.
+3. Map, where applicable: command execution, file writes, paths, LLM inputs (prompt injection), API keys, timeouts and fallbacks.
+4. For high risk (tools, execution, paths, API auth), record the threat model and negative tests in the spec/plan **before** the code.
+
+### 6.2 During implementation
+
+- Prefer the simplest solution that fulfills the spec; don't create abstraction, flag, dependency or configuration "for the future".
+- **Never loosen security controls to get a result:** safe mode, dry-run, command whitelist, `resolveSafePath` and LLM input validation are non-negotiable. Disabling them "just to test" only via the end user's explicit `--no-safe`/`--dry-run`.
+- Treat model output as untrusted input: paths, commands and arguments coming from tool calls must be validated and sanitized at the handler boundary.
+- No API keys in code, fixtures, logs, error messages and session exports (`/export`).
+- Preserve user changes and avoid unrelated alterations; out-of-scope findings must be reported, not "fixed in passing".
+
+### 6.3 Tests and proportional gates
+
+- **Every code change:** `node --check src/<file>.js` on all touched files + smoke test (`node bin/emile.js --verbose` with a simple task).
+- **Behavior/contract change:** documented manual script in `tasks.md` (steps + expected + actual) until an automated suite exists; include error paths and boundaries.
+- **UI/TUI:** verify narrow terminal width (<80 cols), readline state reset, `Ctrl+C`/`Esc` interruption and no ANSI code leakage in output.
+- **Tools/execution:** test command outside the whitelist, path traversal (`../`), dry-run and command failure. High risk requires negative scenarios.
+- **New dependency:** justification, official origin, maintenance/license review, lockfile and `npm audit` recorded.
+
+Before running gates, discover the project's real scripts. A validator that reports "no tool configured" does **not** count as a passed gate. Scripts in `.agent/` complement native commands; they don't replace them.
+
+### 6.4 Result handling
+
+- Read the full output, separate real error, warning, limitation and false positive, and record file/line/impact when available.
+- Fix failures caused by the change and repeat the gate. Pre-existing or out-of-scope failures must be presented with exact evidence; never omitted or declared as approval.
+- **Critical/High** security findings, gate bypass, real secrets, data loss or broken smoke test block completion.
+- Suppression is only accepted with affected rule, reason, residual risk, mitigation, owner and removal deadline/issue.
+- The final handoff reports executed commands, results and non-executed verifications with the reason. It is forbidden to claim "safe", "tested" or "no vulnerabilities" without compatible evidence.
+
+---
+
+## RULE 7 — MANDATORY FEATURE REGISTRY (`features/`)
+
+**Every newly implemented feature MUST generate a registry file in `features/`, in the same act of closing the task.** Without a registry, the feature officially doesn't exist.
+
+**Rules:**
+
+1. **File name:** kebab-case in **English**, named after the feature — e.g., `features/plans-mode.md`, `features/session-persistence.md`
+2. **Mandatory template:** use `features/_template.md` as the base (copy it, don't edit the template)
+3. **Minimum content:** product-language description, source spec, PRD RFs served, flags/slash commands/tools involved and where it lives in the code
+4. **When changing an existing feature:** update its file ("Change History" section) — don't create a new file for an improvement to the same feature
+5. **When removing a feature:** mark `Status: removed` in the header and record it in the CHANGELOG — never delete the file
+6. **Index:** add/update the corresponding row in the index table of `features/README.md`
+
+---
+
+## RULE 8 — GIT WORKFLOW (feature branches and commit discipline)
+
+**All work happens on a feature branch. Nothing is committed directly to `main`.**
+
+### 8.1 Branch per feature
+
+Before starting any task, resolve the branch:
+
+1. **Identify the product domain** from the task/spec (e.g., `ux-ui`, `mcp-system`, `system-prompt`, `cli-commands`, `model-system`).
+2. **Check if a branch for it already exists** (`git branch --list` / `git status`). If it exists, switch to it — don't create a duplicate.
+3. **If it doesn't exist, create it from the latest `development`**, named after the stable product domain:
+   - `feat/<domain>` — feature work (e.g., `feat/ux-ui`, `feat/mcp-system`, `feat/system-prompt`, `feat/cli-commands`)
+   - `fix/<bug>` — bug fixes
+   - `docs/<topic>` — documentation-only work
+   - `refactor/<topic>` — refactors
+   - `chore/<topic>` — maintenance/config
+4. **`development` is the integration parent.** Every active feature branch must be based on the current `development` tip and should be merged back through a pull request. `main` is reserved for released/integrated states.
+5. **One product domain per branch.** If the task expands into a different domain mid-flight, finish or stash the current work and switch to the corresponding canonical branch.
+
+### 8.2 Commit discipline
+
+- **Commit as soon as a coherent unit of the feature is done** — don't pile up the entire feature into one giant commit at the end.
+- **Stage ONLY the files related to that feature/branch.** Use explicit paths: `git add src/tools.js src/api.js docs/roadmap.md`. **NEVER use `git add .` or `git add -A`**, and never mix files from unrelated concerns in the same commit.
+- **Before every commit:** run `git status` to review the working tree, and after staging verify the staged set with `git diff --cached --stat` — if anything unrelated is staged, unstage it (`git restore --staged <path>`).
+- **Commit message:** Conventional Commits format `type(scope): short description`, with the spec reference in the body when one exists:
+  ```
+  feat(tools): reject ambiguous editFile matches
+
+  Refs: specs/2026-08-25-editfile-ambiguous-match
+  ```
+- **Unrelated changes found while working** (e.g., a bug spotted in another module): do NOT commit them together with the feature. Either report them to the user as findings, or handle them on their own branch/commit after the current feature is done.
+- **Files shared across concerns** (e.g., `CHANGELOG.md`): commit them with the feature that motivated the change — one CHANGELOG entry per feature, not one commit with several features' entries.
+- **At the end of the task:** leave the branch ready for review/merge. Do not merge or delete it unless the user asks.
+
+---
+
+## RULE 9 — FINAL VERIFICATION (before closing any task)
+
+Mandatory closing checklist:
+
+- [ ] Does the change fulfill the spec / original request?
+- [ ] Were the acceptance criteria (if a spec exists) verified?
+- [ ] Was the risk classified and the applicable threat/failure surfaces handled?
+- [ ] Were command execution, paths, secrets and LLM inputs reviewed where applicable?
+- [ ] Were the smoke test and verifications proportional to the risk executed and recorded?
+- [ ] Was Rule 2 executed (all relevant docs updated)?
+- [ ] If it's a new feature: was the `features/` registry created and the `features/README.md` index updated (Rule 7)?
+- [ ] Did `CHANGELOG.md` receive the entry for the change?
+- [ ] Are all touched Mermaid diagrams still valid?
+- [ ] Was the work committed on a feature branch with ONLY the files of that feature (Rule 8)?
+- [ ] Was no gate disabled and no relevant limitation hidden in the handoff?
+
+**If any item fails, the task is NOT complete — even if the code works.**
