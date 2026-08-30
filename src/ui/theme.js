@@ -82,8 +82,13 @@ export function wrapText(text, width) {
   return lines;
 }
 
-// Format a token count with a `k` suffix (128000 → 128k, 14200 → 14.2k)
+// Format a token count compactly (128000 → 128k, 14200 → 14.2k, 1M → 1M)
 export function fmtK(n) {
+  if (n >= 1_000_000) {
+    const millions = n / 1_000_000;
+    const value = Number.isInteger(millions) ? String(millions) : millions.toFixed(1).replace(/\.0$/, '');
+    return `${value}M`;
+  }
   if (n >= 1000) {
     const k = n / 1000;
     return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
