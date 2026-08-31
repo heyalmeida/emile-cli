@@ -135,9 +135,21 @@ export function getRetryDelayMs(err, attempt) {
 
 /** Maps common provider failures to an actionable, secret-free UI message. */
 export function formatApiError(err, { model = '' } = {}) {
-  const status = Number(err?.status);
-  const message = String(err?.message || '').toLowerCase();
+  const status = Number(err?.status ?? err?.response?.status ?? err?.error?.status);
+  const rawMessage = String(err?.error?.message || err?.message || '');
+  const errorCode = err?.code || err?.error?.code;
+  const message = rawMessage.toLowerCase();
   const safeModel = String(model || 'selected model').replace(/[\r\n\t]/g, ' ').slice(0, 100);
+  const safeDetail = rawMessage
+    .replace(/bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/((?:api[-_ ]?key|token|secret)\s*[:=]\s*)\S+/gi, '$1[redacted]')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  const detail = safeDetail && !/^(provider returned error|api request failed)$/i.test(safeDetail)
+    ? ` Details: ${safeDetail}`
+    : '';
 
   if (status === 401 || /invalid api key|unauthorized|authentication/.test(message)) {
     return 'Authentication failed. Check your API key with /connect.';
@@ -148,13 +160,28 @@ export function formatApiError(err, { model = '' } = {}) {
   if (status === 413 || (status === 400 && /context (length|size|window|too long)|maximum context|too many tokens|request too large|prompt too long/.test(message))) {
     return 'Context window exceeded. Compressing history and retrying...';
   }
+  if (status === 402 || /insufficient (credits?|funds?)|payment required|quota exceeded|billing/.test(message)) {
+    return `Provider quota or billing rejected the request${status ? ` (${status})` : ''}. Check the provider account, model limits and search/tool charges.`;
+  }
+  if (status === 403) {
+    return `Provider denied this request (403). Check model access and account permissions.${detail}`;
+  }
   if (status === 429) {
     return 'Rate limited. Waiting 10s before retry...';
   }
-  if (err?.code === 'ETIMEDOUT' || err?.code === 'ERR_SOCKET_CONNECTION_TIMEOUT' || err?.cause?.code === 'ETIMEDOUT') {
+  if (errorCode === 'ETIMEDOUT' || errorCode === 'ERR_SOCKET_CONNECTION_TIMEOUT' || err?.cause?.code === 'ETIMEDOUT') {
     return 'Request timed out. Check your connection.';
   }
-  return 'API request failed. Check your provider settings and connection.';
+  if (status >= 500) {
+    return `Provider server error (${status}). Try again or switch provider/model.${detail}`;
+  }
+  if (status >= 400) {
+    return `Provider rejected the request (${status}). Check the model and tool parameters.${detail}`;
+  }
+  if (errorCode) {
+    return `Provider connection failed (${String(errorCode).slice(0, 40)}). Check your network and provider settings.${detail}`;
+  }
+  return `API request failed. Check your provider settings and connection.${detail}`;
 }
 
 /**

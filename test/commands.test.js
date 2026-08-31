@@ -5,7 +5,7 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
-  '/rewind', '/thinking', '/help', '/undo', '/cost', '/export', '/rules',
+  '/rewind', '/thinking', '/websearch', '/help', '/undo', '/cost', '/export', '/rules',
 ];
 
 test('registry contains every existing slash command and aliases', () => {

@@ -1,6 +1,6 @@
 // agent.js — the agent loop (runAgent) and tool dispatch.
 import { buildSystemPrompt } from '../prompt.js';
-import { createChatCompletion } from '../api/index.js';
+import { createChatCompletion, formatApiError, getProviderToolDefinitions } from '../api/index.js';
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
 import { promptPlanApproval, renderPlanStatus } from '../plans.js';
@@ -175,7 +175,11 @@ async function runAgentInner({
 
   const localTools = toolDefinitions;
   const mcpTools = getMcpToolDefinitions();
-  const allTools = [...localTools, ...mcpTools];
+  const providerTools = getProviderToolDefinitions({
+    provider: config.provider,
+    webSearch: config.webSearch,
+  });
+  const allTools = [...localTools, ...mcpTools, ...providerTools];
 
   // Estimate the complete payload before applying the compression gate so its
   // token unit and context window match the status bar. Recalculate after a
@@ -374,7 +378,7 @@ async function runAgentInner({
       // Surface the failure — a silent swallow made mid-response failures
       // look like empty replies. Partial reasoning/text still renders below.
       spinner.stop();
-      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${streamErr.message}`)}\n`);
+      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
     }
 
     if (isFirstChunk) {

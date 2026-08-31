@@ -39,6 +39,19 @@ function loadUserConfig() {
 
 const savedConfig = loadUserConfig() || {};
 
+function readBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return fallback;
+  if (/^(1|true|yes|on)$/i.test(value)) return true;
+  if (/^(0|false|no|off)$/i.test(value)) return false;
+  return fallback;
+}
+
+const webSearch = readBoolean(
+  savedConfig.webSearch ?? process.env.EMILE_WEB_SEARCH,
+  false,
+);
+
 export const config = {
   provider: savedConfig.provider || process.env.EMILE_PROVIDER || 'requesty',
   apiKey: savedConfig.apiKey || process.env.REQUESTY_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY || '',
@@ -46,6 +59,8 @@ export const config = {
   defaultEffort: savedConfig.effort || process.env.EMILE_DEFAULT_EFFORT || 'low',
   workspaceDir,
   mcpConfig: loadMcpConfig(),
+  webSearch,
+  sessionCwd: workspaceDir,
   dryRun: false,
   safeMode: true,
   commandTimeout: 30000,
@@ -77,12 +92,14 @@ export function saveUserConfig(settings) {
   if (settings.apiKey) config.apiKey = settings.apiKey;
   if (settings.model) config.defaultModel = settings.model;
   if ('effort' in settings) config.defaultEffort = settings.effort;
+  if ('webSearch' in settings) config.webSearch = settings.webSearch === true;
 
   const dataToSave = {
     provider: config.provider,
     apiKey: config.apiKey,
     model: config.defaultModel,
     effort: config.defaultEffort,
+    webSearch: config.webSearch,
   };
 
   try {
