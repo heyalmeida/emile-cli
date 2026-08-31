@@ -370,4 +370,3 @@ No build step — the project runs raw ES modules. Syntax-check individual files
 Built for people who think faster than they type.
 
 </div>
-```
