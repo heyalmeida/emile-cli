@@ -17,14 +17,14 @@
 - [x] T1.2 — Add persistent workspace-contained session cwd for `runCommand` *(AC-03, AC-04, AC-07)*.
 - [x] T1.3 — Improve provider/stream error classification and file-tool boundary validation *(AC-05, AC-06, AC-07)*.
 - [x] T1.4 — Add regression tests for provider gating, web toggle, cwd, errors and file boundaries *(AC-01–AC-07)*.
-- [ ] T1.5 — Normalize nested OpenRouter SSE status codes and retry transient streams only before the first chunk *(AC-05, AC-07)*.
+- [x] T1.5 — Normalize nested OpenRouter SSE status codes and retry transient streams only before the first chunk *(AC-05, AC-07)*.
 
 ## Phase 2 — Verification
 
 - [x] T2.1 — Run syntax checks, tests, lint and diff check.
 - [x] T2.2 — Run safe-mode, dry-run, traversal, cwd and CLI smoke checks.
 - [x] T2.3 — Verify every acceptance criterion and record limitations.
-- [ ] T2.4 — Re-run the focused stream-error regression checks after the post-implementation correction.
+- [x] T2.4 — Re-run the focused stream-error regression checks after the post-implementation correction.
 
 ## Phase 3 — Documentation and Closing
 
@@ -46,7 +46,7 @@
 ## Verification Evidence
 
 - `node --check` on every touched source file: passed.
-- `npm test`: 27/27 tests passed.
+- `npm test`: 27/27 tests passed, including the nested OpenRouter SSE `error.code` regression.
 - `npm run lint`: passed with 0 errors and 157 pre-existing warnings.
 - `git diff --check`: passed.
 - `node bin/emile.js --help`: passed and shows `--web-search` with its charge warning.
@@ -58,3 +58,4 @@
 |--------|---------|-------|
 | `60ca112` | `feat(agent): add web search and session cwd` | Product source and regression tests |
 | `this commit` | Documentation sync for this spec | README, PRD, architecture, security, glossary, visual identity, feature registry and CHANGELOG |
+| `e63c029` | `fix(api): retry transient streams before output` | Nested SSE status classification and pre-output stream retry |

@@ -42,4 +42,4 @@ bodies are never copied wholesale.
 | Date | Change | Reference |
 |------|--------|-----------|
 | 2026-08-30 | Added actionable API failures and network-to-shell confirmation warning | Source spec / CHANGELOG |
-| 2026-08-31 | Classified provider quota/permission/server failures with bounded secret-redacted details | `specs/2026-08-31-web-search-tool-reliability` / CHANGELOG |
+| 2026-08-31 | Classified provider quota/permission/server failures with bounded secret-redacted details and normalized nested OpenRouter SSE status codes | `specs/2026-08-31-web-search-tool-reliability` / CHANGELOG |

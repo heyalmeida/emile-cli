@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
 
 ### Changed
+- **Transient stream recovery** (`specs/2026-08-31-web-search-tool-reliability`): OpenRouter SSE errors with nested numeric status codes are classified correctly, and retryable failures before the first chunk are retried without replaying partially rendered reasoning, text or tool calls.
 - **Tool and session reliability** (`specs/2026-08-31-web-search-tool-reliability`): `runCommand` now carries a validated workspace-contained cwd across calls and persisted sessions; `writeFile`/`editFile` reject malformed arguments before touching state; provider errors include bounded status/detail classification with secret redaction.
 - **Streaming and multiline input integrity** (`specs/2026-08-30-streaming-input-integrity`): cumulative or overlapping reasoning snapshots are reduced to unseen text, legacy and structured reasoning are not rendered twice, prompt/thinking redraws are emitted as assembled terminal frames, and `Shift+Enter` inserts a newline while plain `Enter` submits.
 - **Compact token units** (`specs/2026-08-30-readable-token-units`): the input footer and status bar now display million-token contexts as `M` (for example, `1M`) instead of values such as `1000k`.
