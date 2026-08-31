@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { turnState } from './turn-state.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
+import { stripTerminalControls } from './control.js';
 
 // ──────────────────────────────────────────────
 //  Tool Execution Summary
@@ -86,6 +87,19 @@ export function printToolSummary(toolCalls) {
   // indent(2) + bullet(1) + space(1) + label(8) = 12 chars before the arg
   const maxArg = Math.max(cols - 4 - 2 - LABEL_W - 1, 10);
 
+  const writeMultilineArg = (prefix, value, width) => {
+    const cleanValue = stripTerminalControls(value);
+    const lines = cleanValue.split('\n').map(line =>
+      line.length > width ? line.substring(0, width - 1) + '…' : line
+    );
+    const continuationIndent = ' '.repeat(stripAnsi(prefix).length);
+    const renderLine = line => line ? C.dim(line) : '';
+    process.stdout.write(`${prefix}${renderLine(lines[0] || '')}\n`);
+    for (const line of lines.slice(1)) {
+      process.stdout.write(`${continuationIndent}${renderLine(line)}\n`);
+    }
+  };
+
   // Leading blank line: exactly one gap between this group and the block above
   process.stdout.write(GAP.section);
 
@@ -94,16 +108,13 @@ export function printToolSummary(toolCalls) {
     if (d.mcp) {
       const maxMcp = Math.max(cols - 6, 20);
       const mcpLabel = d.label.length > maxMcp ? d.label.slice(0, maxMcp - 1) + '…' : d.label;
-      process.stdout.write(`  ${tone('●')} ${tone(mcpLabel)} ${C.dim(d.arg)}\n`);
+      const prefix = `  ${tone('●')} ${tone(mcpLabel)} `;
+      writeMultilineArg(prefix, d.arg, Math.max(cols - 4 - stripAnsi(prefix).length, 10));
       continue;
     }
     const label = (d.label || '').substring(0, LABEL_W).padEnd(LABEL_W);
-    const arg = d.arg
-      ? (d.arg.length > maxArg ? d.arg.substring(0, maxArg - 1) + '…' : d.arg)
-      : '';
-    process.stdout.write(
-      `  ${tone('●')} ${tone(label)} ${arg ? C.dim(arg) : ''}\n`
-    );
+    const prefix = `  ${tone('●')} ${tone(label)} `;
+    writeMultilineArg(prefix, d.arg || '', maxArg);
   }
 
   // Feed the turn counter — consumed by printAssistantResponse (`↳ N tools`)
