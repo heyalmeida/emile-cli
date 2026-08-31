@@ -34,6 +34,7 @@ This is a personal project that grew into something useful enough to share. It's
 - **Skills system** — 40+ YAML-based skill modules (architecture, TDD, React patterns, security, etc.) that auto-inject into the system prompt when relevant
 - **User-authored project rules** — optional `.emilerules` preferences, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks
 - **Session persistence** — conversations are saved per workspace; resume, switch, export to Markdown, or rewind to edit your last message
+- **Opt-in web search** — OpenRouter's provider-operated web search can be enabled per run or with `/websearch`; search charges may apply even on free model routes
 - **Context tracking and adaptive compression** — real token usage in the footer; history compresses at 80% of the active model's catalog window
 - **Claude Code–style UI** — boxed writing field, autocomplete for slash commands, `Esc` to cancel a draft, Tokyo Night color palette throughout
 - **Dynamic terminal title** — the tab reports real activity such as thinking, responding, context compression and safe tool summaries
@@ -72,6 +73,7 @@ export EMILE_PROVIDER=requesty
 export REQUESTY_API_KEY=your-key-here
 export EMILE_DEFAULT_MODEL=anthropic/claude-3.5-sonnet
 export EMILE_DEFAULT_EFFORT=low
+export EMILE_WEB_SEARCH=false   # set true only when OpenRouter search is wanted
 ```
 
 ### Run
@@ -97,6 +99,7 @@ emile -H                          # resume a previous session
 | `-H, --history` | Select and resume a past session | `false` |
 | `--no-safe` | Bypass the safe-execution gate for shell commands | safe mode on |
 | `--dry-run` | Simulate file changes and command execution without writing | `false` |
+| `--web-search` | Enable OpenRouter web search; additional provider charges may apply | `false` |
 | `--export-thinking` | Include model reasoning in `/export` output (explicit opt-in) | `false` |
 | `--max-session-size <bytes>` | Maximum size of each persisted session snapshot; old tool results are trimmed when needed | `10485760` |
 | `--verbose` | Show setup and MCP initialization logs | `false` |
@@ -120,6 +123,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
+| `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
 
@@ -147,9 +151,13 @@ The agent has direct access to these file-system and shell tools. All write oper
 | `listDir` | List directory contents |
 | `findFiles` | Find files by glob pattern |
 | `grepSearch` | Search file contents with regex |
-| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware); network-to-shell pipes receive an explicit injection warning |
+| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning |
 
 External tools from MCP servers are exposed alongside these with an `mcp__<server>__<tool>` naming convention.
+
+When enabled, OpenRouter web search is sent as a provider-operated server tool;
+it is not sent to Requesty or other providers. Search results are returned by
+the provider and should be treated as untrusted external data.
 
 ---
 

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-08-31-web-search-tool-reliability` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 
 ## 1. Technical Approach
 

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-31-web-search-tool-reliability` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 3 — Agent capability and execution reliability |
 | **Related documents** | [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [Code quality](../../docs/code-quality-and-security.md), [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) |
 

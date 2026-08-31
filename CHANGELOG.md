@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Opt-in OpenRouter web search** (`specs/2026-08-31-web-search-tool-reliability`): added `--web-search` and `/websearch`; the provider-operated server tool is only sent to OpenRouter and displays a warning that search charges may apply, including on free model routes.
 - **Documentation branch workflow** (`specs/2026-08-30-documentation-branch`): created `docs/documentation`, mapped every catalog feature to its canonical code branch and separated documentation commits from product implementation branches.
 - **Development-first Git workflow** (`specs/2026-08-30-branch-topology-migration`): active work now uses stable product-domain branches rooted at `development`, while legacy incident-oriented refs are preserved under `archive/legacy/`.
 - **Retroactive feature registry** (`IMPROVEMENTS.md` §8.4): documented the agent loop, built-in tools, plans mode and context compression and indexed the complete shipped-feature catalog.
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
 
 ### Changed
+- **Tool and session reliability** (`specs/2026-08-31-web-search-tool-reliability`): `runCommand` now carries a validated workspace-contained cwd across calls and persisted sessions; `writeFile`/`editFile` reject malformed arguments before touching state; provider errors include bounded status/detail classification with secret redaction.
 - **Streaming and multiline input integrity** (`specs/2026-08-30-streaming-input-integrity`): cumulative or overlapping reasoning snapshots are reduced to unseen text, legacy and structured reasoning are not rendered twice, prompt/thinking redraws are emitted as assembled terminal frames, and `Shift+Enter` inserts a newline while plain `Enter` submits.
 - **Compact token units** (`specs/2026-08-30-readable-token-units`): the input footer and status bar now display million-token contexts as `M` (for example, `1M`) instead of values such as `1000k`.
 - **Readable model context labels** (`specs/2026-08-30-model-context-display`): model picker metadata now displays million-token windows as `1M ctx` instead of `1000k ctx`, while smaller windows retain the `k` format.

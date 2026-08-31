@@ -59,6 +59,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
+| **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
 | **Status bar / footer** | `fmtK` | Context (tokens), model and estimated cost; counts at or above one million use compact `M` units (`1M`, `1.5M`) and smaller counts use `k` |
 
@@ -96,6 +97,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 |----------|--------|
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
 | Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
+| Web search | `/websearch` toggles only for OpenRouter and displays the cost warning when enabled |
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
 | Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |

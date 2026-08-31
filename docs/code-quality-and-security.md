@@ -32,6 +32,8 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 | **MCP** | Malicious external server exposing tools with colliding names | `mcp__<server>__<tool>` namespacing; server failure degrades without crashing |
 | **API failures** | Raw provider responses may expose implementation details or sensitive error text | Common statuses are mapped to bounded actionable messages; original error objects remain internal for retry/fallback |
 | **Sessions** | History with sensitive content or unbounded tool output saved to disk | Sessions stay in `.emile/` (gitignored); reasoning is omitted, old tool results are bounded, and cleanup accepts only positive ages |
+| **Web search** | External results may be stale, malicious or unexpectedly billable | Search is explicit opt-in, provider-gated to OpenRouter, bounded to 5/15 results, and the UI warns that provider charges may apply; results remain untrusted model input |
+| **Session cwd** | A command could persist a directory outside the workspace | Shell-reported and persisted cwd values pass through `normalizeWorkspaceCwd`/`resolveSafePath`; invalid or external values fall back to the workspace root |
 | **Supply chain** | Malicious dependency | Justification + official origin + `npm audit` + lockfile for every new dependency |
 
 ---
@@ -46,6 +48,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 6. **Network-pipe friction:** safe-mode confirmation explicitly warns when network content is piped into a shell interpreter; it never auto-approves the command.
 7. **No empty `catch`:** every caught exception is handled, logged (verbose) or propagated with context.
 8. **Dependencies:** no new ones without an ADR or justification recorded in the spec + `npm audit` run.
+9. **Provider-owned tools:** never send a provider-specific tool schema to another provider; web search remains disabled unless explicitly enabled and the owning provider is active.
 
 ---
 
@@ -64,6 +67,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 | **Tools/execution (high)** | Negative scenarios: command outside the whitelist, `../` path outside the workspace, dry-run writes nothing, command failure becomes an error result (not a crash) |
 | **UI/TUI** | Verification at 60/80/120 columns; no ANSI leakage; `Esc`/`Ctrl+C` don't corrupt the readline; [design system](visual-identity.md#6-visual-review-checklist) checklist |
 | **MCP** | Missing/invalid server degrades with a warning and the CLI continues; first connection is fail-closed without interactive approval; remote URLs are limited to HTTP(S), header interpolation fails closed, reconnects are bounded, and nonexistent MCP tools return an error to the model |
+| **Provider web search** | Disabled by default; OpenRouter-only schema; bounded search parameters; no search tool is sent to other providers; cost warning and provider error classification are covered |
 | **New dependency** | Justification + official origin + `npm audit` recorded in `tasks.md` |
 
 ---
