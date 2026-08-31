@@ -44,7 +44,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 |----|-----------|--------|
 | **RF-01** | Conversational agent in a REPL with a tool-call loop (read, write, edit, search, list, run commands) | ✅ |
 | **RF-02** | Connection to multiple OpenAI-compatible providers (Requesty, OpenRouter, OpenCode, OpenCode Go) with a setup wizard | ✅ |
-| **RF-03** | Response streaming with live reasoning rendering visible by default and expand/collapse toggle (`/thinking`) | ✅ |
+| **RF-03** | Response streaming with monotonic live reasoning rendering visible by default, expand/collapse toggle (`/thinking`), and multiline prompt input (`Shift+Enter`) | ✅ |
 | **RF-04** | Built-in tools: `readFile`, `writeFile`, `editFile` (diff), `listDir`, `findFiles`, `grepSearch`, `runCommand` | ✅ |
 | **RF-05** | Execution gate: safe mode with a safe-command whitelist, `--no-safe` and `--dry-run` | ✅ |
 | **RF-06** | `/undo [N]` to revert the agent's last or last N file modifications (undo stack) | ✅ |

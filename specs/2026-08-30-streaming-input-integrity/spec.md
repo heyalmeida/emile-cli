@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-30-streaming-input-integrity` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 2 — TUI reliability and reasoning stream |
 | **Related documents** | [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [Visual identity](../../docs/visual-identity.md), [Code quality](../../docs/code-quality-and-security.md) |
 

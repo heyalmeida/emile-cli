@@ -49,9 +49,9 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Startup screen** | `printStartupScreen` | Brand header in the open-box style: `╭─ ✦ emile ─ v ───` / tagline / `╰────` |
 | **Command divider** | `printUserMessage` | User message as the chapter marker: `── <message> ────` (fg text, muted dashes, truncated); resets the turn's tool counter |
 | **Open boxes** | `boxTopOpen`/`boxBottomOpen` | **Top and bottom borders only** — no left/right rails. Content indents 4 spaces (`BOX_INDENT`). Border ANSI parts are composed separately: never nest a styled label inside `C.muted(...)` or the label's RESET kills the border color |
-| **Input prompt** | `promptInput` | Boxed writing field with slash-command autocomplete, ↑/↓ history; one blank line above the block. **The field draws one explicit row per wrapped line** (each row ≤ terminal width — the terminal must never auto-wrap, or the redraw math corrupts the screen); cursor column is always clamped within its row |
+| **Input prompt** | `promptInput` | Boxed writing field with slash-command autocomplete, ↑/↓ history and multiline editing via `Shift+Enter`; one blank line above the block. **Each redraw assembles the complete frame before one `stdout.write()`** and draws one explicit row per wrapped line (each row ≤ terminal width — the terminal must never auto-wrap, or the redraw math corrupts the screen); cursor column is always clamped within its row |
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
-| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
+| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
 | **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
 | **Tool lines** | `printToolSummary` | Grid-aligned single lines (no box): `● <label 8ch> <dim arg>`; bullet+label carry the semantic tone of the operation (table below); args truncated to the terminal width |
 | **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
@@ -97,6 +97,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
 | Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
+| Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
 | Risk confirmation | @clack `confirm` defaulting to **no** (fail-closed) |

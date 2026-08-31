@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
 
 ### Changed
+- **Streaming and multiline input integrity** (`specs/2026-08-30-streaming-input-integrity`): cumulative or overlapping reasoning snapshots are reduced to unseen text, legacy and structured reasoning are not rendered twice, prompt/thinking redraws are emitted as assembled terminal frames, and `Shift+Enter` inserts a newline while plain `Enter` submits.
 - **Compact token units** (`specs/2026-08-30-readable-token-units`): the input footer and status bar now display million-token contexts as `M` (for example, `1M`) instead of values such as `1000k`.
 - **Readable model context labels** (`specs/2026-08-30-model-context-display`): model picker metadata now displays million-token windows as `1M ctx` instead of `1000k ctx`, while smaller windows retain the `k` format.
 - **Searchable `/model` picker** (`specs/2026-08-30-model-search-picker`): replaced the unbounded provider list with case-insensitive incremental search, at most seven visible results, keyboard navigation, cancellation-safe terminal cleanup and the existing manual model-entry path. OpenRouter uses its live/cache catalog; other providers search their curated options.

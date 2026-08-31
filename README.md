@@ -129,6 +129,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 |-----|--------|
 | `Tab` | Accept autocomplete suggestion / toggle plans mode |
 | `Up` `Down` | Navigate autocomplete entries |
+| `Shift+Enter` | Insert a newline without sending the prompt |
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
 
@@ -300,7 +301,7 @@ User input
 
 1. **System prompt** is assembled from the base prompt + active skills + tool definitions
 2. **Context policy** estimates the full payload before the turn and compresses older history only at 80% of the active model's catalog window
-3. **Streaming response** is parsed chunk-by-chunk: reasoning deltas render live, text accumulates, tool calls are assembled
+3. **Streaming response** is parsed chunk-by-chunk: cumulative reasoning is reduced to unseen text before live rendering, text accumulates, and tool calls are assembled
 4. **Tool execution** runs built-in handlers or MCP bridges, with safe-mode and dry-run checks
 5. **Results** are appended to the message history and the loop continues until the model stops requesting tools
 6. **Context tracking** updates on every API response using real `usage` tokens, with a pre-call character-based estimate as fallback
