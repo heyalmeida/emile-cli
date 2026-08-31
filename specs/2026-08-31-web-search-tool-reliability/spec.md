@@ -64,6 +64,15 @@ leaking credentials or weakening workspace/shell gates.
 - **AC-06:** Given missing/non-string file-tool arguments, when `writeFile` or `editFile` runs, then it returns a clear error and does not modify the filesystem or undo stack.
 - **AC-07:** Given path traversal, unsafe shell commands, dry-run and command failure, when tools run, then existing gates and error-result behavior remain intact.
 
+### Post-implementation correction (2026-08-31)
+
+OpenRouter SSE error envelopes can carry the HTTP status in `error.code`
+instead of the SDK's top-level `status`. AC-05 therefore also requires the
+formatter to derive a 4xx/5xx classification from a numeric nested code. A
+transient stream failure may be retried only before the first chunk is received;
+once reasoning, text or tool-call data has been yielded, the CLI must not replay
+the stream and duplicate visible output.
+
 ## 7. Risks and Open Questions
 
 | Risk/Question | Impact | Mitigation/Answer |

@@ -17,12 +17,14 @@
 - [x] T1.2 — Add persistent workspace-contained session cwd for `runCommand` *(AC-03, AC-04, AC-07)*.
 - [x] T1.3 — Improve provider/stream error classification and file-tool boundary validation *(AC-05, AC-06, AC-07)*.
 - [x] T1.4 — Add regression tests for provider gating, web toggle, cwd, errors and file boundaries *(AC-01–AC-07)*.
+- [ ] T1.5 — Normalize nested OpenRouter SSE status codes and retry transient streams only before the first chunk *(AC-05, AC-07)*.
 
 ## Phase 2 — Verification
 
 - [x] T2.1 — Run syntax checks, tests, lint and diff check.
 - [x] T2.2 — Run safe-mode, dry-run, traversal, cwd and CLI smoke checks.
 - [x] T2.3 — Verify every acceptance criterion and record limitations.
+- [ ] T2.4 — Re-run the focused stream-error regression checks after the post-implementation correction.
 
 ## Phase 3 — Documentation and Closing
 
@@ -37,7 +39,7 @@
 | AC-02 | ✅ | `test/provider-tools.test.js`, `test/commands.test.js`, `node bin/emile.js --help`: default-off provider composition, `/websearch` registration and `--web-search` help/cost warning. |
 | AC-03 | ✅ | `test/run-command.test.js`: `mkdir -p site && cd site` changes `config.sessionCwd`; the next `pwd` runs from `site`. |
 | AC-04 | ✅ | `src/history.js` normalizes persisted `sessionCwd`; `src/cli.js` and `/switch` restore it; `/new` resets it; missing/legacy values fall back to workspace root. |
-| AC-05 | ✅ | `test/api-client.test.js`: 402 classification and secret redaction; stream failures use `formatApiError`. |
+| AC-05 | ✅ | `test/api-client.test.js`: 402 classification, nested `error.code` status classification and secret redaction; stream failures use `formatApiError`. |
 | AC-06 | ✅ | `test/write-file.test.js` and `test/edit-file.test.js`: malformed arguments return clear errors without filesystem or undo changes. |
 | AC-07 | ✅ | Existing security tests plus `test/run-command.test.js`: dry-run, command failure, outside-workspace cwd and existing path/shell gates remain covered. |
 

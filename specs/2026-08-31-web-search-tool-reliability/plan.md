@@ -20,8 +20,10 @@
    the workspace. Save/restore the validated value in session metadata and
    reset it on `/new`.
 4. Expand provider-error classification and route stream errors through the
-   same bounded formatter. Redact key-like values and expose status/category,
-   not raw response bodies.
+   same bounded formatter. Derive HTTP status from OpenRouter's nested numeric
+   `error.code` when needed, redact key-like values and expose
+   status/category, not raw response bodies. Retry transient stream failures
+   only before the first chunk to prevent duplicated output.
 5. Add explicit argument validation and regression tests for write/edit
    boundary failures while retaining existing path, dry-run and undo gates.
 
