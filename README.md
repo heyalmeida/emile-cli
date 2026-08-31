@@ -15,7 +15,7 @@ Connects to any OpenAI-compatible LLM provider (Requesty, OpenRouter, OpenCode) 
 
 ## What is this?
 
-`emile` is a coding agent you run from your terminal. You give it a task in plain English, and it reads files, writes code, runs commands, and iterates — all within your current working directory. Think of it as a pair-programmer that never gets tired of refactoring.
+`emile` is a coding agent you run from your terminal. You give it a task in plain, and it reads files, writes code, runs commands, and iterates — all within your current working directory. Think of it as a pair-programmer that never gets tired of refactoring.
 
 It's built to be **provider-agnostic**: it talks to any OpenAI-compatible API, so you're not locked into a single vendor. The agent loop supports tool calls, reasoning models (with live thinking streams), prompt caching to cut costs, and a skills system that injects domain expertise into the system prompt on demand.
 
