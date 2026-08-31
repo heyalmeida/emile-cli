@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-08-31-aligned-multiline-tool-output` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 
 ## 1. Technical Approach
 

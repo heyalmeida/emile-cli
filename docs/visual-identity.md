@@ -53,7 +53,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
 | **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
 | **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
-| **Tool lines** | `printToolSummary` | Grid-aligned single lines (no box): `● <label 8ch> <dim arg>`; bullet+label carry the semantic tone of the operation (table below); args truncated to the terminal width |
+| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic tone of the operation and each physical line remains bounded/sanitized |
 | **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
 | **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-08-31-aligned-multiline-tool-output` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 2 — Terminal UI reliability |
 | **Related documents** | [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [Visual identity](../../docs/visual-identity.md), [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) |
 
