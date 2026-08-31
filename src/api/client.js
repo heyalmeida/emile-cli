@@ -13,6 +13,15 @@ const RETRYABLE_CODES    = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', '
 
 const MAX_RETRIES = 3;
 
+function getErrorStatus(err) {
+  const candidates = [err?.status, err?.response?.status, err?.error?.status, err?.error?.code];
+  for (const candidate of candidates) {
+    const status = Number(candidate);
+    if (Number.isInteger(status) && status >= 400 && status <= 599) return status;
+  }
+  return null;
+}
+
 /**
  * Get or initialize the OpenAI client configured for the active provider.
  * Re-initializes client if settings have changed.
@@ -69,7 +78,8 @@ export function resetClient() {
  * Returns true if the error is worth retrying (rate-limit, network, server error).
  */
 function isRetryable(err) {
-  if (err?.status && RETRYABLE_STATUSES.has(err.status)) return true;
+  const status = getErrorStatus(err);
+  if (status && RETRYABLE_STATUSES.has(status)) return true;
   if (err?.code  && RETRYABLE_CODES.has(err.code))       return true;
   if (err?.cause?.code && RETRYABLE_CODES.has(err.cause.code)) return true;
   // OpenAI SDK wraps network errors as APIConnectionError
@@ -129,13 +139,13 @@ export function getRetryDelayMs(err, attempt) {
     const dateMs = Date.parse(retryAfter);
     if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
   }
-  if (Number(err?.status) === 429) return 10_000;
+  if (getErrorStatus(err) === 429) return 10_000;
   return attempt * 1500;
 }
 
 /** Maps common provider failures to an actionable, secret-free UI message. */
 export function formatApiError(err, { model = '' } = {}) {
-  const status = Number(err?.status ?? err?.response?.status ?? err?.error?.status);
+  const status = getErrorStatus(err);
   const rawMessage = String(err?.error?.message || err?.message || '');
   const errorCode = err?.code || err?.error?.code;
   const message = rawMessage.toLowerCase();
@@ -147,7 +157,7 @@ export function formatApiError(err, { model = '' } = {}) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
-  const detail = safeDetail && !/^(provider returned error|api request failed)$/i.test(safeDetail)
+  const detail = safeDetail && !/^(provider returned(?: an)? error|api request failed)$/i.test(safeDetail)
     ? ` Details: ${safeDetail}`
     : '';
 
@@ -182,6 +192,47 @@ export function formatApiError(err, { model = '' } = {}) {
     return `Provider connection failed (${String(errorCode).slice(0, 40)}). Check your network and provider settings.${detail}`;
   }
   return `API request failed. Check your provider settings and connection.${detail}`;
+}
+
+/**
+ * Iterates a streaming request with bounded retries for failures that happen
+ * before any response chunk is received. Replaying a partially rendered stream
+ * would duplicate reasoning, text or tool-call deltas in the terminal.
+ */
+async function* streamWithRetries(client, callArgs) {
+  let lastErr;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    let receivedChunk = false;
+    try {
+      const responseStream = await client.chat.completions.create({
+        ...callArgs,
+        stream: true,
+        stream_options: { include_usage: true },
+      });
+
+      for await (const chunk of responseStream) {
+        receivedChunk = true;
+        yield chunk;
+      }
+      return;
+    } catch (err) {
+      lastErr = err;
+      const retryable = !receivedChunk && isRetryable(err) && attempt < MAX_RETRIES;
+      if (!retryable) throw err;
+
+      const waitMs = getRetryDelayMs(err, attempt);
+      const status = getErrorStatus(err);
+      const retryMessage = status === 429
+        ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retrying stream...`
+        : `Stream failed before output. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
+      process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);
+      await sleep(waitMs);
+      process.stdout.write(`\r\x1B[K  ${C.warn('⟳')} ${C.muted(`Stream attempt ${attempt + 1}/${MAX_RETRIES}...`)}\n`);
+    }
+  }
+
+  throw lastErr;
 }
 
 /**
@@ -235,17 +286,12 @@ export async function createChatCompletion({
     extra_body: Object.keys(extraBody).length > 0 ? extraBody : undefined,
   };
 
+  if (stream) return streamWithRetries(client, callArgs);
+
   // ── Retry loop ────────────────────────────────────────────────
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      if (stream) {
-        return await client.chat.completions.create({
-          ...callArgs,
-          stream: true,
-          stream_options: { include_usage: true },
-        });
-      }
       return await client.chat.completions.create(callArgs);
     } catch (err) {
       lastErr = err;
@@ -257,7 +303,7 @@ export async function createChatCompletion({
       }
 
       const waitMs = getRetryDelayMs(err, attempt);
-      const retryMessage = Number(err?.status) === 429
+      const retryMessage = getErrorStatus(err) === 429
         ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`
         : `Connection failed. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
       process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);

@@ -86,3 +86,12 @@ test('classifies provider quota errors without exposing raw credentials', () => 
   assert.match(message, /400/);
   assert.doesNotMatch(message, /secret-value/);
 });
+
+test('classifies OpenRouter streaming errors that carry status in nested error.code', () => {
+  const message = formatApiError({
+    error: { code: 502, message: 'Provider returned an error' },
+  }, { model: 'minimax/minimax-m3:free' });
+
+  assert.match(message, /Provider server error \(502\)/);
+  assert.doesNotMatch(message, /Provider returned an error/);
+});
