@@ -68,6 +68,12 @@ export async function main() {
   const maxLoopIterations = Number(options.maxLoopIterations);
   if (Number.isFinite(maxLoopIterations) && maxLoopIterations > 0) config.maxLoopIterations = maxLoopIterations;
 
+  // Load persisted enhanced-web settings and credentials (.emile/web.json)
+  // into the runtime config — without this, keys configured via /tavily or
+  // /firecrawl are saved but never restored on the next startup.
+  const { hydrateEnhancedWebConfig } = await import('./web/index.js');
+  hydrateEnhancedWebConfig(config);
+
   // Refresh the dynamic model catalog (OpenRouter public endpoint) in the
   // background — effort gating and cost/context metadata use live data when
   // available. Never blocks startup; failures fall back to cache/static.
