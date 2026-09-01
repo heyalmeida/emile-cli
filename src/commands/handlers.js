@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
+import { saveUserConfig } from '../config.js';
+import { normalizeWorkspaceCwd } from '../tools/security.js';
 import {
   C,
   printConfigBox,
@@ -66,6 +68,8 @@ export async function handleSessions(ctx, args = []) {
     if (loaded) {
       ctx.setMessages(loaded);
       ctx.setSessionId(selectedId);
+      const record = ctx.getSessionRecord ? ctx.getSessionRecord(selectedId) : null;
+      ctx.config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || ctx.config.workspaceDir;
       const refreshedSessions = ctx.listSessions();
       const matched = refreshedSessions.find(s => s.id === selectedId);
       ctx.setSessionSummary(matched ? matched.summary : '');
@@ -84,6 +88,7 @@ export function handleNewSession(ctx) {
   ctx.setMessages([]);
   ctx.setSessionId(`session_${Date.now()}`);
   ctx.setSessionSummary('');
+  if (ctx.config) ctx.config.sessionCwd = ctx.config.workspaceDir;
   console.log(C.success('\n  New session started.'));
 }
 
@@ -115,6 +120,25 @@ export function handleThinking(ctx) {
   ctx.config.expandThinking = ctx.config.expandThinking === true ? false : true;
   console.log();
   console.log(C.muted(`  Thinking output: ${ctx.config.expandThinking === true ? C.success('Expanded') : C.dim('Collapsed')}`));
+  console.log();
+}
+
+export function handleWebSearch(ctx) {
+  if (ctx.config.provider !== 'openrouter') {
+    ctx.config.webSearch = false;
+    saveUserConfig({ webSearch: false });
+    console.log(C.warn('\n  Web search is currently available only with the OpenRouter provider.\n'));
+    return;
+  }
+
+  ctx.config.webSearch = ctx.config.webSearch !== true;
+  saveUserConfig({ webSearch: ctx.config.webSearch });
+  const state = ctx.config.webSearch ? C.success('Enabled') : C.dim('Disabled');
+  console.log();
+  console.log(`  Web search: ${state}`);
+  if (ctx.config.webSearch) {
+    console.log(C.warn('  Search may add provider charges, including on free model routes.'));
+  }
   console.log();
 }
 
