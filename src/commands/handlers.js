@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
 import { normalizeWorkspaceCwd } from '../tools/security.js';
+import { saveUserConfig } from '../config.js';
 import { saveEnhancedWebConfig } from '../web/config.js';
 import {
   C,
@@ -129,8 +130,22 @@ export function handleThinking(ctx) {
 }
 
 function saveWebSettings(ctx, settings) {
-  const save = ctx.saveWebConfig || ctx.saveUserConfig || saveEnhancedWebConfig;
-  save(settings, { runtimeConfig: ctx.config });
+  if (ctx.saveUserConfig && !ctx.saveWebToggle && !ctx.saveWebConfig) {
+    // Backward-compatible injection used by embedded callers and tests.
+    ctx.saveUserConfig(settings, { runtimeConfig: ctx.config });
+  } else {
+    if ('webSearch' in settings) {
+      const saveToggle = ctx.saveWebToggle || saveUserConfig;
+      saveToggle({ webSearch: settings.webSearch === true });
+    }
+    const enhancedSettings = Object.fromEntries(
+      Object.entries(settings).filter(([key]) => key !== 'webSearch'),
+    );
+    if (Object.keys(enhancedSettings).length > 0) {
+      const saveEnhanced = ctx.saveWebConfig || saveEnhancedWebConfig;
+      saveEnhanced(enhancedSettings, { runtimeConfig: ctx.config });
+    }
+  }
   // Tests and embedded callers can inject an isolated config object instead
   // of mutating the process-global config singleton.
   Object.assign(ctx.config, settings);

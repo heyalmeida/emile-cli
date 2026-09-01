@@ -4,7 +4,6 @@ import path from 'node:path';
 import { config } from '../config.js';
 
 const WEB_CONFIG_KEYS = new Set([
-  'webSearch',
   'webSearchMode',
   'tavilyApiKey',
   'tavilyEnabled',
@@ -39,7 +38,6 @@ export function hydrateEnhancedWebConfig(runtimeConfig = config, {
   saved = loadWebConfig(runtimeConfig),
   env = process.env,
 } = {}) {
-  if ('webSearch' in saved) runtimeConfig.webSearch = readBoolean(saved.webSearch, runtimeConfig.webSearch === true);
   runtimeConfig.webSearchMode = saved.webSearchMode === 'enhanced' ? 'enhanced' : 'native';
   runtimeConfig.tavilyApiKey = saved.tavilyApiKey || env.TAVILY_API_KEY || '';
   runtimeConfig.tavilyEnabled = readBoolean(saved.tavilyEnabled ?? env.EMILE_TAVILY_ENABLED, false);
@@ -59,7 +57,7 @@ export function saveEnhancedWebConfig(settings, {
       if (typeof value === 'string' && value.trim()) runtimeConfig[key] = value.trim();
       continue;
     }
-    if (key.endsWith('Enabled') || key === 'webSearch') {
+    if (key.endsWith('Enabled')) {
       runtimeConfig[key] = value === true;
       continue;
     }
@@ -70,13 +68,13 @@ export function saveEnhancedWebConfig(settings, {
 
   const next = {
     ...persisted,
-    webSearch: runtimeConfig.webSearch === true,
     webSearchMode: runtimeConfig.webSearchMode === 'enhanced' ? 'enhanced' : 'native',
     tavilyApiKey: runtimeConfig.tavilyApiKey || '',
     tavilyEnabled: runtimeConfig.tavilyEnabled === true,
     firecrawlApiKey: runtimeConfig.firecrawlApiKey || '',
     firecrawlEnabled: runtimeConfig.firecrawlEnabled === true,
   };
+  delete next.webSearch;
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 });

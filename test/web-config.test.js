@@ -28,7 +28,6 @@ test('persists enhanced web credentials in an isolated owner-only file', () => {
 
   try {
     saveEnhancedWebConfig({
-      webSearch: true,
       webSearchMode: 'enhanced',
       tavilyApiKey: 'tavily-secret',
       tavilyEnabled: true,
@@ -39,7 +38,6 @@ test('persists enhanced web credentials in an isolated owner-only file', () => {
 
     const saved = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     assert.deepEqual(saved, {
-      webSearch: true,
       webSearchMode: 'enhanced',
       tavilyApiKey: 'tavily-secret',
       tavilyEnabled: true,
