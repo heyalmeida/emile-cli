@@ -3,6 +3,7 @@ import { text, select, isCancel, cancel, confirm } from '@clack/prompts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, hasCredentials } from './config.js';
+import { normalizeWorkspaceCwd } from './tools/security.js';
 // All user-facing output goes through the C palette exported by ui.js —
 // the single source of colors per the visual identity doc (the legacy
 // picocolors remap was removed in the TUI overhaul pass 1).
@@ -32,6 +33,7 @@ program
   .option('-H, --history', 'Select and resume a past conversation history', false)
   .option('--no-safe', 'Bypass command execution safe gate', false)
   .option('--dry-run', 'Simulate changes and command execution', false)
+  .option('--web-search', 'Allow OpenRouter web search (additional provider charges may apply)', config.webSearch)
   .option('--export-thinking', 'Include model reasoning in /export output', false)
   .option('--max-session-size <bytes>', 'Maximum persisted session size in bytes', String(config.maxSessionSize))
   .option('--verbose', 'Show setup and initialization logs', false);
@@ -59,6 +61,7 @@ export async function main() {
   config.dryRun = !!options.dryRun;
   config.safeMode = options.safe !== false;
   config.plansMode = !!options.plans;
+  config.webSearch = options.webSearch === true;
   const maxSessionSize = Number(options.maxSessionSize);
   if (Number.isFinite(maxSessionSize) && maxSessionSize > 0) config.maxSessionSize = maxSessionSize;
 
@@ -154,6 +157,8 @@ export async function main() {
       if (loaded) {
         messages = loaded;
         sessionId = selectedId;
+        const record = getSessionRecord(selectedId);
+        config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || config.workspaceDir;
         const refreshedSessions = listSessions();
         const matched = refreshedSessions.find(s => s.id === selectedId);
         sessionSummary = matched ? matched.summary : '';
@@ -323,6 +328,7 @@ export async function main() {
       setSessionId: (nextSessionId) => { sessionId = nextSessionId; },
       getSessionSummary: () => sessionSummary,
       setSessionSummary: (nextSummary) => { sessionSummary = nextSummary; },
+      getSessionRecord,
       setPrefill: (nextPrefill) => { prefill = nextPrefill; },
       resumeSession: resumeLoadedSession,
     };

@@ -74,4 +74,19 @@ export function resolveSafePath(userPath) {
   return resolved;
 }
 
+/**
+ * Validates a persisted or shell-reported working directory. Returning null
+ * instead of throwing lets callers safely fall back to the workspace root.
+ */
+export function normalizeWorkspaceCwd(candidate) {
+  if (typeof candidate !== 'string' || candidate.length === 0) return null;
+  try {
+    const resolved = resolveSafePath(candidate);
+    if (!fs.statSync(resolved).isDirectory()) return null;
+    return resolved;
+  } catch {
+    return null;
+  }
+}
+
 // Generate and display diff using centralized UI

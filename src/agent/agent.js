@@ -1,6 +1,6 @@
 // agent.js — the agent loop (runAgent) and tool dispatch.
 import { buildSystemPrompt } from '../prompt.js';
-import { createChatCompletion } from '../api/index.js';
+import { createChatCompletion, formatApiError, getProviderToolDefinitions } from '../api/index.js';
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
 import { promptPlanApproval, renderPlanStatus } from '../plans.js';
@@ -20,7 +20,7 @@ import {
   describeToolActivity,
 } from '../ui/index.js';
 import { createSpinner } from '../ui/spinner.js';
-import { appendReasoningDetails } from './reasoning.js';
+import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
 
 export const FREE_FALLBACK_MODEL = 'openrouter/free';
@@ -175,7 +175,11 @@ async function runAgentInner({
 
   const localTools = toolDefinitions;
   const mcpTools = getMcpToolDefinitions();
-  const allTools = [...localTools, ...mcpTools];
+  const providerTools = getProviderToolDefinitions({
+    provider: config.provider,
+    webSearch: config.webSearch,
+  });
+  const allTools = [...localTools, ...mcpTools, ...providerTools];
 
   // Estimate the complete payload before applying the compression gate so its
   // token unit and context window match the status bar. Recalculate after a
@@ -295,6 +299,10 @@ async function runAgentInner({
     let usage = null;
     let isFirstChunk = true;
     let thinkingStreamed = false;
+    // Some providers expose the same reasoning through both the legacy
+    // string field and reasoning_details. Choose the first readable channel
+    // for display so one provider response cannot be rendered twice.
+    let reasoningDisplaySource = null;
 
     try {
       for await (const chunk of responseStream) {
@@ -315,19 +323,26 @@ async function runAgentInner({
 
         const delta = choice.delta || {};
 
-        const rDelta = delta.reasoning_content || delta.reasoning || '';
-        if (rDelta) {
-          if (!thinkingStreamed) {
-            startThinkingStream();
-            thinkingStreamed = true;
+        const rawReasoning = delta.reasoning_content || delta.reasoning || '';
+        if (rawReasoning && reasoningDisplaySource !== 'structured') {
+          const rDelta = getIncrementalText(reasoningContent, rawReasoning);
+          if (rDelta) {
+            reasoningDisplaySource = 'legacy';
+            if (!thinkingStreamed) {
+              startThinkingStream();
+              thinkingStreamed = true;
+            }
+            appendThinkingStream(rDelta);
+            reasoningContent += rDelta;
           }
-          appendThinkingStream(rDelta);
-          reasoningContent += rDelta;
         }
 
         if (Array.isArray(delta.reasoning_details)) {
           const structuredText = appendReasoningDetails(reasoningDetails, delta.reasoning_details);
-          if (structuredText) {
+          // Keep structured details in the assistant message even when the
+          // provider also sends the legacy field, but render only one source.
+          if (structuredText && reasoningDisplaySource !== 'legacy') {
+            reasoningDisplaySource = 'structured';
             if (!thinkingStreamed) {
               startThinkingStream();
               thinkingStreamed = true;
@@ -337,7 +352,7 @@ async function runAgentInner({
           }
         }
 
-        const cDelta = delta.content || '';
+        const cDelta = getIncrementalText(textContent, delta.content || '');
         if (cDelta) {
           setTerminalActivity('responding');
           textContent += cDelta;
@@ -363,7 +378,7 @@ async function runAgentInner({
       // Surface the failure — a silent swallow made mid-response failures
       // look like empty replies. Partial reasoning/text still renders below.
       spinner.stop();
-      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${streamErr.message}`)}\n`);
+      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
     }
 
     if (isFirstChunk) {
