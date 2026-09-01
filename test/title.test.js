@@ -70,6 +70,8 @@ test('describes built-in tool activity without leaking command or search argumen
     ['editFile', { path: '/work/src/output.js' }, 'editing src/output.js'],
     ['listDir', { path: '/work/private' }, 'listing files'],
     ['findFiles', { pattern: 'private-token' }, 'finding files'],
+    ['searchWeb', { query: 'private-token' }, 'searching web'],
+    ['browsePage', { url: 'https://example.com/private?token=secret' }, 'reading web page'],
     ['createPlan', { secret: 'not-visible' }, 'creating plan'],
     ['updateTask', { secret: 'not-visible' }, 'updating plan'],
   ];
