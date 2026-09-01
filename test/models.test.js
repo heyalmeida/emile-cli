@@ -14,6 +14,17 @@ test('formats catalog model metadata without control characters', () => {
   assert.doesNotMatch(label, /[\r\n\t]/);
 });
 
+test('formats million-token context windows with an M suffix', () => {
+  const label = formatCatalogModelLabel('provider/large-context', {
+    context: 1_000_000,
+    inputPrice: 1,
+    outputPrice: 2,
+  });
+
+  assert.match(label, /1M ctx/);
+  assert.doesNotMatch(label, /1000k ctx/);
+});
+
 test('bounds malformed catalog ids and metadata to a safe label', () => {
   const label = formatCatalogModelLabel(`  ${'x'.repeat(200)}  `, {
     context: 'invalid',
