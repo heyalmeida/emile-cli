@@ -24,6 +24,13 @@ export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';
 export {
+  promptWebProviderCredential,
+  printWebProviderStatus,
+  printWebSearchStatus,
+  printWebCommandWarning,
+  printWebProviderConfigured,
+} from './web-config.js';
+export {
   MAX_TERMINAL_TITLE_LENGTH,
   sanitizeTitlePart,
   formatTerminalTitle,

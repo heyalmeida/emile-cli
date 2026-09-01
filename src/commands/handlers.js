@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
-import { saveUserConfig } from '../config.js';
 import { normalizeWorkspaceCwd } from '../tools/security.js';
+import { saveEnhancedWebConfig } from '../web/config.js';
 import {
   C,
   printConfigBox,
@@ -11,6 +11,11 @@ import {
   promptSwitchSession,
   configureTerminalTitle,
   setTerminalActivity,
+  promptWebProviderCredential,
+  printWebProviderStatus,
+  printWebSearchStatus,
+  printWebCommandWarning,
+  printWebProviderConfigured,
 } from '../ui/index.js';
 
 export async function handleConnect(ctx) {
@@ -123,23 +128,133 @@ export function handleThinking(ctx) {
   console.log();
 }
 
-export function handleWebSearch(ctx) {
-  if (ctx.config.provider !== 'openrouter') {
-    ctx.config.webSearch = false;
-    saveUserConfig({ webSearch: false });
-    console.log(C.warn('\n  Web search is currently available only with the OpenRouter provider.\n'));
+function saveWebSettings(ctx, settings) {
+  const save = ctx.saveWebConfig || ctx.saveUserConfig || saveEnhancedWebConfig;
+  save(settings, { runtimeConfig: ctx.config });
+  // Tests and embedded callers can inject an isolated config object instead
+  // of mutating the process-global config singleton.
+  Object.assign(ctx.config, settings);
+}
+
+function showWebSearchStatus(ctx) {
+  (ctx.printWebSearchStatus || printWebSearchStatus)(ctx.config);
+}
+
+function showWebProviderStatus(ctx, provider) {
+  (ctx.printWebProviderStatus || printWebProviderStatus)(provider, ctx.config);
+}
+
+function warnWebCommand(ctx, message) {
+  (ctx.printWebCommandWarning || printWebCommandWarning)(message);
+}
+
+function isEnhancedProviderReady(config, provider) {
+  return config?.[`${provider}Enabled`] === true && Boolean(config?.[`${provider}ApiKey`]);
+}
+
+export function handleWebSearch(ctx, args = []) {
+  const operation = String(args[0] || '').toLowerCase();
+  if (args.length > 1 || !['', 'on', 'off', 'native', 'enhanced', 'status'].includes(operation)) {
+    warnWebCommand(ctx, 'Usage: /websearch [on|off|native|enhanced|status]');
     return;
   }
 
-  ctx.config.webSearch = ctx.config.webSearch !== true;
-  saveUserConfig({ webSearch: ctx.config.webSearch });
-  const state = ctx.config.webSearch ? C.success('Enabled') : C.dim('Disabled');
-  console.log();
-  console.log(`  Web search: ${state}`);
-  if (ctx.config.webSearch) {
-    console.log(C.warn('  Search may add provider charges, including on free model routes.'));
+  if (operation === 'status') {
+    showWebSearchStatus(ctx);
+    return;
   }
-  console.log();
+
+  if (operation === 'native') {
+    if (ctx.config.provider !== 'openrouter') {
+      warnWebCommand(ctx, 'Native web search requires the OpenRouter provider.');
+      return;
+    }
+    saveWebSettings(ctx, { webSearchMode: 'native', webSearch: true });
+    showWebSearchStatus(ctx);
+    return;
+  }
+
+  if (operation === 'enhanced') {
+    saveWebSettings(ctx, { webSearchMode: 'enhanced', webSearch: true });
+    showWebSearchStatus(ctx);
+    if (!isEnhancedProviderReady(ctx.config, 'tavily') || !isEnhancedProviderReady(ctx.config, 'firecrawl')) {
+      warnWebCommand(ctx, 'Enhanced mode is active with partial capabilities. Configure /tavily and /firecrawl to enable both tools.');
+    }
+    return;
+  }
+
+  if (operation === 'off') {
+    saveWebSettings(ctx, { webSearch: false });
+    showWebSearchStatus(ctx);
+    return;
+  }
+
+  const shouldEnable = operation === 'on' || ctx.config.webSearch !== true;
+  const mode = ctx.config.webSearchMode === 'enhanced' ? 'enhanced' : 'native';
+  if (shouldEnable && mode === 'native' && ctx.config.provider !== 'openrouter') {
+    warnWebCommand(ctx, 'Native web search requires OpenRouter. Use /websearch enhanced for provider-independent search.');
+    return;
+  }
+  if (shouldEnable && mode === 'enhanced' &&
+      !isEnhancedProviderReady(ctx.config, 'tavily') &&
+      !isEnhancedProviderReady(ctx.config, 'firecrawl')) {
+    warnWebCommand(ctx, 'Configure /tavily or /firecrawl before enabling enhanced web search.');
+    return;
+  }
+
+  saveWebSettings(ctx, { webSearch: shouldEnable });
+  showWebSearchStatus(ctx);
+}
+
+async function handleEnhancedProvider(ctx, provider, args = []) {
+  const operation = String(args[0] || '').toLowerCase();
+  if (args.length > 1 || !['', 'on', 'off', 'status'].includes(operation)) {
+    warnWebCommand(ctx, `Usage: /${provider} [on|off|status]. API keys are accepted only by the masked setup.`);
+    return;
+  }
+
+  if (operation === 'status') {
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  if (operation === 'off') {
+    saveWebSettings(ctx, { [`${provider}Enabled`]: false });
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  if (operation === 'on') {
+    if (!ctx.config?.[`${provider}ApiKey`]) {
+      warnWebCommand(ctx, `Configure /${provider} before enabling it.`);
+      return;
+    }
+    saveWebSettings(ctx, { [`${provider}Enabled`]: true });
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  setTerminalActivity(`configuring ${provider}`);
+  try {
+    const promptCredential = ctx.promptWebProviderCredential || promptWebProviderCredential;
+    const result = await promptCredential(provider);
+    if (!result || result.cancelled || !result.value) return;
+    saveWebSettings(ctx, {
+      [`${provider}ApiKey`]: result.value,
+      [`${provider}Enabled`]: true,
+    });
+    (ctx.printWebProviderConfigured || printWebProviderConfigured)(provider);
+  } finally {
+    setTerminalActivity('waiting');
+  }
+}
+
+export async function handleTavily(ctx, args = []) {
+  await handleEnhancedProvider(ctx, 'tavily', args);
+}
+
+export async function handleFirecrawl(ctx, args = []) {
+  await handleEnhancedProvider(ctx, 'firecrawl', args);
 }
 
 export function handleHelp() {
