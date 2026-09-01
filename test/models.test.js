@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { formatCatalogModelLabel } from '../src/commands.js';
+import { parseProviderModelIds } from '../src/models.js';
 import { fmtK } from '../src/ui/theme.js';
 
 test('formats catalog model metadata without control characters', () => {
@@ -43,4 +44,24 @@ test('bounds malformed catalog ids and metadata to a safe label', () => {
   assert.ok(label.length < 140);
   assert.match(label, /context n\/a/);
   assert.match(label, /\$n\/a\/\$n\/a/);
+});
+
+
+test('parseProviderModelIds extracts and trims non-empty ids', () => {
+  assert.deepEqual(
+    parseProviderModelIds({ data: [
+      { id: 'claude-sonnet-4-5' },
+      { id: '  deepseek-v4-pro  ' },
+      { id: '' },
+      { id: 42 },
+      null,
+    ] }),
+    ['claude-sonnet-4-5', 'deepseek-v4-pro'],
+  );
+});
+
+test('parseProviderModelIds returns an empty list for malformed payloads', () => {
+  assert.deepEqual(parseProviderModelIds(null), []);
+  assert.deepEqual(parseProviderModelIds({ data: 'nope' }), []);
+  assert.deepEqual(parseProviderModelIds({}), []);
 });

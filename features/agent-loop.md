@@ -26,10 +26,12 @@ free-model fallback and iteration limits protect the turn.
 
 | Item | Detail |
 |------|---------|
-| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache` |
-| **Slash commands** | `/thinking`, `/cost` |
+| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--max-loop-iterations <n>` |
+| **Slash commands** | `/thinking`, `/cost`, `/maxloop <n>` |
 | **Tools** | Built-in tools and MCP tool bridge |
 | **Configuration** | Provider/model/effort in `.emile/config.json` and environment variables |
+| **Iteration cap** | `maxLoopIterations` (default 40) via `EMILE_MAX_LOOP_ITERATIONS`, `--max-loop-iterations <n>`, or `/maxloop <n>` |
+| **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop (partial text kept, pending tool calls dropped or placeholder-filled); lines typed during a turn are queued and run as the next turns (`src/agent/turn-control.js`, `src/ui/turn-keys.js`) |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
 ## Where It Lives in the Code
@@ -50,3 +52,5 @@ the loop is single-agent rather than parallel.
 | Date | Change | Reference |
 |------|--------|-----------|
 | 2026-08-30 | Registered the shipped agent-loop capability | `specs/2026-08-30-feature-registry-completion` |
+| 2026-09-01 | Made the per-turn iteration cap configurable via `EMILE_MAX_LOOP_ITERATIONS`, `--max-loop-iterations` and the `/maxloop <n>` command | CHANGELOG |
+| 2026-09-01 | Added graceful turn interrupt (Esc/Ctrl+C) and message queueing while the agent works | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |

@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` |
+| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-09-01-opencode-model-list` |
 | **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop / API / UI (`src/models.js`, `src/api/`, `src/agent/`, `src/ui/model-picker.js`) |
 
@@ -12,7 +12,7 @@
 
 ## Description
 
-The model knowledge and session-telemetry system: a dynamic catalog with static fallbacks answers context windows, pricing and reasoning capability; reasoning effort is normalized and capability-gated before reaching the API; context tracking distinguishes the pre-call estimate from measured API usage; and history compression scales to 80% of that same model window instead of treating every paid/free route alike. The conversation prefix remains byte-stable per session to maximize provider prompt-cache hits, with the hit rate visible in the status bar and `/cost`. `/model` provides incremental, case-insensitive search with at most seven visible results; OpenRouter uses its live/cache catalog and providers without a supported catalog endpoint use curated options.
+The model knowledge and session-telemetry system: a dynamic catalog with static fallbacks answers context windows, pricing and reasoning capability; reasoning effort is normalized and capability-gated before reaching the API; context tracking distinguishes the pre-call estimate from measured API usage; and history compression scales to 80% of that same model window instead of treating every paid/free route alike. The conversation prefix remains byte-stable per session to maximize provider prompt-cache hits, with the hit rate visible in the status bar and `/cost`. `/model` provides incremental, case-insensitive search with at most seven visible results; OpenRouter uses its live/cache catalog, OpenCode Zen and OpenCode Go use their live `/models` lists, and providers without a supported list endpoint use curated options.
 
 ## How It Works
 
@@ -31,7 +31,8 @@ flowchart LR
 | Item | Detail |
 |------|---------|
 | **Model metadata** | `src/models.js` → dynamic OpenRouter catalog + `MODEL_INFO` fallback through `getModelInfo()`; safe default 128k / $3/$15; `/model` waits for and searches live/cache OpenRouter entries |
-| **Model picker** | `src/ui/model-picker.js` → sanitized incremental substring filter, maximum seven visible rows, keyboard navigation and cancellation; non-OpenRouter providers search their curated lists |
+| **Model lists** | `src/models.js` → `getProviderModelOptions()` fetches OpenCode Zen (`opencode.ai/zen/v1/models`) and OpenCode Go (`opencode.ai/zen/go/v1/models`) ids on demand, with a 10s timeout, in-memory cache and curated fallback |
+| **Model picker** | `src/ui/model-picker.js` → sanitized incremental substring filter, maximum seven visible rows, keyboard navigation, scrolling through the full match list and cancellation; OpenRouter/OpenCode use live lists, other providers search their curated lists |
 | **Effort gating** | OpenRouter uses `reasoning.effort`; Requesty Anthropic-family models use `thinking.budget_tokens` (512–16,384); generic models use `reasoning_effort`; unsupported fields are omitted |
 | **Context honesty** | Pre-call estimate (`chars / 4`) prefixed with `~`; measured usage unprefixed; limit from MODEL_INFO |
 | **Context compression** | Full payload compresses at 80% of the active catalog window; secondary system summaries are counted, same-session retry requires >40% post-compression history growth, and failed summarization drops oldest complete groups toward 70% |
@@ -52,7 +53,8 @@ flowchart LR
 - Offline catalog cache and static fallback metadata are best-effort and can go stale; startup refreshes the live catalog when available.
 - The workspace snapshot in the system prompt is frozen until plans mode or skills change (deliberate cache trade-off).
 - Providers that don't report cached tokens show no cache percentage.
-- Only OpenRouter has a validated remote catalog integration; other providers' searchable options can become stale until their catalog contracts are added.
+- OpenRouter has a validated remote metadata catalog; OpenCode Zen/Go expose live id-only model lists (no context/pricing), so their labels fall back to the static table for display metadata.
+- OpenCode Zen routes model families to different endpoints (`/responses`, `/messages`, Google-native). emile still sends every request through the OpenAI-SDK `chat/completions` path, so families outside that path may fail at call time even though their ids appear in the live list.
 - Context estimation uses the existing four-characters-per-token approximation; no provider-specific tokenizer or mid-tool-loop compression is implemented.
 - If both summarization and safe truncation cannot reduce the history, the request continues with the existing warning and remains subject to the provider's context error handling.
 
@@ -68,3 +70,4 @@ flowchart LR
 | 2026-08-30 | Added native Anthropic thinking budget mapping for Requesty Anthropic-family models | `specs/2026-08-30-anthropic-thinking-budget` / CHANGELOG |
 | 2026-08-30 | Replaced the unbounded `/model` select with incremental id/label search, seven visible results, keyboard navigation and safe manual-entry fallback | `specs/2026-08-30-model-search-picker` / CHANGELOG |
 | 2026-08-30 | Model picker context metadata uses `M` for million-token windows and keeps `k` for smaller windows | `specs/2026-08-30-model-context-display` / CHANGELOG |
+| 2026-09-01 | `/model` fetches live OpenCode Zen/Go model lists and the OpenCode Zen client base URL was corrected to `opencode.ai/zen/v1` | `specs/2026-09-01-opencode-model-list` / CHANGELOG |

@@ -45,8 +45,8 @@ export function getClient() {
         'X-Title': 'Emile CLI',
       };
     } else if (config.provider === 'opencode') {
-      // OpenCode Zen — OpenAI-compatible gateway (https://opencode.ai)
-      options.baseURL = 'https://api.opencode.ai/v1';
+      // OpenCode Zen — curated gateway (https://opencode.ai/zen)
+      options.baseURL = 'https://opencode.ai/zen/v1';
       options.defaultHeaders = {
         'X-Title': 'Emile CLI',
       };

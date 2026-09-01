@@ -172,6 +172,7 @@ async function runAgentInner({
   checkpointSession = null,
   createCompletion = createChatCompletion,
   requestPlanApproval = promptPlanApproval,
+  control = null,
 }) {
   // Clear file read cache at the beginning of each turn/interaction
   clearFileCache();
@@ -246,6 +247,12 @@ async function runAgentInner({
   let pendingWebAttachments = [];
 
   while (loop) {
+    // Turn control (spec 2026-09-01-turn-interrupt-queue): graceful cancel
+    // requested between iterations — stop before any new API call.
+    if (control?.shouldStop()) {
+      process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled.')}\n`);
+      break;
+    }
     // IMPROVEMENTS.md §3.1: hard stop when the loop exceeds the cap.
     const iteration = (iterationCount += 1);
     if (iteration > MAX_LOOP_ITERATIONS) {
@@ -349,8 +356,16 @@ async function runAgentInner({
     // for display so one provider response cannot be rendered twice.
     let reasoningDisplaySource = null;
 
+    let streamCanceled = false;
     try {
       for await (const chunk of responseStream) {
+        // Turn control: stop consuming the stream as soon as a cancel is
+        // requested. The partial content rendered so far is kept.
+        if (control?.shouldStop()) {
+          streamCanceled = true;
+          try { responseStream.controller?.abort?.(); } catch { /* best-effort */ }
+          break;
+        }
         if (isFirstChunk) {
           // Silent stop — the streamed content itself (thinking stream, text,
           // tool box) is the progress signal; a "response received" line on
@@ -518,6 +533,20 @@ async function runAgentInner({
       }
     }
 
+    // Turn control: a cancel that arrived during the stream stops the turn
+    // here. Tool calls from a partially received response are dropped (their
+    // arguments may be incomplete); text-only partial replies are kept.
+    if (streamCanceled || control?.shouldStop()) {
+      spinner.stop();
+      if (assistantMessage.tool_calls) {
+        process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — pending tool calls discarded.')}\n`);
+      } else {
+        messages.push(assistantMessage);
+        process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — partial response kept.')}\n`);
+      }
+      break;
+    }
+
     messages.push(assistantMessage);
 
     // Process tool calls as a batch — no clack spinner, just text output
@@ -530,7 +559,22 @@ async function runAgentInner({
       });
       printToolSummary(toolCalls);
 
-      for (const toolCall of toolCalls) {
+      for (const [toolIndex, toolCall] of toolCalls.entries()) {
+        // Turn control: stop before executing this call and fill every
+        // remaining call with a placeholder result so the history keeps one
+        // tool result per tool_call id (valid for the next request).
+        if (control?.shouldStop()) {
+          for (const pendingCall of toolCalls.slice(toolIndex)) {
+            messages.push({
+              role: 'tool',
+              tool_call_id: pendingCall.id,
+              content: '[canceled by user]',
+            });
+          }
+          process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — remaining tools skipped.')}\n`);
+          loop = false;
+          break;
+        }
         setTerminalActivity(describeToolActivity(toolCall));
         const toolResult = await executeTool(toolCall);
         messages.push({

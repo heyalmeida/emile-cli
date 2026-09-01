@@ -129,6 +129,21 @@ export function handleThinking(ctx) {
   console.log();
 }
 
+export function handleMaxLoop(ctx, args = []) {
+  const value = Number(args[0]);
+  if (args.length !== 1 || !Number.isInteger(value) || value < 1) {
+    console.log();
+    console.log(C.warn('  Usage: /maxloop <number> — a whole number of at least 1.'));
+    console.log(C.muted(`  Current agent-loop cap: ${C.success(String(ctx.config.maxLoopIterations))} iterations per turn.`));
+    console.log();
+    return;
+  }
+  ctx.config.maxLoopIterations = value;
+  console.log();
+  console.log(C.muted(`  Agent-loop cap set to ${C.success(String(value))} iterations per turn.`));
+  console.log();
+}
+
 function saveWebSettings(ctx, settings) {
   if (ctx.saveUserConfig && !ctx.saveWebToggle && !ctx.saveWebConfig) {
     // Backward-compatible injection used by embedded callers and tests.

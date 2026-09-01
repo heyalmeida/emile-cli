@@ -49,6 +49,7 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       { name: '/export', desc: 'Export the current session as Markdown' },
       { name: '/rules', desc: 'Inspect user-authored project rules' },
       { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
+      { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
       { name: '/websearch', desc: 'Control native or enhanced web search' },
       { name: '/tavily', desc: 'Configure Tavily enhanced search' },
       { name: '/firecrawl', desc: 'Configure Firecrawl page rendering' },

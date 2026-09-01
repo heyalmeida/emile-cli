@@ -5,8 +5,8 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
-  '/rewind', '/thinking', '/websearch', '/tavily', '/firecrawl', '/help',
-  '/undo', '/cost', '/export', '/rules',
+  '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
+  '/help', '/undo', '/cost', '/export', '/rules',
 ];
 
 test('registry contains every existing slash command and aliases', () => {
@@ -51,6 +51,17 @@ test('thinking handler toggles the shared visibility state', async () => {
 
   assert.equal(handled, true);
   assert.equal(config.expandThinking, false);
+});
+
+test('maxloop handler sets the iteration cap and rejects invalid values', async () => {
+  const config = { maxLoopIterations: 40 };
+  const handled = await dispatchCommand('/maxloop 80', { config });
+
+  assert.equal(handled, true);
+  assert.equal(config.maxLoopIterations, 80);
+
+  await dispatchCommand('/maxloop nope', { config });
+  assert.equal(config.maxLoopIterations, 80);
 });
 
 test('undo dispatch accepts an optional count', async () => {
