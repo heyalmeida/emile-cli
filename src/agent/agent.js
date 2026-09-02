@@ -302,13 +302,22 @@ async function runAgentInner({
         useCache: cache,
         effort,
         stream: true,
+        signal: control?.signal,
       });
       // Screenshot URLs are short-lived references for exactly one immediate
       // model request. They are deliberately absent from persisted history.
       pendingWebAttachments = [];
     } catch (err) {
-      spinner.stop('API error', '✗');
+      spinner.stop();
 
+      // Turn control: the request was aborted by a cancel while waiting for
+      // the response to start (e.g. the provider stalled in "thinking").
+      // Handle it as a graceful cancel — never as a compression/fallback
+      // trigger or a stream error.
+      if (control?.shouldStop()) {
+        process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled.')}\n`);
+        break;
+      }
       // IMPROVEMENTS.md §3.3: on context overflow, force-compress the history
       // and retry the turn once instead of entering the retry loop with the
       // same oversized payload.
@@ -435,10 +444,14 @@ async function runAgentInner({
         }
       }
     } catch (streamErr) {
-      // Surface the failure — a silent swallow made mid-response failures
-      // look like empty replies. Partial reasoning/text still renders below.
+      // A cancel that aborted the request mid-stream is not an error — it is
+      // handled below via streamCanceled/shouldStop with a proper notice.
       spinner.stop();
-      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
+      if (!control?.shouldStop()) {
+        // Surface the failure — a silent swallow made mid-response failures
+        // look like empty replies. Partial reasoning/text still renders below.
+        process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
+      }
     }
 
     if (isFirstChunk) {
