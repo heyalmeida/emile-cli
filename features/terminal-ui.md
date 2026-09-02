@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-aligned-multiline-tool-output` |
+| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` + `specs/2026-09-01-turn-interrupt-queue` + `specs/2026-09-02-prompt-paste` |
 | **PRD RFs served** | RF-14, RF-16, RF-18 |
 | **Owner/Area** | UI (`src/ui/`) |
 
@@ -40,6 +40,7 @@ flowchart TD
 | **Multiline tool rows** | Continuation lines are sanitized, width-bounded and indented beneath the argument column instead of restarting at column zero |
 | **Palette tokens** | `C.gold` (#FFD700), `C.ghost` (#3B4261); `GAP` spacing constants |
 | **Terminal title** | OSC 0, activity-first, max 100 chars; real TTY only; duplicate writes suppressed |
+| **Prompt lifecycle** | `persistentPromptInput` owns idle stdin; Tab completes slash commands, bracketed pasted text stays editable (including newlines), and nested pickers receive exclusive ownership. During active turns, `listenTurnKeys` provides the same paste behavior, renders the same full frame, routes stdout above it and leaves the real caret at the draft before returning ownership afterward |
 | **Applicable security gates** | Assistant output sanitization; terminal title excludes prompts/command/query args and strips ANSI/OSC/control bytes |
 
 ## Where It Lives in the Code
@@ -47,6 +48,7 @@ flowchart TD
 | Layer | Main paths |
 |--------|---------------------|
 | Rendering | `src/ui/` module tree (`theme.js`, components and `index.js` barrel) |
+| Prompt interaction | `src/ui/prompt-input-persistent.js`, `src/ui/turn-keys.js`, `src/ui/switch-session.js`; lifecycle orchestration in `src/cli.js` |
 | Terminal title | `src/ui/title.js`; lifecycle integration in `src/cli.js`, `src/agent/agent.js` and `src/agent/compression.js` |
 | Spinner | `src/ui/spinner.js` (silent stop on success) |
 | Render harness | `test-ui.js` (full simulated turn) |
@@ -71,5 +73,6 @@ flowchart TD
 | 2026-08-25 | Dynamic terminal title: automatic sanitized lifecycle, reasoning, response, compression and tool states; no model-facing tool or prompt/argument leakage | `specs/2026-08-25-dynamic-terminal-title` / CHANGELOG |
 | 2026-08-30 | Reasoning display fix: unified `/thinking` state, completed duration for expanded streams, and OpenRouter `reasoning_details` parsing with encrypted-block protection | `specs/2026-08-30-reasoning-details-display` / CHANGELOG |
 | 2026-08-30 | Reasoning is expanded by default after validation with `minimax-m3:free`; `/thinking` and Ctrl+P remain the collapse toggle | `specs/2026-08-30-reasoning-details-display` / CHANGELOG |
-| 2026-08-31 | Streamed reasoning no longer duplicates cumulative/overlapping text; prompt and thinking redraws use atomic frames and `Shift+Enter` supports multiline input | `specs/2026-08-30-streaming-input-integrity` / CHANGELOG |
-| 2026-08-31 | Multiline tool arguments keep continuation lines aligned beneath the argument column with existing styling, bounds and sanitization | `specs/2026-08-31-aligned-multiline-tool-output` / CHANGELOG |
+| 2026-09-01 | Persistent prompt lifecycle: Tab completion, exclusive nested-picker stdin and reliable prompt resume after `/switch` | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
+| 2026-09-02 | Active-turn visual parity: shared full prompt, distinct `●` autocomplete selection, prompt-aware stdout arbitration and real caret preserved at the draft | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
+| 2026-09-02 | Multiline paste retention: idle and active prompts use terminal bracketed-paste mode, retain CRLF-normalized drafts and restore the terminal mode on cleanup | `specs/2026-09-02-prompt-paste` / CHANGELOG |

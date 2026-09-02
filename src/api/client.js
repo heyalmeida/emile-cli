@@ -41,7 +41,7 @@ export function getClient() {
     if (config.provider === 'openrouter') {
       options.baseURL = 'https://openrouter.ai/api/v1';
       options.defaultHeaders = {
-        'HTTP-Referer': 'https://github.com/ArctisDev/emile-cli',
+        'HTTP-Referer': 'https://emile.luarvia.dev',
         'X-Title': 'Emile CLI',
       };
     } else if (config.provider === 'opencode') {
@@ -199,17 +199,18 @@ export function formatApiError(err, { model = '' } = {}) {
  * before any response chunk is received. Replaying a partially rendered stream
  * would duplicate reasoning, text or tool-call deltas in the terminal.
  */
-async function* streamWithRetries(client, callArgs) {
+async function* streamWithRetries(client, callArgs, signal = null) {
   let lastErr;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     let receivedChunk = false;
+    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
     try {
       const responseStream = await client.chat.completions.create({
         ...callArgs,
         stream: true,
         stream_options: { include_usage: true },
-      });
+      }, signal ? { signal } : undefined);
 
       for await (const chunk of responseStream) {
         receivedChunk = true;
@@ -218,6 +219,8 @@ async function* streamWithRetries(client, callArgs) {
       return;
     } catch (err) {
       lastErr = err;
+      // A cancel/signal abort must never be retried — throw immediately.
+      if (signal?.aborted) throw err;
       const retryable = !receivedChunk && isRetryable(err) && attempt < MAX_RETRIES;
       if (!retryable) throw err;
 
@@ -228,6 +231,7 @@ async function* streamWithRetries(client, callArgs) {
         : `Stream failed before output. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
       process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);
       await sleep(waitMs);
+      if (signal?.aborted) throw err;
       process.stdout.write(`\r\x1B[K  ${C.warn('⟳')} ${C.muted(`Stream attempt ${attempt + 1}/${MAX_RETRIES}...`)}\n`);
     }
   }
@@ -248,6 +252,7 @@ async function* streamWithRetries(client, callArgs) {
  * @param {string}        [params.effort]
  * @param {boolean}       [params.stream]
  * @param {string}        [params.overrideModel] — used internally by fallback logic
+ * @param {AbortSignal}   [params.signal] — aborts the in-flight HTTP request (turn cancel)
  * @returns {Promise<object|AsyncIterable>}
  */
 export async function createChatCompletion({
@@ -258,11 +263,16 @@ export async function createChatCompletion({
   effort = null,
   stream = false,
   overrideModel,
+  signal = null,
 }) {
   const client = getClient();
   const activeModel = overrideModel || model;
 
   const body = { model: activeModel, messages };
+  if (process.env.EMILE_DEBUG_API) {
+    const rp = buildReasoningParams({ provider: config.provider, model: activeModel, effort: config.defaultEffort });
+    process.stderr.write(`[api] model=${activeModel} reasoning=${JSON.stringify(rp)}\n`);
+  }
 
   if (tools && tools.length > 0) {
     body.tools = tools;
@@ -286,19 +296,23 @@ export async function createChatCompletion({
     extra_body: Object.keys(extraBody).length > 0 ? extraBody : undefined,
   };
 
-  if (stream) return streamWithRetries(client, callArgs);
+  if (stream) return streamWithRetries(client, callArgs, signal);
 
   // ── Retry loop ────────────────────────────────────────────────
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
     try {
-      return await client.chat.completions.create(callArgs);
+      return await client.chat.completions.create(callArgs, signal ? { signal } : undefined);
     } catch (err) {
       lastErr = err;
 
-      if (!isRetryable(err) || attempt === MAX_RETRIES) {
-        // Not retryable or exhausted — surface error
-        process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.muted(formatApiError(err, { model: activeModel }))}\n`);
+      if (signal?.aborted || !isRetryable(err) || attempt === MAX_RETRIES) {
+        // Aborted, not retryable, or exhausted — surface error (the abort
+        // path is handled by the caller as a cancel, so stay silent here).
+        if (!signal?.aborted) {
+          process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.muted(formatApiError(err, { model: activeModel }))}\n`);
+        }
         throw err;
       }
 

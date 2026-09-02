@@ -4,6 +4,38 @@ import { C, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
 
+
+// Opt-in diagnostic: log every stdout write to stderr with the
+// pre/post cursor row. Activated by EMILE_DEBUG_THINKING=1.
+const DEBUG = process.env.EMILE_DEBUG_THINKING === '1';
+let _cursorRow = 0;
+function trackCursor(chunk) {
+  let i = 0;
+  while (i < chunk.length) {
+    const ch = chunk[i];
+    if (ch === '\n') { _cursorRow += 1; i += 1; continue; }
+    if (ch === '\r') { i += 1; continue; }
+    if (ch === '\x1B' && chunk[i + 1] === '[') {
+      const m = /^\x1B\[([0-9;]*)([A-Za-z])/.exec(chunk.slice(i));
+      if (m) {
+        const amt = Number(m[1]) || 0;
+        if (m[2] === 'A') _cursorRow = Math.max(0, _cursorRow - amt);
+        else if (m[2] === 'B') _cursorRow += amt;
+        i += m[0].length;
+        continue;
+      }
+    }
+    break;
+  }
+}
+function debugWrite(tag, chunk) {
+  if (!DEBUG) return;
+  const before = _cursorRow;
+  trackCursor(chunk);
+  const display = chunk.length > 200 ? chunk.slice(0, 200) + '…' : chunk;
+  process.stderr.write(`[${tag}] r${before}->r${_cursorRow} ${JSON.stringify(display)}\n`);
+}
+
 /**
  * Live thinking stream — renders reasoning deltas in real time as they arrive
  * from the API (Claude-Code-style flowing dim text). The block is redrawn on
@@ -35,12 +67,12 @@ export function startThinkingStream() {
   // stays until the stream ends. GAP.section provides the single gap after the
   // user divider (vertical rhythm rule).
   if (_startedAsExpanded) {
-    process.stdout.write(`${GAP.section}  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
+    { const _o = `${GAP.section}  ${C.muted('✻')} ${C.muted('Thinking…')}\n`; debugWrite('thinking.start', _o); process.stdout.write(_o); }
     _thinkingHeaderPrinted = true;
     _thinkingHeaderLineCount = 1;
   } else {
-    process.stdout.write(GAP.section);
-    process.stdout.write(`  ${C.ghost('··· thinking')}\n`);
+    { const _a = GAP.section; debugWrite('thinking.start.collapsed.a', _a); process.stdout.write(_a); }
+    { const _b = `  ${C.ghost('··· thinking')}\n`; debugWrite('thinking.start.collapsed.b', _b); process.stdout.write(_b); }
   }
 }
 
@@ -90,7 +122,7 @@ export function appendThinkingStream(delta) {
     output += `\x1B[${oldTotal - newTotal}A`;
   }
 
-  process.stdout.write(output);
+  debugWrite('thinking.append', output); process.stdout.write(output);
   _thinkingLinesPrinted = newLines.length;
 }
 
@@ -107,7 +139,7 @@ export function endThinkingStream() {
     // one-liner (`··· thought Ns`). Exactly one line — rhythm preserved, no
     // cursor-up math beyond the single line itself.
     if (wordCount > 0) {
-      process.stdout.write(`\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`);
+      { const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`; debugWrite('thinking.end.collapsed', _o); process.stdout.write(_o); }
     }
   } else {
     // Expanded: keep the streamed text in place and update only the known
@@ -120,7 +152,7 @@ export function endThinkingStream() {
       if (totalLines > _thinkingHeaderLineCount) {
         output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
       }
-      process.stdout.write(output);
+      debugWrite('thinking.end.expanded', output); process.stdout.write(output);
     }
   }
 
@@ -151,8 +183,7 @@ export function printThinking(content) {
 
   // Two leading blank lines so the block breathes after the user's message
   // divider / previous block (vertical rhythm for a standalone reasoning box).
-  console.log();
-  console.log();
+  console.log(); console.log();
 
   if (!isVerbose) {
     // Collapsed: single ghost line — thinking is background noise
