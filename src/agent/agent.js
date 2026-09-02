@@ -3,7 +3,7 @@ import { buildSystemPrompt } from '../prompt.js';
 import { createChatCompletion, formatApiError, getProviderToolDefinitions } from '../api/index.js';
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
-import { promptPlanApproval, renderPlanStatus } from '../plans.js';
+import { promptPlanApproval } from '../plans.js';
 import { config } from '../config.js';
 import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } from './session-stats.js';
 import { compressContextIfNeeded } from './compression.js';
@@ -608,9 +608,9 @@ async function runAgentInner({
       // No "tools completed" footer — printAssistantResponse renders the dim
       // `↳ N tools` header above the next response box (premium pass).
 
-      if (plansMode) {
-        renderPlanStatus();
-      }
+      // Plan progress is surfaced through the prompt footer
+      // (buildPromptFooterSegments + getPlanProgress), not by printing to
+      // stdout on every iteration.
 
       isFirstTurn = false;
       continue;

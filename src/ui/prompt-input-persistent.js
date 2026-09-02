@@ -27,6 +27,7 @@ import readline from 'node:readline';
 import { C, stripAnsi, fmtK } from './theme.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
+import { getPlanProgress } from '../plans.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
 
@@ -217,10 +218,18 @@ function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort,
     }
     if (stats.promptTokens > 0 && stats.cachedPromptTokens > 0) {
       const hitPct = Math.round((stats.cachedPromptTokens / stats.promptTokens) * 100);
-      infoSegments.push(C.success(`cache: ${hitPct}%`));
+      infoSegments.push(C.muted(`cache: ${hitPct}%`));
     }
   }
   if (mcpInfo) infoSegments.push(C.muted(`MCP: ${mcpInfo}`));
+  if (config.plansMode) {
+    const progress = getPlanProgress();
+    if (progress) {
+      const done = progress.completed >= progress.total;
+      const text = `tasks: ${progress.completed}/${progress.total}`;
+      infoSegments.push(done ? C.success(text) : C.warn(text));
+    }
+  }
   return infoSegments;
 }
 
