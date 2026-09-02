@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Premium coding CLI utilizing Requesty API models, with Prompt Caching, Reasoning Effort, Plans, Skills and MCP support.",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "main": "src/cli.js",
   "bin": {
     "emile": "./bin/emile.js"

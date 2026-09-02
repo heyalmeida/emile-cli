@@ -124,7 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap for the session (default `40`) |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |

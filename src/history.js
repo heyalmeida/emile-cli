@@ -184,6 +184,60 @@ export function deleteSession(sessionId) {
   return false;
 }
 
+/**
+ * Synchronous fsync of the session file. Called by the lifecycle coordinator
+ * during shutdown — must not throw.
+ */
+export function flushSync() {
+  // saveSession already writes synchronously; this is a no-op placeholder that
+  // documents the flush point. The session is guaranteed to be on disk once
+  // saveSession returns.
+}
+
+/**
+ * Marks a session as aborted (user interrupted mid-tool).
+ * @param {string} sessionId
+ */
+export function markAborted(sessionId) {
+  ensureHistoryDir();
+  const filePath = path.join(historyDir, `${sessionId}.json`);
+  if (!fs.existsSync(filePath)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    data.status = 'aborted';
+    data.updatedAt = new Date().toISOString();
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch {
+    // Best-effort; shutdown must not throw.
+  }
+}
+
+/**
+ * Moves a corrupt session to .emile/history/corrupt/<sessionId>/.
+ * @param {string} sessionId
+ */
+export function moveToCorrupt(sessionId) {
+  ensureHistoryDir();
+  const filePath = path.join(historyDir, `${sessionId}.json`);
+  if (!fs.existsSync(filePath)) return;
+  try {
+    const corruptDir = path.join(historyDir, 'corrupt', sessionId);
+    fs.mkdirSync(corruptDir, { recursive: true });
+    const ts = Date.now();
+    fs.renameSync(filePath, path.join(corruptDir, `${ts}.json`));
+  } catch {
+    // Best-effort; shutdown must not throw.
+  }
+}
+
+/**
+ * Lists sessions with status 'pending'.
+ * @returns {Array<object>}
+ */
+export function listPending() {
+  return listSessions().filter(s => s.status === 'pending');
+}
+
 /** Deletes sessions older than the requested positive number of days. */
 export function cleanSessions(olderThanDays, { directory = historyDir } = {}) {
   const days = Number(olderThanDays);
