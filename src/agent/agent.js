@@ -3,12 +3,13 @@ import { buildSystemPrompt } from '../prompt.js';
 import { createChatCompletion, formatApiError, getProviderToolDefinitions } from '../api/index.js';
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
-import { promptPlanApproval, renderPlanStatus } from '../plans.js';
+import { promptPlanApproval } from '../plans.js';
 import { config } from '../config.js';
 import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } from './session-stats.js';
 import { compressContextIfNeeded } from './compression.js';
 import {
   C,
+  GAP,
   printAssistantResponse,
   printThinking,
   startThinkingStream,
@@ -22,6 +23,16 @@ import {
 import { createSpinner } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
+import { compileMentionAttachments } from '../mentions.js';
+// Lifecycle: register the active tool with the shutdown coordinator so the drain
+// phase can await or abort it during shutdown.
+import { setActiveTool, clearActiveTool } from '../lifecycle/index.js';
+
+// Opt-in diagnostic: log every reasoning/content delta that arrives
+// from the model so we can confirm whether the provider is actually
+// sending content alongside the reasoning. Activated by
+// EMILE_DEBUG_THINKING=1 (the same flag the spinner/thinking logs use).
+const DEBUG_THINKING = process.env.EMILE_DEBUG_THINKING === '1';
 import { getEnhancedWebToolDefinitions, modelSupportsImages, webToolHandlers } from '../web/index.js';
 
 export const FREE_FALLBACK_MODEL = 'openrouter/free';
@@ -73,21 +84,22 @@ export function createTransientWebReferenceMessage(attachments, model) {
   };
 }
 
-async function executeTool(toolCall) {
+async function executeToolWithSignal(toolCall, signal) {
   const { name, arguments: argsString } = toolCall.function;
   let args = {};
-
-  try {
-    args = JSON.parse(argsString);
-  } catch {
-    return normalizeToolExecutionResult('Error: Failed to parse tool arguments.');
-  }
-
+  try { args = JSON.parse(argsString); } catch { return normalizeToolExecutionResult('Error: Failed to parse tool arguments.'); }
   try {
     if (isMcpTool(name)) {
+      // handleMcpToolCall doesn't accept a signal yet; the abort fires on
+      // the MCP client's HTTP layer. Pass only if the handler signature accepts it.
       return normalizeToolExecutionResult(await handleMcpToolCall(name, args));
     } else if (toolHandlers[name]) {
-      return normalizeToolExecutionResult(await toolHandlers[name](args));
+      // Pass { signal } only if the handler accepts it (defensive).
+      const handler = toolHandlers[name];
+      const acceptsSignal = handler.length > 1;
+      return normalizeToolExecutionResult(acceptsSignal
+        ? await handler(args, { signal })
+        : await handler(args));
     } else if (webToolHandlers[name]) {
       return normalizeToolExecutionResult(await webToolHandlers[name](args));
     }
@@ -142,7 +154,15 @@ export async function resumePendingTools({ messages, pendingToolCalls, checkpoin
   printToolSummary(pending);
   for (const toolCall of pending) {
     setTerminalActivity(describeToolActivity(toolCall));
-    const toolResult = await executeTool(toolCall);
+    // Register with the lifecycle coordinator so shutdown can await/abort recovery tools.
+    const toolAbort = new AbortController();
+    setActiveTool({ requestStop: (reason) => toolAbort.abort(reason), signal: toolAbort.signal });
+    let toolResult;
+    try {
+      toolResult = await executeToolWithSignal(toolCall, toolAbort.signal);
+    } finally {
+      clearActiveTool();
+    }
     messages.push({
       role: 'tool',
       tool_call_id: toolCall.id,
@@ -199,7 +219,9 @@ async function runAgentInner({
   }
 
   if (initialPrompt) {
-    messages.push({ role: 'user', content: initialPrompt });
+    const mentions = compileMentionAttachments(initialPrompt);
+    for (const warning of mentions.warnings) console.log(C.warn(`  ${warning}`));
+    messages.push({ role: 'user', content: `${initialPrompt}${mentions.context}` });
   }
 
   const localTools = toolDefinitions;
@@ -366,6 +388,7 @@ async function runAgentInner({
     let reasoningDisplaySource = null;
 
     let streamCanceled = false;
+    let streamErrored = false;
     try {
       for await (const chunk of responseStream) {
         // Turn control: stop consuming the stream as soon as a cancel is
@@ -391,6 +414,19 @@ async function runAgentInner({
         if (!choice) continue;
 
         const delta = choice.delta || {};
+
+        if (DEBUG_THINKING) {
+          const summary = {
+            has_reasoning_content: typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0,
+            has_reasoning: typeof delta.reasoning === 'string' && delta.reasoning.length > 0,
+            has_reasoning_details: Array.isArray(delta.reasoning_details),
+            has_content: typeof delta.content === 'string' && delta.content.length > 0,
+            content_len: typeof delta.content === 'string' ? delta.content.length : 0,
+            has_tool_calls: Array.isArray(delta.tool_calls),
+            finish_reason: choice.finish_reason,
+          };
+          process.stderr.write(`[delta] ${JSON.stringify(summary)}\n`);
+        }
 
         const rawReasoning = delta.reasoning_content || delta.reasoning || '';
         if (rawReasoning && reasoningDisplaySource !== 'structured') {
@@ -458,6 +494,12 @@ async function runAgentInner({
       // Stream produced no chunks — clear the spinner silently (the error
       // path above already reported failures when applicable).
       spinner.stop();
+      if (!streamCanceled && !streamErrored && !control?.shouldStop()) {
+        // No chunk arrived, no cancel, no stream error: the model returned
+        // an empty response. Surface a one-liner so the user does not see a
+        // blank line where the spinner used to be.
+        process.stdout.write(`${GAP.section}  ${C.muted('· (empty response)')}\n`);
+      }
     }
 
     // Accumulate tokens and cost estimates
@@ -589,7 +631,24 @@ async function runAgentInner({
           break;
         }
         setTerminalActivity(describeToolActivity(toolCall));
-        const toolResult = await executeTool(toolCall);
+
+        // Register the active tool with the shutdown coordinator so the drain
+        // phase can await it or abort it during shutdown.
+        const toolAbort = new AbortController();
+        if (control?.signal) {
+          // When the user cancels the turn, the HTTP request is already aborted.
+          // Chain the tool abort so the same signal stops the tool handler.
+          control.signal.addEventListener('abort', () => { try { toolAbort.abort(); } catch { /* already aborted */ } }, { once: true });
+        }
+        setActiveTool({ requestStop: (reason) => toolAbort.abort(reason), signal: toolAbort.signal });
+
+        let toolResult;
+        try {
+          toolResult = await executeToolWithSignal(toolCall, toolAbort.signal);
+        } finally {
+          clearActiveTool();
+        }
+
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -608,9 +667,9 @@ async function runAgentInner({
       // No "tools completed" footer — printAssistantResponse renders the dim
       // `↳ N tools` header above the next response box (premium pass).
 
-      if (plansMode) {
-        renderPlanStatus();
-      }
+      // Plan progress is surfaced through the prompt footer
+      // (buildPromptFooterSegments + getPlanProgress), not by printing to
+      // stdout on every iteration.
 
       isFirstTurn = false;
       continue;

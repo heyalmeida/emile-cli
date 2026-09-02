@@ -124,7 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap for the session (default `40`) |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -138,8 +138,11 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `Shift+Enter` | Insert a newline without sending the prompt |
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
+| Paste | Keep the complete pasted text, including multiple lines, editable; press `Enter` separately to send it |
 
-**While the agent is working** you are not locked out: `Esc` or `Ctrl+C` cancel the current turn gracefully (the CLI keeps running), and any text you type followed by `Enter` is queued and runs automatically as the next turn. Queued lines starting with `/` run as slash commands between turns.
+**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
+
+**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
 ---
 
@@ -343,7 +346,7 @@ This project follows formal Software Engineering practices (documentation as the
 | [Roadmap](./docs/roadmap.md) | Phases 0–4: foundation, UI overhaul, automated quality, robustness, distribution | 🟢 Current |
 | [Glossary](./docs/glossary.md) | Domain terms (plans mode, skills, MCP, prompt caching…) | 🟢 Current |
 | [Code Improvements](./docs/IMPROVEMENTS.md) | Prioritized codebase improvement backlog (robustness, security, testing) | 🟢 Current |
-| [Decisions (ADRs)](./docs/adr/) | Architecture decision records (tech stack) | 🟢 Current |
+| [Decisions (ADRs)](./docs/adr/) | Architecture decisions (stack, quality gates, active prompt output) | 🟢 Current |
 
 > The [`.agent/`](./.agent/) directory contains generic AI agent kit configuration (agents, skills, workflows) — it is not product documentation.
 

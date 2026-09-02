@@ -41,20 +41,20 @@ export function getClient() {
     if (config.provider === 'openrouter') {
       options.baseURL = 'https://openrouter.ai/api/v1';
       options.defaultHeaders = {
-        'HTTP-Referer': 'https://github.com/ArctisDev/emile-cli',
-        'X-Title': 'Emile CLI',
+        'HTTP-Referer': 'https://emile.luarvia.dev',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode') {
       // OpenCode Zen — curated gateway (https://opencode.ai/zen)
       options.baseURL = 'https://opencode.ai/zen/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode-go') {
       // OpenCode Go — curated open-source models (https://opencode.ai)
       options.baseURL = 'https://opencode.ai/zen/go/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else {
       // Default to Requesty
@@ -269,6 +269,10 @@ export async function createChatCompletion({
   const activeModel = overrideModel || model;
 
   const body = { model: activeModel, messages };
+  if (process.env.EMILE_DEBUG_API) {
+    const rp = buildReasoningParams({ provider: config.provider, model: activeModel, effort: config.defaultEffort });
+    process.stderr.write(`[api] model=${activeModel} reasoning=${JSON.stringify(rp)}\n`);
+  }
 
   if (tools && tools.length > 0) {
     body.tools = tools;
