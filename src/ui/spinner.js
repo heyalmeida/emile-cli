@@ -27,12 +27,11 @@ export function createSpinner() {
   let currentLabel = '';
 
   function render() {
-    process.stdout.write('\r\x1B[K');
     // Use amber color for "thinking..." label, muted otherwise
     const isThinking = currentLabel.includes('thinking');
     const frame = isThinking ? amber(FRAMES[frameIndex]) : muted(FRAMES[frameIndex]);
     const label = isThinking ? amber(currentLabel) : muted(currentLabel);
-    process.stdout.write(`  ${frame} ${label}`);
+    process.stdout.write(`\r\x1B[K  ${frame} ${label}`);
     frameIndex = (frameIndex + 1) % FRAMES.length;
   }
 
@@ -55,14 +54,15 @@ export function createSpinner() {
         clearInterval(interval);
         interval = null;
       }
-      process.stdout.write('\r\x1B[K');
+      let output = '\r\x1B[K';
       if (finalLabel) {
         const sym = symbol === '✓' ? green('✓')
                   : symbol === '✗' ? red('✗')
                   : symbol === 'ℹ' ? info('ℹ')
                   : muted(symbol);
-        process.stdout.write(`  ${sym} ${muted(finalLabel)}\n`);
+        output += `  ${sym} ${muted(finalLabel)}\n`;
       }
+      process.stdout.write(output);
       return this;
     },
   };

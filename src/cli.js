@@ -312,7 +312,7 @@ export async function main() {
     // ── Persistent REPL loop ─────────────────────────────────────
     // The full writing field owns stdin while idle. Async submissions suspend
     // it and hand stdin either to a nested picker or to listenTurnKeys, which
-    // keeps a compact queue/cancel row visible while the agent is working.
+    // keeps the same full prompt frame visible while the agent is working.
     let isRunning = true;
     let promptApi = null;
     const pendingQueue = [];
@@ -323,12 +323,13 @@ export async function main() {
       const control = createTurnControl();
       const keys = listenTurnKeys({
         control,
+        promptOptions: { stats: sessionStats, mcpInfo },
         onLine: (line) => {
           pendingQueue.push(line);
+          const preview = line.replace(/\s+/g, ' ');
           process.stdout.write(
-            `\r\x1B[K  ${C.muted(`queued: ${line.slice(0, 90)}${line.length > 90 ? '…' : ''}`)}\n`
+            `\r\x1B[K  ${C.muted(`queued: ${preview.slice(0, 90)}${preview.length > 90 ? '…' : ''}`)}\n`
           );
-          keys.redraw();
         },
       });
       try {

@@ -136,9 +136,12 @@ test('typing a slash command keeps a single clean block with the menu', async (t
   typeKeys(fakeStdin, ['/', 'm']);
 
   const text = emu.text();
-  assert.ok(text.includes('❯ /m'), 'input row shows the typed command');
+  const plainText = text.replace(/\x1B\[[0-9;]*m/g, '');
+  assert.match(plainText, /❯\s+\/m\b/, 'input row shows the typed command');
   assert.ok(text.includes('/model'), 'menu shows /model');
   assert.ok(text.includes('/maxloop'), 'menu shows /maxloop');
+  assert.match(plainText, /●\s+\/model/, 'selected suggestion uses a distinct menu marker');
+  assert.doesNotMatch(plainText, /❯\s+\/model/, 'the input glyph is never reused as a suggestion marker');
   const borderCount = emu.lines.filter(l => l.includes('─') && !l.includes('·')).length;
   assert.equal(borderCount, 3, 'top border, menu/input border, bottom border — no residue');
   assert.equal(emu.lines.filter(l => /❯\s+\/m\b/.test(l.replace(/\x1B\[[0-9;]*m/g, ''))).length, 1, 'input row appears exactly once');
@@ -234,7 +237,7 @@ test('backspace and narrowing keep the screen residue-free', async (t) => {
   assert.ok(stripped.some(l => /❯\s+\/w$/.test(l)), 'input narrowed to /w');
   assert.ok(!stripped.some(l => /❯\s+\/web$/.test(l)), 'old longer input fully erased');
   typeKeys(fakeStdin, [{ name: 'backspace' }]); // '/'
-  assert.ok(emu.text().replace(/\x1B\[[0-9;]*m/g, '').includes('❯ /'));
+  assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /❯\s+\/$/m);
   typeKeys(fakeStdin, [{ name: 'backspace' }]); // '' — placeholder back
   assert.ok(emu.text().includes('Enter prompt or /help'));
   assert.ok(emu.wrapped === false);

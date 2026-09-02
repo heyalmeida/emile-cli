@@ -30,7 +30,7 @@ import { getModelInfo } from '../models.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
 
-const MAX_PROMPT_LINES = 6;
+export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
 
 const COMMANDS = [
@@ -53,6 +53,13 @@ const COMMANDS = [
   { name: '/help', desc: 'Display this help menu' },
   { name: 'exit', desc: 'Quit the CLI' },
 ];
+
+/** Returns slash commands matching the current prompt draft. */
+export function matchPromptCommands(input = '') {
+  return input.startsWith('/')
+    ? COMMANDS.filter(cmd => cmd.name.startsWith(input))
+    : [];
+}
 
 /**
  * Truncates a styled line to `columns` visible cells. SGR sequences
@@ -147,7 +154,7 @@ export function buildPromptLayout({
   }
 
   // ── Block assembly ───────────────────────────────────────────
-  const visibleMatches = matches.slice(0, MAX_PROMPT_LINES);
+  const visibleMatches = matches.slice(0, PROMPT_MATCH_LIMIT);
   // Clamp: a selection beyond the visible list (e.g. after completion
   // narrows the match list) would leave no highlighted row.
   selectedIndex = Math.min(selectedIndex, Math.max(visibleMatches.length - 1, 0));
@@ -156,7 +163,9 @@ export function buildPromptLayout({
   lines.push(border);
   for (const [index, cmd] of visibleMatches.entries()) {
     const selected = index === selectedIndex;
-    const marker = selected ? C.accent('❯') : C.muted('·');
+    // Reserve `❯` for the actual writing field. Reusing it here made the
+    // selected suggestion look like a second prompt/input row.
+    const marker = selected ? C.accent('●') : C.muted('·');
     const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
     lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
   }
@@ -215,6 +224,15 @@ function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort,
   return infoSegments;
 }
 
+/** Builds the shared idle/active prompt footer from current runtime state. */
+export function buildPromptFooterSegments({ stats = null, mcpInfo = null } = {}) {
+  const modelInfo = getModelInfo(config.defaultModel);
+  const modelName = String(config.defaultModel || '').split('/').pop();
+  const supportsReasoning = modelInfo?.reasoning === true;
+  const effort = config.defaultEffort || 'low';
+  return buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort, mcpInfo);
+}
+
 /**
  * Persistent prompt input. Resolves on every Enter without tearing down
  * the screen; the writing field stays on screen and clears/redraws in
@@ -260,15 +278,11 @@ export function persistentPromptInput({
     let keypressAttached = false;
 
     function footerSegments() {
-      const modelInfo = getModelInfo(config.defaultModel);
-      const modelName = String(config.defaultModel || '').split('/').pop();
-      const supportsReasoning = modelInfo?.reasoning === true;
-      const effort = config.defaultEffort || 'low';
-      return buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort, mcpInfo);
+      return buildPromptFooterSegments({ stats, mcpInfo });
     }
 
     function currentMatches() {
-      return input.startsWith('/') ? COMMANDS.filter(cmd => cmd.name.startsWith(input)) : [];
+      return matchPromptCommands(input);
     }
 
     function erasePreviousBlock() {
@@ -431,7 +445,7 @@ export function persistentPromptInput({
       }
       if (key.name === 'return' || key.name === 'enter') {
         const matches = currentMatches();
-        const visible = matches.slice(0, MAX_PROMPT_LINES);
+        const visible = matches.slice(0, PROMPT_MATCH_LIMIT);
         // Slash-command completion: with the menu open, the first Enter
         // completes the highlighted command; the second submits it.
         const selected = visible[selectedIndex];
@@ -464,13 +478,13 @@ export function persistentPromptInput({
       } else if (key.name === 'right') {
         if (cursor < input.length) cursor++;
       } else if (key.name === 'up') {
-        const count = currentMatches().slice(0, MAX_PROMPT_LINES).length;
+        const count = currentMatches().slice(0, PROMPT_MATCH_LIMIT).length;
         if (count > 0) selectedIndex = (selectedIndex - 1 + count) % count;
       } else if (key.name === 'down') {
-        const count = currentMatches().slice(0, MAX_PROMPT_LINES).length;
+        const count = currentMatches().slice(0, PROMPT_MATCH_LIMIT).length;
         if (count > 0) selectedIndex = (selectedIndex + 1) % count;
       } else if (key.name === 'tab') {
-        const matches = currentMatches().slice(0, MAX_PROMPT_LINES);
+        const matches = currentMatches().slice(0, PROMPT_MATCH_LIMIT);
         const selected = matches[selectedIndex];
         if (selected && selected.name !== input) {
           input = selected.name;
