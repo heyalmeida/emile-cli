@@ -189,6 +189,20 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       }
       return;
     }
+    // Bracketed-paste / multi-line paste: the readline keypress has
+    // key.name === undefined and str contains the whole pasted text,
+    // including newlines. Insert it as-is at the cursor without
+    // interpreting the embedded newlines as Enter.
+    if (key.name === undefined && typeof str === 'string' && str.length > 0) {
+      const paste = str.replace(/\r/g, '');
+      if (buffer.length + paste.length <= MAX_BUFFER_CHARS) {
+        buffer = buffer.slice(0, cursor) + paste + buffer.slice(cursor);
+        cursor += paste.length;
+        selectedIndex = 0;
+        repaint();
+      }
+      return;
+    }
     if (key.name === 'return' || key.name === 'enter') {
       const selected = currentMatches()[selectedIndex];
       if (selected && selected.name !== buffer) {
