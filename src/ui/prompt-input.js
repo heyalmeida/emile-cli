@@ -48,6 +48,7 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       { name: '/cost', desc: 'Show session token usage and costs' },
       { name: '/export', desc: 'Export the current session as Markdown' },
       { name: '/rules', desc: 'Inspect user-authored project rules' },
+      { name: '/skills', desc: 'List available workspace skills' },
       { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
       { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
       { name: '/websearch', desc: 'Control native or enhanced web search' },
@@ -276,6 +277,22 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       }
 
       if (key.name === 'return' || key.name === 'enter') {
+        // Multi-line paste detection: if the current str contains a
+        // newline OR the buffer already has a newline AND the trailing
+        // line is not empty, insert a literal newline instead of
+        // committing. Once the user is in multi-line mode, an empty
+        // trailing line followed by Enter commits the input.
+        if ((typeof str === 'string' && str.includes('\n')) || input.includes('\n')) {
+          if (input.slice(input.lastIndexOf('\n') + 1).trim() === '') {
+            // Empty trailing line — commit.
+          } else {
+            input = input.slice(0, cursor) + '\n' + input.slice(cursor);
+            cursor++;
+            selectedIndex = 0;
+            render();
+            return;
+          }
+        }
         // When typing a command prefix that matches autocomplete entries,
         // commit the highlighted suggestion instead of sending the raw
         // incomplete prefix as a prompt to the agent.

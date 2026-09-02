@@ -4,6 +4,7 @@ import { confirm, isCancel } from '@clack/prompts';
 import { normalizeWorkspaceCwd } from '../tools/security.js';
 import { saveUserConfig } from '../config.js';
 import { saveEnhancedWebConfig } from '../web/config.js';
+import { listSkills } from '../skills.js';
 import {
   C,
   printConfigBox,
@@ -17,6 +18,7 @@ import {
   printWebSearchStatus,
   printWebCommandWarning,
   printWebProviderConfigured,
+  printSkillsInfo,
 } from '../ui/index.js';
 
 export async function handleConnect(ctx) {
@@ -139,6 +141,9 @@ export function handleMaxLoop(ctx, args = []) {
     return;
   }
   ctx.config.maxLoopIterations = value;
+  // Persist for future sessions; .emile/config.json is read at startup (config.js).
+  const persist = ctx.saveUserConfig || saveUserConfig;
+  persist({ maxLoopIterations: value });
   console.log();
   console.log(C.muted(`  Agent-loop cap set to ${C.success(String(value))} iterations per turn.`));
   console.log();
@@ -398,4 +403,8 @@ export function handleExport(ctx, args = []) {
 
 export async function handleRules(ctx) {
   await ctx.runRulesCommand();
+}
+
+export function handleSkills() {
+  printSkillsInfo(listSkills());
 }

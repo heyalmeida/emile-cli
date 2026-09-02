@@ -30,8 +30,8 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 
 | Feature | Status | Code branch | Source spec |
 |---------|--------|-------------|------------|
-| [Terminal UI (TUI)](./terminal-ui.md) | active | `feat/ux-ui` | `specs/2026-08-25-tui-overhaul` + `2026-08-25-tui-premium` + `2026-08-25-tui-open-boxes` + `2026-08-25-prompt-multiline-fix` + `2026-08-25-dynamic-terminal-title` + `2026-08-30-streaming-input-integrity` + `2026-08-31-aligned-multiline-tool-output` |
-| [Agent Loop](./agent-loop.md) | active | `feat/agent-loop` | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` |
+| [Terminal UI (TUI)](./terminal-ui.md) | active | `feat/ux-ui` | `specs/2026-08-25-tui-overhaul` + `2026-08-25-tui-premium` + `2026-08-25-tui-open-boxes` + `2026-08-25-prompt-multiline-fix` + `2026-08-25-dynamic-terminal-title` + `2026-08-30-streaming-input-integrity` + `2026-08-31-aligned-multiline-tool-output` + `2026-09-01-turn-interrupt-queue` |
+| [Agent Loop](./agent-loop.md) | active | `feat/agent-loop` | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` + `2026-09-01-turn-interrupt-queue` |
 | [Built-in Tools](./built-in-tools.md) | active | `feat/tools-system` | `specs/2026-08-25-project-structure` + `specs/2026-08-31-web-search-tool-reliability` |
 | [Plans Mode](./plans-mode.md) | active | `feat/plans-mode` | `specs/2026-08-30-plans-compression-resilience` |
 | [Context Compression](./context-compression.md) | active | `feat/context-compression` | `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` |

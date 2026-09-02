@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
 import { config } from './config.js';
-import { C } from './ui/theme.js';
 import { stripTerminalControls } from './ui/control.js';
 
 /**
@@ -31,6 +30,24 @@ export function getTaskChecklist() {
 }
 
 /**
+ * Computes plan progress from task.md without writing to stdout.
+ * Used by the prompt footer to display "tasks: X/Y" once, instead of
+ * printing the same line on every agent-loop iteration.
+ * @returns {{ completed: number, total: number } | null}
+ *   null when task.md is missing or contains no checkboxes.
+ */
+export function getPlanProgress() {
+  const checklist = getTaskChecklist();
+  if (!checklist) return null;
+
+  const lines = checklist.split('\n');
+  const total = lines.filter(l => l.includes('[ ]') || l.includes('[x]') || l.includes('[/]')).length;
+  if (total === 0) return null;
+  const completed = lines.filter(l => l.includes('[x]')).length;
+  return { completed, total };
+}
+
+/**
  * Prompt the user to approve the proposed plan.
  * @returns {Promise<boolean>} True if approved, false otherwise
  */
@@ -53,20 +70,4 @@ export async function promptPlanApproval({ preview = '' } = {}) {
   }
 
   return true;
-}
-
-/**
- * Renders plan progress status on the terminal.
- */
-export function renderPlanStatus() {
-  const checklist = getTaskChecklist();
-  if (!checklist) return;
-
-  const lines = checklist.split('\n');
-  const total = lines.filter(l => l.includes('[ ]') || l.includes('[x]') || l.includes('[/]')).length;
-  const completed = lines.filter(l => l.includes('[x]')).length;
-  
-  if (total > 0) {
-    console.log(C.muted(`   Plan Progress: ${completed}/${total} tasks completed`));
-  }
 }

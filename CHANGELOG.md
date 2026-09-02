@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Persistent prompt lifecycle** (`specs/2026-09-01-turn-interrupt-queue`): the same full prompt frame now remains visible and writable while the agent works; spinner/reasoning/output writes are routed above it and the real blinking cursor stays at the queue draft instead of on `thinking...`. Tab accepts the highlighted slash-command completion, whose selected `●` marker is distinct from the input's `❯`; nested pickers such as `/switch` receive exclusive stdin ownership and return it resumed. The bounded renderer preserves exact wrapped-cursor positions, `Shift+Enter` multiline input and ANSI resets at 60/80/120 columns.
+
 ### Added
 - **Opt-in OpenRouter web search** (`specs/2026-08-31-web-search-tool-reliability`): added `--web-search` and `/websearch`; the provider-operated server tool is only sent to OpenRouter and displays a warning that search charges may apply, including on free model routes.
 - **Documentation branch workflow** (`specs/2026-08-30-documentation-branch`): created `docs/documentation`, mapped every catalog feature to its canonical code branch and separated documentation commits from product implementation branches.
@@ -21,7 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Model validation on provider switch** (`IMPROVEMENTS.md` §4.2): after `/connect`, if the live catalog is active and the current model is unknown for the new provider, the wizard offers to pick a new model before the next turn fails.
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
 - **Configurable agent-loop iteration cap**: the per-turn tool-loop safety cap (default `40`) is now settable via `EMILE_MAX_LOOP_ITERATIONS`, `--max-loop-iterations <n>`, or the in-session `/maxloop <n>` command.
-- **Turn interrupt and message queue** (`specs/2026-09-01-turn-interrupt-queue`): Esc/Ctrl+C now cancel the running agent turn gracefully (the CLI stays open, partial text is kept, pending tool calls are dropped or replaced with `[canceled by user]` results), and lines typed during a turn are queued with a visible notice and run automatically as the next turns.
+- **Session lifecycle hardening** (`specs/2026-09-02-session-lifecycle`):
+  - **Ordered shutdown** (`src/lifecycle/`): SIGINT/SIGTERM/SIGHUP/`beforeExit` handlers run 5 phases in order (stop-input → drain-tools → flush-session → close-mcp → restore-terminal) with a global 3 s cap and `--verbose` per-phase timing.
+  - **Boot recovery scan** (`src/recovery.js`): every session is scanned before the REPL is shown; pending checkpoints are classified as `recoverable`, `abandoned` or `corrupt`; corrupt sessions are moved to `.emile/sessions/<id>/corrupt/`.
+  - **Persistent undo stack** (`src/tools/file-state/`): `/undo` survives restarts via `.emile/undo/<sessionId>/`; the stack is capped at 50 entries with overflow discarded from memory and disk; deleted sessions clean up their undo directory.
+  - **Per-provider API key isolation** (`src/config.js`): `resolveApiKey(provider)` returns only the provider-specific env var; cross-provider fallback removed; the connect wizard surfaces missing keys explicitly.
+  - **Config file mode 0600**: `.emile/config.json` is now written with POSIX mode `0600`; existing files are re-`chmod`'d on the next save; FAT filesystems degrade gracefully with a `--verbose` warning.
+  - **`package.json` engines**: `"engines": { "node": ">=18" }` added; `npm install` emits `EBADENGINE` on older versions.
+
+### Fixed
+- **`/maxloop` persistence**: the in-session cap set with `/maxloop <n>` is now written to `.emile/config.json` (`maxLoopIterations`) and survives restarts — previously it lived only in memory for the current session, while the startup loader already read the persisted field.
+- **Turn interrupt and message queue** (`specs/2026-09-01-turn-interrupt-queue`): Esc/Ctrl+C now cancel the running agent turn gracefully (the CLI stays open, partial text is kept, pending tool calls are dropped or replaced with `[canceled by user]` results), and lines typed in the full active prompt are queued and run automatically as the next turns. The selected autocomplete row uses `●`, reserving `❯` for the actual input.
 
 ### Changed
 - **Live OpenCode model lists** (`specs/2026-09-01-opencode-model-list`): `/model` now fetches available models from OpenCode Zen (`opencode.ai/zen/v1/models`) and OpenCode Go (`opencode.ai/zen/go/v1/models`) and falls back to the curated options when the list is unavailable.
@@ -152,3 +165,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **`docs/IMPROVEMENTS.md`** — pre-existing codebase improvement analysis translated to English and integrated into the roadmap (Phases 2 and 3) and the README documentation index.
+- **`src/tools/file-state.js` → `src/tools/file-state/`** (`specs/2026-09-02-session-lifecycle`): monolithic module split into `read-cache.js`, `undo-stack.js`, `persistence.js`, `path.js` and a barrel. Public API unchanged; all existing tool handlers and `/undo` work without modification.

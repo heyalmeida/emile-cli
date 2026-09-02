@@ -8,6 +8,15 @@ import { turnState } from './turn-state.js';
 import { renderMarkdown } from './markdown.js';
 import readline from 'node:readline';
 
+
+// Opt-in diagnostic: print Assistant response render summary.
+const DEBUG = process.env.EMILE_DEBUG_THINKING === '1';
+function debugPrintResponse(prefix, content) {
+  if (!DEBUG) return;
+  const sample = content.slice(0, 60).replace(/\n/g, ' ');
+  process.stderr.write(`[printAssistantResponse] ${prefix} len=${content.length} sample=${JSON.stringify(sample)}\n`);
+}
+
 /**
  * Prints the AI response inside an open box (top/bottom borders only).
  * Text is wrapped to the content width BEFORE markdown rendering so it
@@ -20,8 +29,10 @@ import readline from 'node:readline';
  * ╰───────────────────────────────────────────────
  */
 export function printAssistantResponse(content) {
+  debugPrintResponse('enter', content);
   const sanitized = sanitizeAssistantOutput(content).trim();
-  if (!sanitized) return;
+  debugPrintResponse('sanitized', sanitized);
+  if (!sanitized) { debugPrintResponse('skip-empty', sanitized); return; }
 
   const cols  = process.stdout.columns || 80;
   // Most of the terminal width, capped at 120 columns (premium pass 4:

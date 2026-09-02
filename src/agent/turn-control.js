@@ -11,16 +11,22 @@
  *   requestStop(reason?: string): void,
  *   shouldStop(): boolean,
  *   stopReason(): string|null,
+ *   readonly signal: AbortSignal,
  *   reset(): void,
  * }}
  */
 export function createTurnControl() {
   let stopped = false;
   let reason = null;
+  // Aborts the in-flight HTTP request. Without this, a cancel only takes
+  // effect at the next stream chunk — a provider stalled in "thinking"
+  // (no chunks) would keep the turn hanging for minutes.
+  let abortController = new AbortController();
   return {
     requestStop(nextReason = 'user') {
       stopped = true;
       reason = nextReason;
+      try { abortController.abort(); } catch { /* already aborted */ }
     },
     shouldStop() {
       return stopped;
@@ -28,9 +34,15 @@ export function createTurnControl() {
     stopReason() {
       return reason;
     },
+    get signal() {
+      return abortController.signal;
+    },
     reset() {
       stopped = false;
       reason = null;
+      if (abortController.signal.aborted) {
+        abortController = new AbortController();
+      }
     },
   };
 }
