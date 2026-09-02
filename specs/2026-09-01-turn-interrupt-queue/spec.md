@@ -74,7 +74,7 @@ agent-loop semantics.
 | Risk/Question | Impact | Mitigation/Answer |
 |---------------|--------|--------------------|
 | Abandoned stream keeps the socket open | Resource leak | Abort the stream controller defensively when canceling mid-stream (best-effort). |
-| Raw-mode listener conflicts with promptInput state | Broken keyboard | Listener restores the previous raw mode and pauses stdin on cleanup; only one listener at a time. |
+| Raw-mode listener conflicts with persistent prompt state | Broken keyboard | The current owner detaches before the next raw-mode surface starts; after nested cleanup, the persistent prompt reasserts raw mode, resumes stdin and attaches exactly one listener. |
 | Queued `/` commands change config mid-drain | Surprise | Commands dispatch only between turns, in the idle REPL. |
 
 ## 8. References

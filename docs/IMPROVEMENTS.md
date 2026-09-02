@@ -84,6 +84,8 @@ function getRetryDelayMs(err, attempt) {
 
 ### 1.4 API key fallback mixes up providers
 
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `config.resolveApiKey(provider)` returns the key for the active provider only; cross-provider env var fallback is removed; the connect wizard surfaces the missing key explicitly.
+
 **File:** `src/config.js`
 
 The current chain:
@@ -112,7 +114,9 @@ If none matches, start empty and let the connection wizard handle it.
 
 ### 1.5 `undoStack` grows without limit
 
-**File:** `src/tools.js`
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: the stack is now bounded at 50 entries; overflow discards the oldest from memory and its disk file; `/undo` persists across restarts via `.emile/undo/<sessionId>/`.
+
+**File:** `src/tools.js` → `src/tools/file-state/`
 
 Every `writeFile`/`editFile` pushes the previous state onto an in-memory stack
 with no limit. In long sessions with many large files, memory consumption
@@ -131,6 +135,8 @@ if (undoStack.length > MAX_UNDO_ENTRIES) undoStack.shift();
 ## 2. Security
 
 ### 2.1 API key stored in plain text
+
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `saveUserConfig` writes `.emile/config.json` with `mode: 0600`; an existing file is `chmod`'d on the next save; if the filesystem rejects the permission (e.g. FAT), a `--verbose` warning is logged and the write continues.
 
 **File:** `src/config.js` → `saveUserConfig`
 
@@ -217,12 +223,9 @@ export function getModelInfo(model) { /* ... */ }
 
 ### 3.3 Missing `engines` field in `package.json`
 
-The README requires Node >= 18, but npm doesn't prevent installation on older
-versions.
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `package.json` now declares `"engines": { "node": ">=18" }`; `npm install` emits an `EBADENGINE` warning on older versions.
 
-```json
-"engines": { "node": ">=18" }
-```
+The README requires Node >= 18, but npm doesn't prevent installation on older versions.
 
 ---
 

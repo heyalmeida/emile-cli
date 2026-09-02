@@ -124,7 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap for the session (default `40`) |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -139,6 +139,8 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
 | Paste | Keep the complete pasted text, including multiple lines, editable; press `Enter` separately to send it |
+
+**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
 **While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 

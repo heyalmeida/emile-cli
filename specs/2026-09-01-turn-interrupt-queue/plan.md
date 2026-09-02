@@ -90,7 +90,7 @@ This is a lifecycle correction to the accepted architecture, not a new ADR.
 
 | Item | Answer |
 |------|--------|
-| **Feature branch** | `fix/persistent-prompt-input`; unrelated staged site/web work remains preserved and excluded by explicit pathspec. |
+| **Feature branch** | `fix/persistent-prompt-input`, created from the active turn-queue baseline because the regression and its uncommitted integration were not present on `development`; unrelated staged site/web work was preserved and excluded by pathspec. |
 | **Documentation branch** | `docs/documentation` for spec, CHANGELOG and feature registry. |
 | **Commit plan** | Code/tests on the product branch and docs separately; stage only explicit paths. If the existing dirty worktree prevents a safe switch, do not disturb unrelated changes and report the branch/commit limitation. |
 
