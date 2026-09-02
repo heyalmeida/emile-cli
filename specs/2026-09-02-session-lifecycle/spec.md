@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-09-02-session-lifecycle` |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 3 — Agent Robustness · Wave 1 of [`docs/ROBUSTNESS-ROADMAP.md`](../../docs/ROBUSTNESS-ROADMAP.md) |
 | **Related documents** | [PRD](../../docs/product.md) · [Architecture](../../docs/architecture.md) · [Code Quality & Security](../../docs/code-quality-and-security.md) · [Visual Identity](../../docs/visual-identity.md) · [Robustness Roadmap](../../docs/ROBUSTNESS-ROADMAP.md) · [IMPROVEMENTS.md](../../docs/IMPROVEMENTS.md) §§1.4, 1.5, 2.1, 3.3 · [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) · [ADR-0002](../../docs/adr/0002-quality-gates.md) |
 

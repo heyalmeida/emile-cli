@@ -7,7 +7,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-09-02-session-lifecycle` |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 
 ## 1. Technical Approach
 
