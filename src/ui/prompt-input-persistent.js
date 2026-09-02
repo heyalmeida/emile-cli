@@ -30,6 +30,7 @@ import { getModelInfo } from '../models.js';
 import { getPlanProgress } from '../plans.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
+import { findMentionCandidates } from '../mentions.js';
 
 export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
@@ -46,6 +47,7 @@ const COMMANDS = [
   { name: '/cost', desc: 'Show session token usage and costs' },
   { name: '/export', desc: 'Export the current session as Markdown' },
   { name: '/rules', desc: 'Inspect user-authored project rules' },
+  { name: '/skills', desc: 'List available workspace skills' },
   { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
   { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
   { name: '/websearch', desc: 'Control native or enhanced web search' },
@@ -60,6 +62,18 @@ export function matchPromptCommands(input = '') {
   return input.startsWith('/')
     ? COMMANDS.filter(cmd => cmd.name.startsWith(input))
     : [];
+}
+
+function currentMentionFragment(input, cursor) {
+  const prefix = input.slice(0, cursor);
+  const match = /(?:^|\s)(@[^\s@]*)$/.exec(prefix);
+  return match ? { value: match[1], start: cursor - match[1].length } : null;
+}
+
+export function matchPromptMentions(input = '', cursor = input.length) {
+  const fragment = currentMentionFragment(input, cursor);
+  if (!fragment) return [];
+  return findMentionCandidates(fragment.value).map(path => ({ name: `@${path}`, desc: 'workspace file', mentionStart: fragment.start }));
 }
 
 /**
@@ -292,7 +306,7 @@ export function persistentPromptInput({
     }
 
     function currentMatches() {
-      return matchPromptCommands(input);
+      return matchPromptCommands(input).length ? matchPromptCommands(input) : matchPromptMentions(input, cursor);
     }
 
     function erasePreviousBlock() {
@@ -483,8 +497,13 @@ export function persistentPromptInput({
         // completes the highlighted command; the second submits it.
         const selected = visible[selectedIndex];
         if (selected && selected.name !== input) {
-          input = selected.name;
-          cursor = input.length;
+          if (Number.isInteger(selected.mentionStart)) {
+            input = input.slice(0, selected.mentionStart) + selected.name + input.slice(cursor);
+            cursor = selected.mentionStart + selected.name.length;
+          } else {
+            input = selected.name;
+            cursor = input.length;
+          }
           render();
           return;
         }
@@ -520,8 +539,13 @@ export function persistentPromptInput({
         const matches = currentMatches().slice(0, PROMPT_MATCH_LIMIT);
         const selected = matches[selectedIndex];
         if (selected && selected.name !== input) {
-          input = selected.name;
-          cursor = input.length;
+          if (Number.isInteger(selected.mentionStart)) {
+            input = input.slice(0, selected.mentionStart) + selected.name + input.slice(cursor);
+            cursor = selected.mentionStart + selected.name.length;
+          } else {
+            input = selected.name;
+            cursor = input.length;
+          }
           selectedIndex = 0;
         } else {
           config.plansMode = !config.plansMode;

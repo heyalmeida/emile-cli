@@ -25,6 +25,7 @@ export { listenTurnKeys } from './turn-keys.js';
 export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';
+export { printSkillsInfo } from './skills-panel.js';
 export {
   promptWebProviderCredential,
   printWebProviderStatus,
