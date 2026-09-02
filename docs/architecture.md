@@ -47,10 +47,10 @@ flowchart TD
 | `plans.js` | Plans mode: draft, approval, status rendering | Writes only after explicit approval |
 | `prompt.js` | System prompt assembly | Base + active skills + tools + `loadRules()` (cache-stable frozen prefix) |
 | `rules.js` | Optional user-authored rules discovery (`.emilerules`→`AGENTS.md`→`.clinerules`→`.cursorrules`), mtime-cached, 12k cap | Read-only; external symlinks rejected; no generated defaults or execution |
-| `config.js` | Config load/save, env vars, workspace resolution | Precedence: `.emile/config.json` > env |
+| `config.js` | Config load/save, env vars, workspace resolution and session-scoped web-search/cwd state | Precedence: `.emile/config.json` > env; web search is opt-in and provider-gated |
 | `commands.js` | Connection and model wizards; assembles provider options and delegates model search to `ui/model-picker.js` | Model ids/catalog metadata remain data; terminal interaction stays in `ui/` |
 | `commands/` | Interactive slash-command registry and handlers | Exact command names only; handlers receive explicit REPL context and preserve existing security/UI gates |
-| `history.js` | Session persistence per workspace (save/restore/list/delete), complete/tool-pending metadata, bounded persisted snapshots and non-mutating projections | Sessions in `.emile/` (gitignored); `reasoning_content` is omitted and oldest tool results may become `[truncated]` on disk while active memory remains unchanged |
+| `history.js` | Session persistence per workspace (save/restore/list/delete), complete/tool-pending metadata, bounded persisted snapshots, session cwd and non-mutating projections | Sessions in `.emile/` (gitignored); `reasoning_content` is omitted, cwd is normalized inside the workspace, and oldest tool results may become `[truncated]` on disk while active memory remains unchanged |
 
 ### Runtime directories
 
@@ -78,13 +78,14 @@ flowchart LR
 **Loop invariants:**
 
 1. The system prompt is frozen per `(plansMode, relevantSkills)` session key and reused across turns (cache stability); auto-detected skills are filtered against the current task before the key is built, while explicit skill lists remain authoritative.
-2. Streaming is parsed chunk by chunk: legacy and structured reasoning deltas render live, structured blocks are preserved, text accumulates, and tool calls are assembled incrementally.
+2. Streaming is parsed chunk by chunk: cumulative legacy/structured reasoning is normalized to unseen text, only one readable reasoning source is rendered, structured blocks are preserved, text accumulates, and tool calls are assembled incrementally.
 3. Tool execution respects safe mode, dry-run and the whitelist; tool failures go back to the model as error results (not crashes).
 4. Context/cost stats update on every response with real usage (`usage`), with a character-based estimate (`~`-prefixed) before the first response.
 5. In Plans mode, explicit approval is requested before the first model stream. Before a turn's initial API call, the complete payload estimate (system prompt, tool schemas and all message roles) is compared with 80% of `getContextLimit(model)`; successful compression requires more than 40% subsequent history growth before it can repeat, and failed summarization falls back to oldest-group truncation toward 70%.
 6. The session is checkpointed before and after tool execution, then saved as `complete` after every successful turn; pending checkpoints are recovered through the existing tool handlers when a session is loaded. Undo restores recorded file states newest-first and requires confirmation for multiple entries.
 7. The terminal title observes lifecycle/loop state through `ui/title.js`; activity descriptions are deterministic and never expose prompts, command arguments or search queries.
 8. MCP connections require first-use approval, persist only the approved server name under `.emile/mcp-consent.json`, and retry unexpected disconnects at 500ms/1s/2s before degrading with a warning; shutdown cancels retries.
+9. Provider-owned tools are composed at the API boundary: OpenRouter web search is included only when the provider is OpenRouter and the user explicitly enables it. `runCommand` executes from the session cwd, probes the resulting cwd in the same shell and persists only workspace-contained directories; `/new` resets it and resumed sessions restore it.
 
 ---
 

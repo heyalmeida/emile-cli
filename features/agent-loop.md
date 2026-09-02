@@ -17,8 +17,8 @@ progress in the terminal.
 
 ## How It Works
 
-The loop builds the system prompt and tool definitions, streams the provider
-response, assembles tool calls, executes them through built-in or MCP handlers,
+The loop builds the system prompt and tool definitions, including explicitly
+enabled provider-owned tools, streams the provider response, assembles tool calls, executes them through built-in or MCP handlers,
 persists checkpoints and repeats until no tool call remains. Context checks,
 free-model fallback and iteration limits protect the turn.
 
@@ -29,6 +29,9 @@ free-model fallback and iteration limits protect the turn.
 | **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--max-loop-iterations <n>` |
 | **Slash commands** | `/thinking`, `/cost`, `/maxloop <n>` |
 | **Tools** | Built-in tools and MCP tool bridge |
+| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--web-search` |
+| **Slash commands** | `/thinking`, `/cost` |
+| **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
 | **Configuration** | Provider/model/effort in `.emile/config.json` and environment variables |
 | **Iteration cap** | `maxLoopIterations` (default 40) via `EMILE_MAX_LOOP_ITERATIONS`, `--max-loop-iterations <n>`, or `/maxloop <n>` |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop (partial text kept, pending tool calls dropped or placeholder-filled); the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
@@ -45,7 +48,8 @@ free-model fallback and iteration limits protect the turn.
 ## Known Limitations
 
 Provider token estimates remain approximate when usage telemetry is absent, and
-the loop is single-agent rather than parallel.
+the loop is single-agent rather than parallel. Web search is currently
+OpenRouter-specific and may incur provider charges, including on free routes.
 
 ## Change History
 

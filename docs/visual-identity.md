@@ -51,15 +51,16 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Open boxes** | `boxTopOpen`/`boxBottomOpen` | **Top and bottom borders only** — no left/right rails. Content indents 4 spaces (`BOX_INDENT`). Border ANSI parts are composed separately: never nest a styled label inside `C.muted(...)` or the label's RESET kills the border color |
 | **Input prompt** | `persistentPromptInput` / `buildPromptLayout` | Persistent boxed writing field shared by idle and active turns, with slash-command autocomplete and ↑/↓ menu navigation; one blank line above the block. Each layout line is clipped to terminal width so redraw height cannot drift. `❯` is reserved for the real input row; the selected autocomplete item uses `●`. Tab accepts that match (or toggles Plans mode without one), while async owners transfer stdin exclusively |
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
-| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
+| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
 | **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
-| **Tool lines** | `printToolSummary` | Grid-aligned single lines (no box): `● <label 8ch> <dim arg>`; bullet+label carry the semantic tone of the operation (table below); args truncated to the terminal width |
+| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic tone of the operation and each physical line remains bounded/sanitized |
 | **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
 | **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |
 | **Turn keys** | `listenTurnKeys` | Exclusive key listener active while the idle prompt is suspended and the agent works. It renders the same full frame, temporarily routes stdout above it, and leaves the real cursor at the queue draft caret. Esc/Ctrl+C cancel only the turn; Tab/↑/↓ keep slash autocomplete usable; Enter queues bounded/sanitized input. Cleanup erases the frame, restores the previous stdout writer/raw state and returns ownership to the idle prompt |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
+| **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
 | **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md` |
 
@@ -97,7 +98,9 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 |----------|--------|
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
 | Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
+| Web search | `/websearch` toggles only for OpenRouter and displays the cost warning when enabled |
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
+| Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
 | Paste | Bracketed-paste payloads remain editable, including embedded newlines; `Enter` sends the draft |

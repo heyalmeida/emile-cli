@@ -15,7 +15,7 @@ Connects to any OpenAI-compatible LLM provider (Requesty, OpenRouter, OpenCode) 
 
 ## What is this?
 
-`emile` is a coding agent you run from your terminal. You give it a task in plain English, and it reads files, writes code, runs commands, and iterates — all within your current working directory. Think of it as a pair-programmer that never gets tired of refactoring.
+`emile` is a coding agent you run from your terminal. You give it a task in plain, and it reads files, writes code, runs commands, and iterates — all within your current working directory. Think of it as a pair-programmer that never gets tired of refactoring.
 
 It's built to be **provider-agnostic**: it talks to any OpenAI-compatible API, so you're not locked into a single vendor. The agent loop supports tool calls, reasoning models (with live thinking streams), prompt caching to cut costs, and a skills system that injects domain expertise into the system prompt on demand.
 
@@ -34,6 +34,7 @@ This is a personal project that grew into something useful enough to share. It's
 - **Skills system** — 40+ YAML-based skill modules (architecture, TDD, React patterns, security, etc.) that auto-inject into the system prompt when relevant
 - **User-authored project rules** — optional `.emilerules` preferences, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks
 - **Session persistence** — conversations are saved per workspace; resume, switch, export to Markdown, or rewind to edit your last message
+- **Opt-in web search** — OpenRouter's provider-operated web search can be enabled per run or with `/websearch`; search charges may apply even on free model routes
 - **Context tracking and adaptive compression** — real token usage in the footer; history compresses at 80% of the active model's catalog window
 - **Claude Code–style UI** — boxed writing field, autocomplete for slash commands, `Esc` to cancel a draft, Tokyo Night color palette throughout
 - **Dynamic terminal title** — the tab reports real activity such as thinking, responding, context compression and safe tool summaries
@@ -72,6 +73,7 @@ export EMILE_PROVIDER=requesty
 export REQUESTY_API_KEY=your-key-here
 export EMILE_DEFAULT_MODEL=anthropic/claude-3.5-sonnet
 export EMILE_DEFAULT_EFFORT=low
+export EMILE_WEB_SEARCH=false   # set true only when OpenRouter search is wanted
 ```
 
 ### Run
@@ -97,6 +99,7 @@ emile -H                          # resume a previous session
 | `-H, --history` | Select and resume a past session | `false` |
 | `--no-safe` | Bypass the safe-execution gate for shell commands | safe mode on |
 | `--dry-run` | Simulate file changes and command execution without writing | `false` |
+| `--web-search` | Enable OpenRouter web search; additional provider charges may apply | `false` |
 | `--export-thinking` | Include model reasoning in `/export` output (explicit opt-in) | `false` |
 | `--max-session-size <bytes>` | Maximum size of each persisted session snapshot; old tool results are trimmed when needed | `10485760` |
 | `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `40` |
@@ -122,6 +125,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
 | `/maxloop <n>` | Set the agent tool-loop iteration cap for the session (default `40`) |
+| `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
 
@@ -131,6 +135,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 |-----|--------|
 | `Tab` | Accept autocomplete suggestion / toggle plans mode |
 | `Up` `Down` | Navigate autocomplete entries |
+| `Shift+Enter` | Insert a newline without sending the prompt |
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
 | Paste | Keep the complete pasted text, including multiple lines, editable; press `Enter` separately to send it |
@@ -151,9 +156,13 @@ The agent has direct access to these file-system and shell tools. All write oper
 | `listDir` | List directory contents |
 | `findFiles` | Find files by glob pattern |
 | `grepSearch` | Search file contents with regex |
-| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware); network-to-shell pipes receive an explicit injection warning |
+| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning |
 
 External tools from MCP servers are exposed alongside these with an `mcp__<server>__<tool>` naming convention.
+
+When enabled, OpenRouter web search is sent as a provider-operated server tool;
+it is not sent to Requesty or other providers. Search results are returned by
+the provider and should be treated as untrusted external data.
 
 ---
 
@@ -306,7 +315,7 @@ User input
 
 1. **System prompt** is assembled from the base prompt + active skills + tool definitions
 2. **Context policy** estimates the full payload before the turn and compresses older history only at 80% of the active model's catalog window
-3. **Streaming response** is parsed chunk-by-chunk: reasoning deltas render live, text accumulates, tool calls are assembled
+3. **Streaming response** is parsed chunk-by-chunk: cumulative reasoning is reduced to unseen text before live rendering, text accumulates, and tool calls are assembled
 4. **Tool execution** runs built-in handlers or MCP bridges, with safe-mode and dry-run checks
 5. **Results** are appended to the message history and the loop continues until the model stops requesting tools
 6. **Context tracking** updates on every API response using real `usage` tokens, with a pre-call character-based estimate as fallback
@@ -376,4 +385,3 @@ No build step — the project runs raw ES modules. Syntax-check individual files
 Built for people who think faster than they type.
 
 </div>
-```

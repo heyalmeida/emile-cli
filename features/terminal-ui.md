@@ -12,7 +12,7 @@
 
 ## Description
 
-The terminal user interface of emile: the Tokyo Night palette, boxed content, live thinking stream, input prompt and activity-driven terminal-tab title. The conversation has a consistent visual rhythm, while the title reports startup, waiting, thinking, responding, context compression and allowlisted tool activities even when the tab is not focused.
+The terminal user interface of emile: the Tokyo Night palette, boxed content, live thinking stream, input prompt, aligned multiline tool output and activity-driven terminal-tab title. The conversation has a consistent visual rhythm, while the title reports startup, waiting, thinking, responding, context compression and allowlisted tool activities even when the tab is not focused.
 
 ## How It Works
 
@@ -34,8 +34,10 @@ flowchart TD
 | **CLI flags** | Visual behavior only — no flags |
 | **Slash commands** | `/thinking` (expand/collapse reasoning — expanded by default, opt-out collapse) |
 | **Configuration** | `config.expandThinking` (`true` = expanded for both live and completed reasoning; default expanded) |
-| **Reasoning request** | OpenRouter receives `reasoning: { effort }`; visible text supports `reasoning_details` while encrypted blocks remain hidden |
+| **Reasoning request** | OpenRouter receives `reasoning: { effort }`; visible text supports `reasoning_details` while encrypted blocks remain hidden and cumulative snapshots are rendered only once |
+| **Input/redraw integrity** | Prompt and thinking frames are assembled before one terminal write; `Shift+Enter` inserts a newline and plain `Enter` submits |
 | **Semantic tool colors** | read=info · write/edit=warn · exec=red · grep/find=gold · list=fg · plan tools=accent |
+| **Multiline tool rows** | Continuation lines are sanitized, width-bounded and indented beneath the argument column instead of restarting at column zero |
 | **Palette tokens** | `C.gold` (#FFD700), `C.ghost` (#3B4261); `GAP` spacing constants |
 | **Terminal title** | OSC 0, activity-first, max 100 chars; real TTY only; duplicate writes suppressed |
 | **Prompt lifecycle** | `persistentPromptInput` owns idle stdin; Tab completes slash commands, bracketed pasted text stays editable (including newlines), and nested pickers receive exclusive ownership. During active turns, `listenTurnKeys` provides the same paste behavior, renders the same full frame, routes stdout above it and leaves the real caret at the draft before returning ownership afterward |

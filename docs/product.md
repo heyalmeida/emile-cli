@@ -1,7 +1,7 @@
 # Emile — Product Requirements Document (PRD)
 
 > **Status:** 🟢 Current · **Source of truth for emile-cli's scope and requirements.**
-> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, MCP, prompt caching, reasoning control, plans mode and a skills system.
+> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, MCP, optional OpenRouter web search, prompt caching, reasoning control, plans mode and a skills system.
 
 ---
 
@@ -35,6 +35,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 - **US-11:** As a dev, I want to define my own always-on project preferences and inspect which rules source is active, without the CLI inventing defaults for me.
 - **US-12:** As a dev with several terminal tabs, I want Emile's tab title to show its current activity, so I can tell waiting and active sessions apart without opening each tab.
 - **US-13:** As a dev using a large-context model, I want history compression to respect that model's real window, so useful context is not summarized prematurely.
+- **US-14:** As a dev researching a current implementation or design, I want to opt into provider web search when supported, so the agent can use fresh external information while I remain aware of search costs.
 
 ---
 
@@ -44,12 +45,14 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 |----|-----------|--------|
 | **RF-01** | Conversational agent in a REPL with a tool-call loop (read, write, edit, search, list, run commands) | ✅ |
 | **RF-02** | Connection to multiple OpenAI-compatible providers (Requesty, OpenRouter, OpenCode, OpenCode Go) with a setup wizard | ✅ |
-| **RF-03** | Response streaming with live reasoning rendering visible by default and expand/collapse toggle (`/thinking`) | ✅ |
-| **RF-04** | Built-in tools: `readFile`, `writeFile`, `editFile` (diff), `listDir`, `findFiles`, `grepSearch`, `runCommand` | ✅ |
+| **RF-03** | Response streaming with monotonic live reasoning rendering visible by default, expand/collapse toggle (`/thinking`), and multiline prompt input (`Shift+Enter`) | ✅ |
+| **RF-04** | Built-in tools: `readFile`, `writeFile`, `editFile` (diff), `listDir`, `findFiles`, `grepSearch`, `runCommand`; file arguments are validated and shell cwd persists within the workspace session | ✅ |
 | **RF-05** | Execution gate: safe mode with a safe-command whitelist, `--no-safe` and `--dry-run` | ✅ |
 | **RF-06** | `/undo [N]` to revert the agent's last or last N file modifications (undo stack) | ✅ |
 | **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, and reasoning omitted by default | ✅ |
 | **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) with live provider catalogs where available (OpenRouter, OpenCode, OpenCode Go) | ✅ |
+| **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, workspace-contained session cwd, and reasoning omitted by default | ✅ |
+| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
 | **RF-10** | Plans mode (`-p`): agent previews the task, asks for approval before model execution, drafts a plan, then executes | ✅ |
 | **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
@@ -61,6 +64,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-17** | Optional user-authored project rules: `.emilerules` precedence, compatible fallbacks, bounded prompt injection and read-only `/rules` inspection | ✅ |
 | **RF-18** | Dynamic terminal title driven by real runtime states, with sanitized/allowlisted activity labels and no prompt, command or query leakage | ✅ |
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
+| **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
 
 ---
 
