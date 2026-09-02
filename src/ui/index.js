@@ -19,6 +19,7 @@ export { printHelp } from './help.js';
 export { printDiffBlock } from './diff-block.js';
 export { printConversationHistory } from './history-replay.js';
 export { promptInput, isShiftEnterKey } from './prompt-input.js';
+export { persistentPromptInput } from './prompt-input-persistent.js';
 export { MODEL_PICKER_LIMIT, filterModelOptions, matchModelOptions, promptModelPicker, sanitizeModelPickerText } from './model-picker.js';
 export { listenTurnKeys } from './turn-keys.js';
 export { promptSwitchSession } from './switch-session.js';

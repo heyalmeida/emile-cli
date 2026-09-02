@@ -1,5 +1,5 @@
 import { program } from 'commander';
-import { text, select, isCancel, cancel, confirm } from '@clack/prompts';
+import { cancel, confirm } from '@clack/prompts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, hasCredentials } from './config.js';
@@ -13,10 +13,10 @@ import {
   printStartupScreen,
   printConfigBox,
   printConversationHistory,
-  promptInput as askPromptInput,
   promptSwitchSession,
   configureTerminalTitle,
   setTerminalActivity,
+  persistentPromptInput,
 } from './ui/index.js';
 import { createSpinner } from './ui/spinner.js';
 
@@ -309,33 +309,30 @@ export async function main() {
     setTerminalActivity('');
     await shutdownMcp();
   } else {
-    // ── Interactive REPL loop ────────────────────────────────────
+    // ── Persistent REPL loop ─────────────────────────────────────
+    // The full writing field owns stdin while idle. Async submissions suspend
+    // it and hand stdin either to a nested picker or to listenTurnKeys, which
+    // keeps a compact queue/cancel row visible while the agent is working.
     let isRunning = true;
-    let prefill = '';
-    // Lines typed while the agent is working (spec 2026-09-01-turn-interrupt-queue).
+    let promptApi = null;
     const pendingQueue = [];
 
-    // Runs one agent turn with an active key listener: Esc/Ctrl+C request a
-    // graceful stop and typed lines are queued for the next turn. The
-    // listener reserves a row at the bottom of the screen for the live
-    // "❯ <buffer>" prompt and redraws it after the agent finishes writing
-    // so it stays visible throughout the turn.
+    // Runs one agent turn with exclusive key ownership. Esc/Ctrl+C cancel
+    // through turn control; Enter appends a FIFO prompt for the next turn.
     const runAgentTurn = async (initialPrompt) => {
       const control = createTurnControl();
       const keys = listenTurnKeys({
         control,
         onLine: (line) => {
           pendingQueue.push(line);
-          // The live row already shows the buffer; print a confirmation on
-          // the line above it. Then redraw the live row to stay anchored.
           process.stdout.write(
             `\r\x1B[K  ${C.muted(`queued: ${line.slice(0, 90)}${line.length > 90 ? '…' : ''}`)}\n`
           );
-          keys.redraw('');
+          keys.redraw();
         },
       });
       try {
-        const result = await runAgent({
+        return await runAgent({
           model: config.defaultModel,
           plansMode: config.plansMode,
           skills: activeSkills,
@@ -346,10 +343,6 @@ export async function main() {
           control,
           checkpointSession,
         });
-        // Bring the live input row back to the bottom of the screen so the
-        // user can keep typing immediately between turns.
-        keys.redraw('');
-        return result;
       } finally {
         keys.stop();
       }
@@ -381,62 +374,68 @@ export async function main() {
       getSessionSummary: () => sessionSummary,
       setSessionSummary: (nextSummary) => { sessionSummary = nextSummary; },
       getSessionRecord,
-      setPrefill: (nextPrefill) => { prefill = nextPrefill; },
+      setPrefill: (nextPrefill) => {
+        prefill = nextPrefill;
+        promptApi?.setInput(nextPrefill);
+      },
       resumeSession: resumeLoadedSession,
     };
 
-    while (isRunning) {
-      // The writing box + footer infos (tokens, MCP) are drawn by promptInput
-      // itself, so a separate top status bar is no longer needed.
-
-      const userInput = await askPromptInput({
-        message: '❯',
-        placeholder: 'Enter prompt or /help',
-        initial: prefill,
-        stats: sessionStats,
-        sessionId,
-        mcpInfo,
-      });
-      prefill = '';
-
-      if (isCancel(userInput) || userInput.trim().toLowerCase() === 'exit') {
-        isRunning = false;
-        break;
-      }
-
-      const cleanInput = userInput.trim();
-
-      // ── Commands ───────────────────────────────────────────────
-      if (await dispatchCommand(cleanInput, commandContext)) {
-        continue;
-      }
-
-      if (cleanInput) {
-        // Run the turn, then drain whatever was queued while it was working.
-        let nextPrompt = cleanInput;
-        while (nextPrompt && isRunning) {
-          if (nextPrompt.toLowerCase() === 'exit') {
-            isRunning = false;
-            break;
+    let prefill = '';
+    // The persistent prompt awaits this drain, remaining detached while each
+    // active owner (turn listener or slash-command picker) consumes stdin.
+    const drainQueue = async () => {
+      while (isRunning) {
+        const next = pendingQueue.shift();
+        if (!next) return;
+        if (next.toLowerCase() === 'exit') {
+          isRunning = false;
+          return;
+        }
+        // Slash commands run between turns in the idle REPL.
+        if (await dispatchCommand(next, commandContext)) continue;
+        try {
+          messages = await runAgentTurn(next);
+          if (!sessionSummary) {
+            sessionSummary = next.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
           }
-          try {
-            messages = await runAgentTurn(nextPrompt);
-
-            if (!sessionSummary) {
-              sessionSummary = nextPrompt.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
-            }
-            await finalizeSessionTurn();
-          } catch (err) {
-            console.error(C.red(`\n  Error: ${err.message}`));
-          }
-          nextPrompt = pendingQueue.shift() || '';
-          // Queued slash commands run between turns, in the idle REPL.
-          if (nextPrompt && await dispatchCommand(nextPrompt, commandContext)) {
-            nextPrompt = pendingQueue.shift() || '';
-          }
+          await finalizeSessionTurn();
+        } catch (err) {
+          console.error(C.red(`\n  Error: ${err.message}\n`));
         }
       }
-    }
+    };
+
+    await persistentPromptInput({
+      message: '❯',
+      placeholder: 'Enter prompt or /help',
+      initial: prefill,
+      stats: sessionStats,
+      sessionId,
+      mcpInfo,
+      onReady: (api) => { promptApi = api; },
+      async onSubmit(submitted) {
+        const clean = String(submitted || '').trim();
+        if (!clean) return 'next';
+        if (clean.toLowerCase() === 'exit') { isRunning = false; return 'cancel'; }
+        // Slash commands: dispatch first, return without queuing.
+        if (await dispatchCommand(clean, commandContext)) {
+          return 'next';
+        }
+        try {
+          messages = await runAgentTurn(clean);
+          if (!sessionSummary) {
+            sessionSummary = clean.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
+          }
+          await finalizeSessionTurn();
+          await drainQueue();
+        } catch (err) {
+          console.error(C.red(`\n  Error: ${err.message}\n`));
+        }
+        return isRunning ? 'next' : 'cancel';
+      },
+    });
+    isRunning = false;
 
     console.log(C.muted('\n  Goodbye.'));
     setTerminalActivity('');
