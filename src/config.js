@@ -132,6 +132,9 @@ export function saveUserConfig(settings) {
   if (settings.model) config.defaultModel = settings.model;
   if ('effort' in settings) config.defaultEffort = settings.effort;
   if ('webSearch' in settings) config.webSearch = settings.webSearch === true;
+  if ('maxLoopIterations' in settings) {
+    config.maxLoopIterations = readPositiveInt(settings.maxLoopIterations, config.maxLoopIterations);
+  }
 
   const dataToSave = {
     provider: config.provider,
@@ -139,6 +142,7 @@ export function saveUserConfig(settings) {
     model: config.defaultModel,
     effort: config.defaultEffort,
     webSearch: config.webSearch,
+    maxLoopIterations: config.maxLoopIterations,
   };
 
   try {
