@@ -30,6 +30,7 @@ import { getModelInfo } from '../models.js';
 import { getPlanProgress } from '../plans.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
+import { findMentionCandidates } from '../mentions.js';
 
 export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
@@ -46,6 +47,8 @@ const COMMANDS = [
   { name: '/cost', desc: 'Show session token usage and costs' },
   { name: '/export', desc: 'Export the current session as Markdown' },
   { name: '/rules', desc: 'Inspect user-authored project rules' },
+  { name: '/skills', desc: 'Search available workspace skills' },
+  { name: '/skill', desc: 'Search available workspace skills' },
   { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
   { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
   { name: '/websearch', desc: 'Control native or enhanced web search' },
@@ -60,6 +63,18 @@ export function matchPromptCommands(input = '') {
   return input.startsWith('/')
     ? COMMANDS.filter(cmd => cmd.name.startsWith(input))
     : [];
+}
+
+function currentMentionFragment(input, cursor) {
+  const prefix = input.slice(0, cursor);
+  const match = /(?:^|\s)(@[^\s@]*)$/.exec(prefix);
+  return match ? { value: match[1], start: cursor - match[1].length } : null;
+}
+
+export function matchPromptMentions(input = '', cursor = input.length) {
+  const fragment = currentMentionFragment(input, cursor);
+  if (!fragment) return [];
+  return findMentionCandidates(fragment.value).map(path => ({ name: `@${path}`, desc: 'workspace file', mentionStart: fragment.start }));
 }
 
 /**
@@ -106,7 +121,7 @@ export function clipLine(line, columns) {
 export function buildPromptLayout({
   input = '',
   cursor = 0,
-  message = '❯',
+  message = '›',
   placeholder = '',
   matches = [],
   selectedIndex = 0,
@@ -160,17 +175,19 @@ export function buildPromptLayout({
   // narrows the match list) would leave no highlighted row.
   selectedIndex = Math.min(selectedIndex, Math.max(visibleMatches.length - 1, 0));
   const lines = [];
-  const border = C.muted('  ' + '─'.repeat(Math.max(columns - GUTTER - 2, 1)));
-  lines.push(border);
+  const frameWidth = Math.max(columns - GUTTER - 3, 1);
+  const topBorder = C.muted(`  ╭${'─'.repeat(frameWidth)}`);
+  const bottomBorder = C.muted(`  ╰${'─'.repeat(frameWidth)}`);
+  lines.push(topBorder);
   for (const [index, cmd] of visibleMatches.entries()) {
     const selected = index === selectedIndex;
-    // Reserve `❯` for the actual writing field. Reusing it here made the
+    // Reserve `›` for the actual writing field. Reusing it here made the
     // selected suggestion look like a second prompt/input row.
     const marker = selected ? C.accent('●') : C.muted('・');
     const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
     lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
   }
-  if (visibleMatches.length > 0) lines.push(border);
+  if (visibleMatches.length > 0) lines.push(C.muted(`  ├${'─'.repeat(frameWidth)}`));
   const inputRowIndex = lines.length;
   for (const [index, row] of rows.entries()) {
     if (index === 0) {
@@ -179,7 +196,7 @@ export function buildPromptLayout({
       lines.push(`  ${' '.repeat(promptLength)}${row.text}`);
     }
   }
-  lines.push(border);
+  lines.push(bottomBorder);
   if (footerSegments.length > 0) {
     lines.push('  ' + footerSegments.join(C.muted(' · ')));
   }
@@ -206,7 +223,7 @@ export function buildPromptLayout({
 }
 
 function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort, mcpInfo) {
-  const infoSegments = [];
+  const infoSegments = [C.warn(`${config.plansMode ? 'plan' : 'build'} (Tab)`)];
   infoSegments.push(C.muted(`${modelName}${supportsReasoning ? ` (${effort})` : ''}`));
   if (stats) {
     const limit = stats.contextLimit || modelInfo.context;
@@ -249,7 +266,7 @@ export function buildPromptFooterSegments({ stats = null, mcpInfo = null } = {})
  */
 export function persistentPromptInput({
   onSubmit,
-  message = '❯',
+  message = '›',
   placeholder = 'Enter prompt or /help',
   initial = '',
   stats = null,
@@ -292,7 +309,7 @@ export function persistentPromptInput({
     }
 
     function currentMatches() {
-      return matchPromptCommands(input);
+      return matchPromptCommands(input).length ? matchPromptCommands(input) : matchPromptMentions(input, cursor);
     }
 
     function erasePreviousBlock() {
@@ -483,8 +500,13 @@ export function persistentPromptInput({
         // completes the highlighted command; the second submits it.
         const selected = visible[selectedIndex];
         if (selected && selected.name !== input) {
-          input = selected.name;
-          cursor = input.length;
+          if (Number.isInteger(selected.mentionStart)) {
+            input = input.slice(0, selected.mentionStart) + selected.name + input.slice(cursor);
+            cursor = selected.mentionStart + selected.name.length;
+          } else {
+            input = selected.name;
+            cursor = input.length;
+          }
           render();
           return;
         }
@@ -520,8 +542,13 @@ export function persistentPromptInput({
         const matches = currentMatches().slice(0, PROMPT_MATCH_LIMIT);
         const selected = matches[selectedIndex];
         if (selected && selected.name !== input) {
-          input = selected.name;
-          cursor = input.length;
+          if (Number.isInteger(selected.mentionStart)) {
+            input = input.slice(0, selected.mentionStart) + selected.name + input.slice(cursor);
+            cursor = selected.mentionStart + selected.name.length;
+          } else {
+            input = selected.name;
+            cursor = input.length;
+          }
           selectedIndex = 0;
         } else {
           config.plansMode = !config.plansMode;

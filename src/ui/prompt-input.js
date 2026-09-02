@@ -48,6 +48,8 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       { name: '/cost', desc: 'Show session token usage and costs' },
       { name: '/export', desc: 'Export the current session as Markdown' },
       { name: '/rules', desc: 'Inspect user-authored project rules' },
+      { name: '/skills', desc: 'Search available workspace skills' },
+      { name: '/skill', desc: 'Search available workspace skills' },
       { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
       { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
       { name: '/websearch', desc: 'Control native or enhanced web search' },

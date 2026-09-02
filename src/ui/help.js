@@ -22,6 +22,7 @@ export function printHelp() {
     ['/cost',     'Show token usage and costs'],
     ['/export',   'Export session as Markdown'],
     ['/rules',    'Inspect user-authored project rules'],
+    ['/skills',   'Search available workspace skills (`/skill` also works)'],
     ['/thinking', 'Toggle reasoning visibility'],
     ['/maxloop',  'Set agent loop iteration cap'],
     ['/websearch', 'Control native/enhanced web search'],

@@ -16,6 +16,7 @@ import {
   handleCost,
   handleExport,
   handleRules,
+  handleSkills,
 } from './handlers.js';
 
 const COMMANDS = new Map([
@@ -36,6 +37,8 @@ const COMMANDS = new Map([
   ['/cost', handleCost],
   ['/export', handleExport],
   ['/rules', handleRules],
+  ['/skills', handleSkills],
+  ['/skill', handleSkills],
 ]);
 
 /**

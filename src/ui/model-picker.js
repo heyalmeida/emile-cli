@@ -58,7 +58,12 @@ function truncateForTerminal(value, columns) {
  * bounded result list. Non-TTY callers receive a safe cancellation instead
  * of a prompt that could block forever waiting for raw-mode input.
  */
-export function promptModelPicker(options, { message = 'Select a model', limit = MODEL_PICKER_LIMIT } = {}) {
+export function promptSearchPicker(options, {
+  message = 'Select an option',
+  limit = MODEL_PICKER_LIMIT,
+  emptyMessage = 'No matching options.',
+  itemLabel = 'options',
+} = {}) {
   return new Promise((resolve) => {
     if (typeof process.stdin.setRawMode !== 'function' || process.stdin.isTTY === false) {
       resolve(null);
@@ -82,29 +87,29 @@ export function promptModelPicker(options, { message = 'Select a model', limit =
     let lastRenderedHeight = 0;
     let settled = false;
 
-    function getModels() {
+    function getOptions() {
       return matchModelOptions(options, query);
     }
 
     function getTotal() {
-      return getModels().length + (customOption ? 1 : 0);
+      return getOptions().length + (customOption ? 1 : 0);
     }
 
     function render() {
       const columns = process.stdout.columns || 80;
-      const models = getModels();
-      const total = models.length + (customOption ? 1 : 0);
+      const matchingOptions = getOptions();
+      const total = matchingOptions.length + (customOption ? 1 : 0);
 
       selectedIndex = total > 0 ? Math.min(Math.max(0, selectedIndex), total - 1) : 0;
 
       // Keep the selected model inside the scrollable window.
-      if (selectedIndex < models.length) {
+      if (selectedIndex < matchingOptions.length) {
         if (selectedIndex < scrollOffset) scrollOffset = selectedIndex;
         if (selectedIndex >= scrollOffset + modelWindow) scrollOffset = selectedIndex - modelWindow + 1;
       }
-      scrollOffset = Math.min(Math.max(0, scrollOffset), Math.max(0, models.length - modelWindow));
+      scrollOffset = Math.min(Math.max(0, scrollOffset), Math.max(0, matchingOptions.length - modelWindow));
 
-      const visibleModels = models.slice(scrollOffset, scrollOffset + modelWindow);
+      const visibleOptions = matchingOptions.slice(scrollOffset, scrollOffset + modelWindow);
 
       const lines = [
         `${C.accent('?')} ${C.bold(sanitizeModelPickerText(message, Math.max(20, columns - 15)))}`,
@@ -112,9 +117,9 @@ export function promptModelPicker(options, { message = 'Select a model', limit =
       ];
 
       if (total === 0) {
-        lines.push(`  ${C.warn('No matching models.')}`);
+        lines.push(`  ${C.warn(sanitizeModelPickerText(emptyMessage, Math.max(20, columns - 4)))}`);
       } else {
-        for (const [offset, option] of visibleModels.entries()) {
+        for (const [offset, option] of visibleOptions.entries()) {
           const index = scrollOffset + offset;
           const selected = index === selectedIndex;
           const label = truncateForTerminal(option.label || option.value, columns);
@@ -122,17 +127,17 @@ export function promptModelPicker(options, { message = 'Select a model', limit =
           lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
         }
         if (customOption) {
-          const selected = selectedIndex === models.length;
+          const selected = selectedIndex === matchingOptions.length;
           const label = truncateForTerminal(customOption.label || customOption.value, columns);
           const marker = selected ? C.accent('❯') : C.muted('·');
           lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
         }
       }
 
-      if (models.length > modelWindow) {
+      if (matchingOptions.length > modelWindow) {
         const from = scrollOffset + 1;
-        const to = Math.min(scrollOffset + modelWindow, models.length);
-        lines.push(`  ${C.muted(`Showing ${from}–${to} of ${models.length} models — ↑↓ scroll · type to filter`)}`);
+        const to = Math.min(scrollOffset + modelWindow, matchingOptions.length);
+        lines.push(`  ${C.muted(`Showing ${from}–${to} of ${matchingOptions.length} ${sanitizeModelPickerText(itemLabel, 20)} — ↑↓ scroll · type to filter`)}`);
       }
       lines.push(`  ${C.dim('↑↓ select  Enter choose  Esc cancel')}`);
 
@@ -176,8 +181,8 @@ export function promptModelPicker(options, { message = 'Select a model', limit =
 
       const total = getTotal();
       if (key.name === 'return' || key.name === 'enter') {
-        const models = getModels();
-        const value = selectedIndex < models.length ? models[selectedIndex]?.value : customOption?.value;
+        const matchingOptions = getOptions();
+        const value = selectedIndex < matchingOptions.length ? matchingOptions[selectedIndex]?.value : customOption?.value;
         finish(value ?? null);
         return;
       }
@@ -201,5 +206,15 @@ export function promptModelPicker(options, { message = 'Select a model', limit =
 
     process.stdin.on('keypress', onKeypress);
     render();
+  });
+}
+
+/** Opens the model-specific configuration of the reusable search picker. */
+export function promptModelPicker(options, { message = 'Select a model', limit = MODEL_PICKER_LIMIT } = {}) {
+  return promptSearchPicker(options, {
+    message,
+    limit,
+    emptyMessage: 'No matching models.',
+    itemLabel: 'models',
   });
 }

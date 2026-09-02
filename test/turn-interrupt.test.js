@@ -29,9 +29,48 @@ test('createTurnControl starts active and records the stop reason', () => {
   control.requestStop('interrupt');
   assert.equal(control.shouldStop(), true);
   assert.equal(control.stopReason(), 'interrupt');
+  assert.equal(control.signal.aborted, true);
 
   control.reset();
   assert.equal(control.shouldStop(), false);
+  assert.equal(control.signal.aborted, false);
+});
+
+test('cancel aborts a completion stalled before its first stream chunk', async () => {
+  const control = createTurnControl();
+  let receivedSignal;
+  let markStarted;
+  const started = new Promise(resolve => { markStarted = resolve; });
+
+  const turn = withMutedStdout(() => runAgent({
+    model: 'test/model',
+    plansMode: false,
+    skills: [],
+    cache: false,
+    effort: 'low',
+    messages: [],
+    initialPrompt: 'wait forever',
+    control,
+    createCompletion: async ({ signal }) => {
+      receivedSignal = signal;
+      markStarted();
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          const error = new Error('Aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      });
+    },
+  }));
+
+  await started;
+  control.requestStop('interrupt');
+  const messages = await turn;
+
+  assert.equal(receivedSignal, control.signal);
+  assert.equal(receivedSignal.aborted, true);
+  assert.equal(messages.some(message => message.role === 'assistant'), false);
 });
 
 test('a cancel request mid-stream keeps the partial text and stops consuming', async () => {

@@ -6,7 +6,7 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
   '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
-  '/help', '/undo', '/cost', '/export', '/rules',
+  '/help', '/undo', '/cost', '/export', '/rules', '/skills', '/skill',
 ];
 
 test('registry contains every existing slash command and aliases', () => {
@@ -23,6 +23,26 @@ test('unknown slash-like input is not dispatched', async () => {
 
   assert.equal(handled, false);
   assert.equal(invoked, false);
+});
+
+test('/skills is a registered read-only command', async () => {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await dispatchCommand('/skills', {}), true);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test('/skill is a registered alias for skills discovery', async () => {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await dispatchCommand('/skill', {}), true);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test('new-session handler mutates only the explicit session state', async () => {
@@ -53,15 +73,21 @@ test('thinking handler toggles the shared visibility state', async () => {
   assert.equal(config.expandThinking, false);
 });
 
-test('maxloop handler sets the iteration cap and rejects invalid values', async () => {
+test('maxloop handler sets the iteration cap and persists it', async () => {
   const config = { maxLoopIterations: 40 };
-  const handled = await dispatchCommand('/maxloop 80', { config });
+  const savedSettings = [];
+  const handled = await dispatchCommand('/maxloop 80', {
+    config,
+    saveUserConfig: (settings) => { savedSettings.push(settings); },
+  });
 
   assert.equal(handled, true);
   assert.equal(config.maxLoopIterations, 80);
+  assert.deepEqual(savedSettings, [{ maxLoopIterations: 80 }], 'cap is persisted via saveUserConfig');
 
   await dispatchCommand('/maxloop nope', { config });
   assert.equal(config.maxLoopIterations, 80);
+  assert.equal(savedSettings.length, 1, 'invalid input does not persist');
 });
 
 test('undo dispatch accepts an optional count', async () => {
