@@ -125,6 +125,10 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
   const writeDirect = (chunk) => originalWrite.call(process.stdout, chunk);
   process.stdin.setRawMode(true);
   process.stdin.resume();
+  // Enable bracketed paste mode so multi-line pastes arrive as a single
+  // keypress with str containing the whole pasted text (and
+  // key.name === undefined) instead of one keypress per \n.
+  writeDirect('\x1b[?2004h');
   readline.emitKeypressEvents(process.stdin);
 
   let buffer = '';
@@ -167,6 +171,11 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
     if (process.stdout.write === interceptedWrite) {
       process.stdout.write = originalWrite;
     }
+    try {
+      // Disable bracketed paste mode before restoring the previous
+      // raw mode setting.
+      writeDirect('\x1b[?2004l');
+    } catch { /* best-effort */ }
     try { process.stdin.setRawMode(wasRaw); } catch { /* stdin may be gone */ }
     process.stdin.pause();
   }
