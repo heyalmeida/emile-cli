@@ -1,10 +1,40 @@
 // thinking.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
-import { getModelInfo } from '../models.js';
-import readline from 'node:readline';
+
+
+// Opt-in diagnostic: log every stdout write to stderr with the
+// pre/post cursor row. Activated by EMILE_DEBUG_THINKING=1.
+const DEBUG = process.env.EMILE_DEBUG_THINKING === '1';
+let _cursorRow = 0;
+function trackCursor(chunk) {
+  let i = 0;
+  while (i < chunk.length) {
+    const ch = chunk[i];
+    if (ch === '\n') { _cursorRow += 1; i += 1; continue; }
+    if (ch === '\r') { i += 1; continue; }
+    if (ch === '\x1B' && chunk[i + 1] === '[') {
+      const m = /^\x1B\[([0-9;]*)([A-Za-z])/.exec(chunk.slice(i));
+      if (m) {
+        const amt = Number(m[1]) || 0;
+        if (m[2] === 'A') _cursorRow = Math.max(0, _cursorRow - amt);
+        else if (m[2] === 'B') _cursorRow += amt;
+        i += m[0].length;
+        continue;
+      }
+    }
+    break;
+  }
+}
+function debugWrite(tag, chunk) {
+  if (!DEBUG) return;
+  const before = _cursorRow;
+  trackCursor(chunk);
+  const display = chunk.length > 200 ? chunk.slice(0, 200) + '…' : chunk;
+  process.stderr.write(`[${tag}] r${before}->r${_cursorRow} ${JSON.stringify(display)}\n`);
+}
 
 /**
  * Live thinking stream — renders reasoning deltas in real time as they arrive
@@ -37,13 +67,12 @@ export function startThinkingStream() {
   // stays until the stream ends. GAP.section provides the single gap after the
   // user divider (vertical rhythm rule).
   if (_startedAsExpanded) {
-    process.stdout.write(GAP.section);
-    process.stdout.write(`  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
+    { const _o = `${GAP.section}  ${C.muted('✻')} ${C.muted('Thinking…')}\n`; debugWrite('thinking.start', _o); process.stdout.write(_o); }
     _thinkingHeaderPrinted = true;
     _thinkingHeaderLineCount = 1;
   } else {
-    process.stdout.write(GAP.section);
-    process.stdout.write(`  ${C.ghost('··· thinking')}\n`);
+    { const _a = GAP.section; debugWrite('thinking.start.collapsed.a', _a); process.stdout.write(_a); }
+    { const _b = `  ${C.ghost('··· thinking')}\n`; debugWrite('thinking.start.collapsed.b', _b); process.stdout.write(_b); }
   }
 }
 
@@ -67,31 +96,33 @@ export function appendThinkingStream(delta) {
 
   const oldTotal = _thinkingHeaderLineCount + _thinkingLinesPrinted;
   const newTotal = _thinkingHeaderLineCount + newLines.length;
+  let output = '';
 
   // Move cursor up to the start of the thinking block (header + old muted lines)
   if (oldTotal > 0) {
-    process.stdout.write(`\x1B[${oldTotal}A`);
+    output += `\x1B[${oldTotal}A`;
   }
 
   // Re-render header
   if (_thinkingHeaderPrinted) {
-    process.stdout.write('\r\x1B[K' + `  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
+    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted('Thinking…')}\n`;
   }
 
   // Re-render muted lines, each with line-erase prefix
   for (const line of newLines) {
-    process.stdout.write('\r\x1B[K' + '  ' + C.muted(line) + '\n');
+    output += '\r\x1B[K' + '  ' + C.muted(line) + '\n';
   }
 
   // If new content has fewer lines, clear the leftover lines
   if (newTotal < oldTotal) {
     for (let i = 0; i < oldTotal - newTotal; i++) {
-      process.stdout.write('\r\x1B[K\n');
+      output += '\r\x1B[K\n';
     }
     // Move cursor back up so position is consistent
-    process.stdout.write(`\x1B[${oldTotal - newTotal}A`);
+    output += `\x1B[${oldTotal - newTotal}A`;
   }
 
+  debugWrite('thinking.append', output); process.stdout.write(output);
   _thinkingLinesPrinted = newLines.length;
 }
 
@@ -108,8 +139,7 @@ export function endThinkingStream() {
     // one-liner (`··· thought Ns`). Exactly one line — rhythm preserved, no
     // cursor-up math beyond the single line itself.
     if (wordCount > 0) {
-      process.stdout.write('\x1B[1A\r\x1B[2K');
-      process.stdout.write(`  ${C.ghost(`··· thought ${durationStr}`)}\n`);
+      { const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`; debugWrite('thinking.end.collapsed', _o); process.stdout.write(_o); }
     }
   } else {
     // Expanded: keep the streamed text in place and update only the known
@@ -117,11 +147,12 @@ export function endThinkingStream() {
     // afterwards so the next renderer starts at the correct cursor position.
     if (_thinkingHeaderPrinted) {
       const totalLines = _thinkingHeaderLineCount + _thinkingLinesPrinted;
-      process.stdout.write(`\x1B[${totalLines}A`);
-      process.stdout.write('\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`);
+      let output = `\x1B[${totalLines}A`;
+      output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
       if (totalLines > _thinkingHeaderLineCount) {
-        process.stdout.write(`\x1B[${totalLines - _thinkingHeaderLineCount}B`);
+        output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
       }
+      debugWrite('thinking.end.expanded', output); process.stdout.write(output);
     }
   }
 
@@ -145,8 +176,6 @@ export function printThinking(content) {
   const innerWidth = Math.max((process.stdout.columns || 80) - 10, 40);
 
   const allLines = cleanContent.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
-  const lineCount = allLines.length;
-
   // Word-count heuristic for duration estimate
   const wordCount = cleanContent.trim().split(/\s+/).length;
   const secs = Math.max(1, Math.round(wordCount / 50));
@@ -154,8 +183,7 @@ export function printThinking(content) {
 
   // Two leading blank lines so the block breathes after the user's message
   // divider / previous block (vertical rhythm for a standalone reasoning box).
-  console.log();
-  console.log();
+  console.log(); console.log();
 
   if (!isVerbose) {
     // Collapsed: single ghost line — thinking is background noise

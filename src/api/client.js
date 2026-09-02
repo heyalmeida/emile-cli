@@ -13,6 +13,15 @@ const RETRYABLE_CODES    = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', '
 
 const MAX_RETRIES = 3;
 
+function getErrorStatus(err) {
+  const candidates = [err?.status, err?.response?.status, err?.error?.status, err?.error?.code];
+  for (const candidate of candidates) {
+    const status = Number(candidate);
+    if (Number.isInteger(status) && status >= 400 && status <= 599) return status;
+  }
+  return null;
+}
+
 /**
  * Get or initialize the OpenAI client configured for the active provider.
  * Re-initializes client if settings have changed.
@@ -32,12 +41,12 @@ export function getClient() {
     if (config.provider === 'openrouter') {
       options.baseURL = 'https://openrouter.ai/api/v1';
       options.defaultHeaders = {
-        'HTTP-Referer': 'https://github.com/ArctisDev/emile-cli',
+        'HTTP-Referer': 'https://emile.luarvia.dev',
         'X-Title': 'Emile CLI',
       };
     } else if (config.provider === 'opencode') {
-      // OpenCode Zen — OpenAI-compatible gateway (https://opencode.ai)
-      options.baseURL = 'https://api.opencode.ai/v1';
+      // OpenCode Zen — curated gateway (https://opencode.ai/zen)
+      options.baseURL = 'https://opencode.ai/zen/v1';
       options.defaultHeaders = {
         'X-Title': 'Emile CLI',
       };
@@ -69,7 +78,8 @@ export function resetClient() {
  * Returns true if the error is worth retrying (rate-limit, network, server error).
  */
 function isRetryable(err) {
-  if (err?.status && RETRYABLE_STATUSES.has(err.status)) return true;
+  const status = getErrorStatus(err);
+  if (status && RETRYABLE_STATUSES.has(status)) return true;
   if (err?.code  && RETRYABLE_CODES.has(err.code))       return true;
   if (err?.cause?.code && RETRYABLE_CODES.has(err.cause.code)) return true;
   // OpenAI SDK wraps network errors as APIConnectionError
@@ -129,15 +139,27 @@ export function getRetryDelayMs(err, attempt) {
     const dateMs = Date.parse(retryAfter);
     if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
   }
-  if (Number(err?.status) === 429) return 10_000;
+  if (getErrorStatus(err) === 429) return 10_000;
   return attempt * 1500;
 }
 
 /** Maps common provider failures to an actionable, secret-free UI message. */
 export function formatApiError(err, { model = '' } = {}) {
-  const status = Number(err?.status);
-  const message = String(err?.message || '').toLowerCase();
+  const status = getErrorStatus(err);
+  const rawMessage = String(err?.error?.message || err?.message || '');
+  const errorCode = err?.code || err?.error?.code;
+  const message = rawMessage.toLowerCase();
   const safeModel = String(model || 'selected model').replace(/[\r\n\t]/g, ' ').slice(0, 100);
+  const safeDetail = rawMessage
+    .replace(/bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/((?:api[-_ ]?key|token|secret)\s*[:=]\s*)\S+/gi, '$1[redacted]')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  const detail = safeDetail && !/^(provider returned(?: an)? error|api request failed)$/i.test(safeDetail)
+    ? ` Details: ${safeDetail}`
+    : '';
 
   if (status === 401 || /invalid api key|unauthorized|authentication/.test(message)) {
     return 'Authentication failed. Check your API key with /connect.';
@@ -148,13 +170,73 @@ export function formatApiError(err, { model = '' } = {}) {
   if (status === 413 || (status === 400 && /context (length|size|window|too long)|maximum context|too many tokens|request too large|prompt too long/.test(message))) {
     return 'Context window exceeded. Compressing history and retrying...';
   }
+  if (status === 402 || /insufficient (credits?|funds?)|payment required|quota exceeded|billing/.test(message)) {
+    return `Provider quota or billing rejected the request${status ? ` (${status})` : ''}. Check the provider account, model limits and search/tool charges.`;
+  }
+  if (status === 403) {
+    return `Provider denied this request (403). Check model access and account permissions.${detail}`;
+  }
   if (status === 429) {
     return 'Rate limited. Waiting 10s before retry...';
   }
-  if (err?.code === 'ETIMEDOUT' || err?.code === 'ERR_SOCKET_CONNECTION_TIMEOUT' || err?.cause?.code === 'ETIMEDOUT') {
+  if (errorCode === 'ETIMEDOUT' || errorCode === 'ERR_SOCKET_CONNECTION_TIMEOUT' || err?.cause?.code === 'ETIMEDOUT') {
     return 'Request timed out. Check your connection.';
   }
-  return 'API request failed. Check your provider settings and connection.';
+  if (status >= 500) {
+    return `Provider server error (${status}). Try again or switch provider/model.${detail}`;
+  }
+  if (status >= 400) {
+    return `Provider rejected the request (${status}). Check the model and tool parameters.${detail}`;
+  }
+  if (errorCode) {
+    return `Provider connection failed (${String(errorCode).slice(0, 40)}). Check your network and provider settings.${detail}`;
+  }
+  return `API request failed. Check your provider settings and connection.${detail}`;
+}
+
+/**
+ * Iterates a streaming request with bounded retries for failures that happen
+ * before any response chunk is received. Replaying a partially rendered stream
+ * would duplicate reasoning, text or tool-call deltas in the terminal.
+ */
+async function* streamWithRetries(client, callArgs, signal = null) {
+  let lastErr;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    let receivedChunk = false;
+    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
+    try {
+      const responseStream = await client.chat.completions.create({
+        ...callArgs,
+        stream: true,
+        stream_options: { include_usage: true },
+      }, signal ? { signal } : undefined);
+
+      for await (const chunk of responseStream) {
+        receivedChunk = true;
+        yield chunk;
+      }
+      return;
+    } catch (err) {
+      lastErr = err;
+      // A cancel/signal abort must never be retried — throw immediately.
+      if (signal?.aborted) throw err;
+      const retryable = !receivedChunk && isRetryable(err) && attempt < MAX_RETRIES;
+      if (!retryable) throw err;
+
+      const waitMs = getRetryDelayMs(err, attempt);
+      const status = getErrorStatus(err);
+      const retryMessage = status === 429
+        ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retrying stream...`
+        : `Stream failed before output. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
+      process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);
+      await sleep(waitMs);
+      if (signal?.aborted) throw err;
+      process.stdout.write(`\r\x1B[K  ${C.warn('⟳')} ${C.muted(`Stream attempt ${attempt + 1}/${MAX_RETRIES}...`)}\n`);
+    }
+  }
+
+  throw lastErr;
 }
 
 /**
@@ -170,6 +252,7 @@ export function formatApiError(err, { model = '' } = {}) {
  * @param {string}        [params.effort]
  * @param {boolean}       [params.stream]
  * @param {string}        [params.overrideModel] — used internally by fallback logic
+ * @param {AbortSignal}   [params.signal] — aborts the in-flight HTTP request (turn cancel)
  * @returns {Promise<object|AsyncIterable>}
  */
 export async function createChatCompletion({
@@ -180,11 +263,16 @@ export async function createChatCompletion({
   effort = null,
   stream = false,
   overrideModel,
+  signal = null,
 }) {
   const client = getClient();
   const activeModel = overrideModel || model;
 
   const body = { model: activeModel, messages };
+  if (process.env.EMILE_DEBUG_API) {
+    const rp = buildReasoningParams({ provider: config.provider, model: activeModel, effort: config.defaultEffort });
+    process.stderr.write(`[api] model=${activeModel} reasoning=${JSON.stringify(rp)}\n`);
+  }
 
   if (tools && tools.length > 0) {
     body.tools = tools;
@@ -208,29 +296,28 @@ export async function createChatCompletion({
     extra_body: Object.keys(extraBody).length > 0 ? extraBody : undefined,
   };
 
+  if (stream) return streamWithRetries(client, callArgs, signal);
+
   // ── Retry loop ────────────────────────────────────────────────
   let lastErr;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
     try {
-      if (stream) {
-        return await client.chat.completions.create({
-          ...callArgs,
-          stream: true,
-          stream_options: { include_usage: true },
-        });
-      }
-      return await client.chat.completions.create(callArgs);
+      return await client.chat.completions.create(callArgs, signal ? { signal } : undefined);
     } catch (err) {
       lastErr = err;
 
-      if (!isRetryable(err) || attempt === MAX_RETRIES) {
-        // Not retryable or exhausted — surface error
-        process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.muted(formatApiError(err, { model: activeModel }))}\n`);
+      if (signal?.aborted || !isRetryable(err) || attempt === MAX_RETRIES) {
+        // Aborted, not retryable, or exhausted — surface error (the abort
+        // path is handled by the caller as a cancel, so stay silent here).
+        if (!signal?.aborted) {
+          process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.muted(formatApiError(err, { model: activeModel }))}\n`);
+        }
         throw err;
       }
 
       const waitMs = getRetryDelayMs(err, attempt);
-      const retryMessage = Number(err?.status) === 429
+      const retryMessage = getErrorStatus(err) === 429
         ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`
         : `Connection failed. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
       process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);

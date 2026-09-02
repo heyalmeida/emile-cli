@@ -4,4 +4,5 @@
  * The former src/api.js moved to client.js; this barrel keeps the public
  * import surface stable: `import { ... } from './api/index.js'`.
  */
-export { getClient, resetClient, createChatCompletion, getRetryDelayMs } from './client.js';
+export { getClient, resetClient, createChatCompletion, getRetryDelayMs, formatApiError } from './client.js';
+export { getProviderToolDefinitions } from './provider-tools.js';

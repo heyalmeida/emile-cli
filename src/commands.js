@@ -1,9 +1,9 @@
 import { select, password, text, confirm, isCancel, cancel } from '@clack/prompts';
-import { C, printRulesInfo } from './ui/index.js';
+import { C, printRulesInfo, promptModelPicker } from './ui/index.js';
 import { saveUserConfig, config } from './config.js';
 import { resetClient } from './api/index.js';
 import { loadRules, MAX_RULES_CHARS } from './rules.js';
-import { getDynamicModels, getModelInfo, initModelCatalog, isDynamicCatalogActive, isKnownModel } from './models.js';
+import { getModelInfo, getProviderModelOptions, isDynamicCatalogActive, isKnownModel } from './models.js';
 
 // Re-map the legacy `pc.*` calls to the Tokyo Night palette exported by ui.js,
 // so wizard output matches the rest of the CLI (one solid color system).
@@ -30,15 +30,14 @@ const PROVIDERS = [
     value: 'opencode',
     label: 'OpenCode Zen  (https://opencode.ai)  — curated coding gateway',
     keyLabel: 'OpenCode Zen',
-    defaultModel: 'anthropic/claude-sonnet-4-5',
+    defaultModel: 'claude-sonnet-4-5',
     models: [
-      { value: 'anthropic/claude-sonnet-4-5',  label: 'Claude Sonnet 4.5  (Recommended for Code)' },
-      { value: 'anthropic/claude-opus-4-5',    label: 'Claude Opus 4.5  (Most powerful)' },
-      { value: 'google/gemini-2.5-pro',        label: 'Gemini 2.5 Pro  (Giant context)' },
-      { value: 'google/gemini-2.5-flash',      label: 'Gemini 2.5 Flash  (Fast & cheap)' },
-      { value: 'openai/gpt-4.1',               label: 'GPT-4.1  (OpenAI latest)' },
-      { value: 'openai/o3',                    label: 'o3  (OpenAI reasoning)' },
-      { value: 'deepseek/deepseek-chat',       label: 'DeepSeek V3  (Cost-efficient)' },
+      { value: 'claude-sonnet-4-5',  label: 'Claude Sonnet 4.5  (Recommended for Code)' },
+      { value: 'claude-opus-4-5',    label: 'Claude Opus 4.5  (Most powerful)' },
+      { value: 'gemini-3.1-pro',     label: 'Gemini 3.1 Pro  (Giant context)' },
+      { value: 'gemini-3.7-flash',   label: 'Gemini 3.7 Flash  (Fast & cheap)' },
+      { value: 'gpt-5.6-luna',       label: 'GPT 5.6 Luna  (OpenAI latest)' },
+      { value: 'deepseek-v4-pro',    label: 'DeepSeek V4 Pro  (Cost-efficient)' },
       { value: 'custom', label: 'Other model... (enter identifier manually)' },
     ],
   },
@@ -171,24 +170,25 @@ export async function runModelWizard() {
     ? providerDef.models
     : [{ value: 'custom', label: 'Enter model identifier manually' }];
 
-  if (config.provider === 'openrouter') {
-    await initModelCatalog();
-    const dynamicModels = getDynamicModels({ provider: config.provider });
-    if (dynamicModels.length > 0) {
-      optionsList = dynamicModels.map(({ id, info }) => ({
-        value: id,
-        label: formatCatalogModelLabel(id, info),
-      }));
-      optionsList.push({ value: 'custom', label: 'Other model... (enter identifier manually)' });
-    }
+  // Prefer the provider's live model list (OpenRouter catalog or the OpenCode
+  // `/models` endpoints). On failure the curated options above remain usable.
+  const liveModels = await getProviderModelOptions({ provider: config.provider });
+  if (liveModels.length > 0) {
+    console.log(pc.gray(`  Loaded ${liveModels.length} models from the live catalog.`));
+    optionsList = liveModels.map(({ id, info }) => ({
+      value: id,
+      label: formatCatalogModelLabel(id, info),
+    }));
+    optionsList.push({ value: 'custom', label: 'Other model... (enter identifier manually)' });
+  } else if (['openrouter', 'opencode', 'opencode-go'].includes(config.provider)) {
+    console.log(pc.yellow('  Live model list unavailable — showing curated options.'));
   }
 
-  const modelChoice = await select({
+  const modelChoice = await promptModelPicker(optionsList, {
     message: 'Select the model you want to use:',
-    options: optionsList,
   });
 
-  if (isCancel(modelChoice)) {
+  if (modelChoice === null || isCancel(modelChoice)) {
     cancel('Model selection cancelled.');
     return;
   }
@@ -219,8 +219,11 @@ export async function runModelWizard() {
 /** Formats remote catalog data as a readable, bounded select label. */
 export function formatCatalogModelLabel(model, info = getModelInfo(model)) {
   const id = String(model || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, 80);
-  const context = Number.isFinite(Number(info?.context)) && Number(info.context) > 0
-    ? `${Math.round(Number(info.context) / 1000)}k ctx`
+  const contextValue = Number(info?.context);
+  const context = Number.isFinite(contextValue) && contextValue > 0
+    ? contextValue >= 1_000_000
+      ? `${Math.round(contextValue / 1_000_000)}M ctx`
+      : `${Math.round(contextValue / 1000)}k ctx`
     : 'context n/a';
   const input = Number.isFinite(Number(info?.inputPrice)) ? Number(info.inputPrice).toFixed(2) : 'n/a';
   const output = Number.isFinite(Number(info?.outputPrice)) ? Number(info.outputPrice).toFixed(2) : 'n/a';

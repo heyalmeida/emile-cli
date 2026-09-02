@@ -1,15 +1,19 @@
 // handlers/write-file.js — writeFile tool handler.
 import fs from 'node:fs';
 import path from 'node:path';
-import { exec } from 'node:child_process';
-import { confirm, isCancel } from '@clack/prompts';
 import { config } from '../../config.js';
-import { resolveSafePath, isSafeCommand } from '../security.js';
+import { resolveSafePath } from '../security.js';
 import { fileCache, pushUndo } from '../file-state.js';
 import { showDiff } from '../show-diff.js';
 
-export async function writeFile({ path: filePath, content }) {
+export async function writeFile({ path: filePath, content } = {}) {
   try {
+    if (typeof filePath !== 'string' || filePath.trim() === '') {
+      return 'Error: path must be a non-empty string.';
+    }
+    if (typeof content !== 'string') {
+      return 'Error: content must be a string.';
+    }
     const targetPath = resolveSafePath(filePath);
     const parentDir = path.dirname(targetPath);
     

@@ -95,6 +95,8 @@ export function describeToolActivity(toolCall) {
   if (name === 'listDir') return 'listing files';
   if (name === 'findFiles') return 'finding files';
   if (name === 'grepSearch') return 'searching code';
+  if (name === 'searchWeb') return 'searching web';
+  if (name === 'browsePage') return 'reading web page';
   if (name === 'runCommand') return 'running command';
   if (name === 'createPlan') return 'creating plan';
   if (name === 'updateTask') return 'updating plan';

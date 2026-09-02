@@ -5,7 +5,8 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
-  '/rewind', '/thinking', '/help', '/undo', '/cost', '/export', '/rules',
+  '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
+  '/help', '/undo', '/cost', '/export', '/rules',
 ];
 
 test('registry contains every existing slash command and aliases', () => {
@@ -52,6 +53,17 @@ test('thinking handler toggles the shared visibility state', async () => {
   assert.equal(config.expandThinking, false);
 });
 
+test('maxloop handler sets the iteration cap and rejects invalid values', async () => {
+  const config = { maxLoopIterations: 40 };
+  const handled = await dispatchCommand('/maxloop 80', { config });
+
+  assert.equal(handled, true);
+  assert.equal(config.maxLoopIterations, 80);
+
+  await dispatchCommand('/maxloop nope', { config });
+  assert.equal(config.maxLoopIterations, 80);
+});
+
 test('undo dispatch accepts an optional count', async () => {
   const workspaceDir = process.cwd();
   const handled = await dispatchCommand('/undo 3', {
@@ -66,4 +78,84 @@ test('undo dispatch accepts an optional count', async () => {
   });
 
   assert.equal(handled, true);
+});
+
+test('websearch enhanced mode is provider-independent and persists explicit state', async () => {
+  const saved = [];
+  const statuses = [];
+  const warnings = [];
+  const config = {
+    provider: 'requesty',
+    webSearch: false,
+    webSearchMode: 'native',
+    tavilyApiKey: '',
+    tavilyEnabled: false,
+    firecrawlApiKey: '',
+    firecrawlEnabled: false,
+  };
+
+  const handled = await dispatchCommand('/websearch enhanced', {
+    config,
+    saveUserConfig: settings => saved.push(settings),
+    printWebSearchStatus: state => statuses.push({ ...state }),
+    printWebCommandWarning: message => warnings.push(message),
+  });
+
+  assert.equal(handled, true);
+  assert.equal(config.webSearch, true);
+  assert.equal(config.webSearchMode, 'enhanced');
+  assert.deepEqual(saved, [{ webSearchMode: 'enhanced', webSearch: true }]);
+  assert.equal(statuses.length, 1);
+  assert.match(warnings[0], /partial capabilities/i);
+});
+
+test('native websearch remains gated to OpenRouter', async () => {
+  const saved = [];
+  const warnings = [];
+  const config = { provider: 'requesty', webSearch: false, webSearchMode: 'enhanced' };
+
+  await dispatchCommand('/websearch native', {
+    config,
+    saveUserConfig: settings => saved.push(settings),
+    printWebCommandWarning: message => warnings.push(message),
+  });
+
+  assert.deepEqual(saved, []);
+  assert.equal(config.webSearch, false);
+  assert.match(warnings[0], /requires the OpenRouter/i);
+});
+
+test('provider root command configures a masked credential through the injected wizard', async () => {
+  const saved = [];
+  const configured = [];
+  const config = { tavilyApiKey: '', tavilyEnabled: false };
+
+  await dispatchCommand('/tavily', {
+    config,
+    promptWebProviderCredential: async provider => ({ cancelled: false, value: `${provider}-secret` }),
+    saveUserConfig: settings => saved.push(settings),
+    printWebProviderConfigured: provider => configured.push(provider),
+  });
+
+  assert.equal(config.tavilyEnabled, true);
+  assert.equal(config.tavilyApiKey, 'tavily-secret');
+  assert.deepEqual(saved, [{ tavilyApiKey: 'tavily-secret', tavilyEnabled: true }]);
+  assert.deepEqual(configured, ['tavily']);
+});
+
+test('provider commands reject inline credentials without persisting or echoing them', async () => {
+  const saved = [];
+  const warnings = [];
+  const secret = 'do-not-print-this-key';
+
+  await dispatchCommand(`/firecrawl ${secret}`, {
+    config: { firecrawlApiKey: '', firecrawlEnabled: false },
+    saveUserConfig: settings => saved.push(settings),
+    printWebCommandWarning: message => warnings.push(message),
+  });
+
+  assert.deepEqual(saved, []);
+  assert.equal(warnings.length, 1);
+  assert.doesNotMatch(warnings[0], new RegExp(secret));
+  assert.match(warnings[0], /masked setup/i);
 });

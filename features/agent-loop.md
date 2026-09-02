@@ -26,6 +26,9 @@ free-model fallback and iteration limits protect the turn.
 
 | Item | Detail |
 |------|---------|
+| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--max-loop-iterations <n>` |
+| **Slash commands** | `/thinking`, `/cost`, `/maxloop <n>` |
+| **Tools** | Built-in tools and MCP tool bridge |
 | **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--web-search` |
 | **Slash commands** | `/thinking`, `/cost` |
 | **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |

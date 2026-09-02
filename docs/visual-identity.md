@@ -62,7 +62,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
 | **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
-| **Status bar / footer** | `fmtK` | Context (tokens), model and estimated cost; counts at or above one million use compact `M` units (`1M`, `1.5M`) and smaller counts use `k` |
+| **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md` |
 
 **Semantic tool colors** (tool lines):
 
@@ -103,6 +103,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
+| Paste | Bracketed-paste payloads remain editable, including embedded newlines; `Enter` sends the draft |
 | Risk confirmation | @clack `confirm` defaulting to **no** (fail-closed) |
 | Plans | `Tab` toggles plans mode at the prompt |
 

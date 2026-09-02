@@ -49,6 +49,8 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-04** | Built-in tools: `readFile`, `writeFile`, `editFile` (diff), `listDir`, `findFiles`, `grepSearch`, `runCommand`; file arguments are validated and shell cwd persists within the workspace session | ✅ |
 | **RF-05** | Execution gate: safe mode with a safe-command whitelist, `--no-safe` and `--dry-run` | ✅ |
 | **RF-06** | `/undo [N]` to revert the agent's last or last N file modifications (undo stack) | ✅ |
+| **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, and reasoning omitted by default | ✅ |
+| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) with live provider catalogs where available (OpenRouter, OpenCode, OpenCode Go) | ✅ |
 | **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, workspace-contained session cwd, and reasoning omitted by default | ✅ |
 | **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
