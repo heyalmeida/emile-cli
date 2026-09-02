@@ -63,15 +63,21 @@ test('thinking handler toggles the shared visibility state', async () => {
   assert.equal(config.expandThinking, false);
 });
 
-test('maxloop handler sets the iteration cap and rejects invalid values', async () => {
+test('maxloop handler sets the iteration cap and persists it', async () => {
   const config = { maxLoopIterations: 40 };
-  const handled = await dispatchCommand('/maxloop 80', { config });
+  const savedSettings = [];
+  const handled = await dispatchCommand('/maxloop 80', {
+    config,
+    saveUserConfig: (settings) => { savedSettings.push(settings); },
+  });
 
   assert.equal(handled, true);
   assert.equal(config.maxLoopIterations, 80);
+  assert.deepEqual(savedSettings, [{ maxLoopIterations: 80 }], 'cap is persisted via saveUserConfig');
 
   await dispatchCommand('/maxloop nope', { config });
   assert.equal(config.maxLoopIterations, 80);
+  assert.equal(savedSettings.length, 1, 'invalid input does not persist');
 });
 
 test('undo dispatch accepts an optional count', async () => {
