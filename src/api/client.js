@@ -42,19 +42,19 @@ export function getClient() {
       options.baseURL = 'https://openrouter.ai/api/v1';
       options.defaultHeaders = {
         'HTTP-Referer': 'https://emile.luarvia.dev',
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode') {
       // OpenCode Zen — curated gateway (https://opencode.ai/zen)
       options.baseURL = 'https://opencode.ai/zen/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode-go') {
       // OpenCode Go — curated open-source models (https://opencode.ai)
       options.baseURL = 'https://opencode.ai/zen/go/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else {
       // Default to Requesty
