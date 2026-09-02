@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` |
+| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-aligned-multiline-tool-output` |
 | **PRD RFs served** | RF-14, RF-16, RF-18 |
 | **Owner/Area** | UI (`src/ui/`) |
 
@@ -12,7 +12,7 @@
 
 ## Description
 
-The terminal user interface of emile: the Tokyo Night palette, boxed content, live thinking stream, input prompt and activity-driven terminal-tab title. The conversation has a consistent visual rhythm, while the title reports startup, waiting, thinking, responding, context compression and allowlisted tool activities even when the tab is not focused.
+The terminal user interface of emile: the Tokyo Night palette, boxed content, live thinking stream, input prompt, aligned multiline tool output and activity-driven terminal-tab title. The conversation has a consistent visual rhythm, while the title reports startup, waiting, thinking, responding, context compression and allowlisted tool activities even when the tab is not focused.
 
 ## How It Works
 
@@ -34,8 +34,10 @@ flowchart TD
 | **CLI flags** | Visual behavior only — no flags |
 | **Slash commands** | `/thinking` (expand/collapse reasoning — expanded by default, opt-out collapse) |
 | **Configuration** | `config.expandThinking` (`true` = expanded for both live and completed reasoning; default expanded) |
-| **Reasoning request** | OpenRouter receives `reasoning: { effort }`; visible text supports `reasoning_details` while encrypted blocks remain hidden |
+| **Reasoning request** | OpenRouter receives `reasoning: { effort }`; visible text supports `reasoning_details` while encrypted blocks remain hidden and cumulative snapshots are rendered only once |
+| **Input/redraw integrity** | Prompt and thinking frames are assembled before one terminal write; `Shift+Enter` inserts a newline and plain `Enter` submits |
 | **Semantic tool colors** | read=info · write/edit=warn · exec=red · grep/find=gold · list=fg · plan tools=accent |
+| **Multiline tool rows** | Continuation lines are sanitized, width-bounded and indented beneath the argument column instead of restarting at column zero |
 | **Palette tokens** | `C.gold` (#FFD700), `C.ghost` (#3B4261); `GAP` spacing constants |
 | **Terminal title** | OSC 0, activity-first, max 100 chars; real TTY only; duplicate writes suppressed |
 | **Applicable security gates** | Assistant output sanitization; terminal title excludes prompts/command/query args and strips ANSI/OSC/control bytes |
@@ -69,3 +71,5 @@ flowchart TD
 | 2026-08-25 | Dynamic terminal title: automatic sanitized lifecycle, reasoning, response, compression and tool states; no model-facing tool or prompt/argument leakage | `specs/2026-08-25-dynamic-terminal-title` / CHANGELOG |
 | 2026-08-30 | Reasoning display fix: unified `/thinking` state, completed duration for expanded streams, and OpenRouter `reasoning_details` parsing with encrypted-block protection | `specs/2026-08-30-reasoning-details-display` / CHANGELOG |
 | 2026-08-30 | Reasoning is expanded by default after validation with `minimax-m3:free`; `/thinking` and Ctrl+P remain the collapse toggle | `specs/2026-08-30-reasoning-details-display` / CHANGELOG |
+| 2026-08-31 | Streamed reasoning no longer duplicates cumulative/overlapping text; prompt and thinking redraws use atomic frames and `Shift+Enter` supports multiline input | `specs/2026-08-30-streaming-input-integrity` / CHANGELOG |
+| 2026-08-31 | Multiline tool arguments keep continuation lines aligned beneath the argument column with existing styling, bounds and sanitization | `specs/2026-08-31-aligned-multiline-tool-output` / CHANGELOG |

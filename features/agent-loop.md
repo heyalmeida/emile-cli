@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` |
+| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` |
 | **PRD RFs served** | RF-01, RF-03, RF-08, RF-10, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop |
 
@@ -17,8 +17,8 @@ progress in the terminal.
 
 ## How It Works
 
-The loop builds the system prompt and tool definitions, streams the provider
-response, assembles tool calls, executes them through built-in or MCP handlers,
+The loop builds the system prompt and tool definitions, including explicitly
+enabled provider-owned tools, streams the provider response, assembles tool calls, executes them through built-in or MCP handlers,
 persists checkpoints and repeats until no tool call remains. Context checks,
 free-model fallback and iteration limits protect the turn.
 
@@ -26,9 +26,9 @@ free-model fallback and iteration limits protect the turn.
 
 | Item | Detail |
 |------|---------|
-| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache` |
+| **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--web-search` |
 | **Slash commands** | `/thinking`, `/cost` |
-| **Tools** | Built-in tools and MCP tool bridge |
+| **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
 | **Configuration** | Provider/model/effort in `.emile/config.json` and environment variables |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
@@ -43,10 +43,12 @@ free-model fallback and iteration limits protect the turn.
 ## Known Limitations
 
 Provider token estimates remain approximate when usage telemetry is absent, and
-the loop is single-agent rather than parallel.
+the loop is single-agent rather than parallel. Web search is currently
+OpenRouter-specific and may incur provider charges, including on free routes.
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|-----------|
 | 2026-08-30 | Registered the shipped agent-loop capability | `specs/2026-08-30-feature-registry-completion` |
+| 2026-08-31 | Added provider-gated OpenRouter web search to the effective tool set | `specs/2026-08-31-web-search-tool-reliability` |
