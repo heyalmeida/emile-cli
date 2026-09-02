@@ -55,7 +55,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
 | **RF-12** | YAML skills system with workspace detection, task-relevance matching and conditional system-prompt injection (`-s` for an explicit subset) | ✅ |
 | **RF-13** | Context and cost tracking: real API token usage with a pre-call estimate fallback, `/cost` | ✅ |
-| **RF-14** | Coherent terminal UI: Tokyo Night palette, boxes, slash-command autocomplete, input history | ✅ (continuous improvement — see [visual identity](visual-identity.md)) |
+| **RF-14** | Coherent terminal UI: Tokyo Night palette, boxes, one persistent full prompt across idle/active turns, slash-command autocomplete and keyboard navigation | ✅ (continuous improvement — see [visual identity](visual-identity.md)) |
 | **RF-15** | Automated test suite covering the critical modules (agent loop, tools, config) | ✅ Delivered (`npm test` + CI gate) |
 | **RF-16** | Reference-grade UI experience: consistent visual hierarchy, progress feedback and layout | 🔄 In progress (spec `2026-08-25-tui-overhaul`) |
 | **RF-17** | Optional user-authored project rules: `.emilerules` precedence, compatible fallbacks, bounded prompt injection and read-only `/rules` inspection | ✅ |
