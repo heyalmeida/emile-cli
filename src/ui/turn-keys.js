@@ -204,6 +204,17 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       return;
     }
     if (key.name === 'return' || key.name === 'enter') {
+      // If the buffer already contains newlines (e.g. from a paste), treat
+      // Enter as a literal newline insertion instead of committing the line.
+      // This allows multi-line paste to work correctly without the first
+      // newline triggering an early commit.
+      if (buffer.includes('\n') && buffer.length < MAX_BUFFER_CHARS) {
+        buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
+        cursor++;
+        selectedIndex = 0;
+        repaint();
+        return;
+      }
       const selected = currentMatches()[selectedIndex];
       if (selected && selected.name !== buffer) {
         buffer = selected.name;
