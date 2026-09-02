@@ -23,6 +23,7 @@ import {
 import { createSpinner } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
+import { compileMentionAttachments } from '../mentions.js';
 
 // Opt-in diagnostic: log every reasoning/content delta that arrives
 // from the model so we can confirm whether the provider is actually
@@ -206,7 +207,9 @@ async function runAgentInner({
   }
 
   if (initialPrompt) {
-    messages.push({ role: 'user', content: initialPrompt });
+    const mentions = compileMentionAttachments(initialPrompt);
+    for (const warning of mentions.warnings) console.log(C.warn(`  ${warning}`));
+    messages.push({ role: 'user', content: `${initialPrompt}${mentions.context}` });
   }
 
   const localTools = toolDefinitions;

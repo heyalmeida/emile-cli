@@ -6,7 +6,7 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
   '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
-  '/help', '/undo', '/cost', '/export', '/rules',
+  '/help', '/undo', '/cost', '/export', '/rules', '/skills',
 ];
 
 test('registry contains every existing slash command and aliases', () => {
@@ -23,6 +23,16 @@ test('unknown slash-like input is not dispatched', async () => {
 
   assert.equal(handled, false);
   assert.equal(invoked, false);
+});
+
+test('/skills is a registered read-only command', async () => {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await dispatchCommand('/skills', {}), true);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test('new-session handler mutates only the explicit session state', async () => {
