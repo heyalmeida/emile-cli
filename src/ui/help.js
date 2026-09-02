@@ -23,6 +23,10 @@ export function printHelp() {
     ['/export',   'Export session as Markdown'],
     ['/rules',    'Inspect user-authored project rules'],
     ['/thinking', 'Toggle reasoning visibility'],
+    ['/maxloop',  'Set agent loop iteration cap'],
+    ['/websearch', 'Control native/enhanced web search'],
+    ['/tavily',   'Configure Tavily web search'],
+    ['/firecrawl','Configure Firecrawl rendering'],
     ['/help',     'Display this help menu'],
     ['exit',      'Quit the CLI'],
   ];

@@ -40,6 +40,12 @@ export function formatToolSummary(toolCalls) {
     else if (name === 'findFiles' && args.pattern) { label = 'find'; arg = args.pattern; tone = 'gold'; }
     else if (name === 'grepSearch' && args.query) { label = 'grep'; arg = args.query; tone = 'gold'; }
     else if (name === 'runCommand' && args.command) { label = 'exec'; arg = args.command.substring(0, 120); tone = 'red'; }
+    else if (name === 'searchWeb' && args.query) { label = 'web'; arg = stripTerminalControls(args.query); tone = 'gold'; }
+    else if (name === 'browsePage' && args.url) {
+      label = 'browse';
+      try { arg = new URL(args.url).hostname; } catch { arg = 'invalid URL'; }
+      tone = 'info';
+    }
     else if (name === 'createPlan') { label = 'plan'; }
     else if (name === 'updateTask') { label = 'task'; }
     else if (name.includes('__')) {
@@ -51,7 +57,12 @@ export function formatToolSummary(toolCalls) {
       tone = 'info';
     }
 
-    details.push({ label, arg, tone, mcp: name.includes('__') });
+    details.push({
+      label: stripTerminalControls(label),
+      arg: stripTerminalControls(arg),
+      tone,
+      mcp: name.includes('__'),
+    });
   }
 
   const total = toolCalls.length;

@@ -5,6 +5,7 @@ import { toolDefinitions } from '../tools/index.js';
 import { getMcpToolDefinitions } from '../mcp.js';
 import { getProviderToolDefinitions } from '../api/provider-tools.js';
 import { config } from '../config.js';
+import { getEnhancedWebToolDefinitions } from '../web/index.js';
 
 export const sessionStats = {
   promptTokens: 0,
@@ -73,7 +74,11 @@ export function initSessionStats(model, plansMode, skills, messages = []) {
   const allTools = [
     ...toolDefinitions,
     ...getMcpToolDefinitions(),
-    ...getProviderToolDefinitions({ provider: config.provider, webSearch: config.webSearch }),
+    ...getProviderToolDefinitions({
+      provider: config.provider,
+      webSearch: config.webSearch && config.webSearchMode === 'native',
+    }),
+    ...getEnhancedWebToolDefinitions(config),
   ];
   const usage = calculateContextUsage({ systemPrompt, tools: allTools, messages });
   sessionStats.estimatedContextTokens = usage.estimatedTokens;
