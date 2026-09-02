@@ -189,30 +189,20 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       }
       return;
     }
-    // Bracketed-paste / multi-line paste: the readline keypress has
-    // key.name === undefined and str contains the whole pasted text,
-    // including newlines. Insert it as-is at the cursor without
-    // interpreting the embedded newlines as Enter.
-    if (key.name === undefined && typeof str === 'string' && str.length > 0) {
-      const paste = str.replace(/\r/g, '');
-      if (buffer.length + paste.length <= MAX_BUFFER_CHARS) {
-        buffer = buffer.slice(0, cursor) + paste + buffer.slice(cursor);
-        cursor += paste.length;
-        selectedIndex = 0;
-        repaint();
-      }
-      return;
-    }
+    // Multi-line paste: when a chunk of text containing newlines arrives
+    // in a single keypress (bracketed paste mode) OR the readline streams
+    // one \n as 'return' while there is more text buffered from the same
+    // paste, treat the newlines as literal inserts instead of commits.
+    // The simplest robust heuristic: if the str is multi-line OR the buffer
+    // already has a newline, treat Enter as a newline insertion.
     if (key.name === 'return' || key.name === 'enter') {
-      // If the buffer already contains newlines (e.g. from a paste), treat
-      // Enter as a literal newline insertion instead of committing the line.
-      // This allows multi-line paste to work correctly without the first
-      // newline triggering an early commit.
-      if (buffer.includes('\n') && buffer.length < MAX_BUFFER_CHARS) {
-        buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
-        cursor++;
-        selectedIndex = 0;
-        repaint();
+      if ((typeof str === 'string' && str.includes('\n')) || buffer.includes('\n')) {
+        if (buffer.length < MAX_BUFFER_CHARS) {
+          buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
+          cursor++;
+          selectedIndex = 0;
+          repaint();
+        }
         return;
       }
       const selected = currentMatches()[selectedIndex];
