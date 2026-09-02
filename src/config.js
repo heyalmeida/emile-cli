@@ -57,9 +57,38 @@ const webSearch = readBoolean(
   false,
 );
 
+// ── API key resolution ────────────────────────────────────────────────────────
+
+const ENV_KEY_MAP = {
+  requesty: 'REQUESTY_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  opencode: 'OPENCODE_API_KEY',
+  'opencode-go': 'OPENCODE_API_KEY',
+};
+
+/**
+ * Returns the API key for the given provider.
+ * Uses the saved key only if it was stored for this provider; otherwise
+ * looks up the provider-specific env var. Cross-provider silent fallback
+ * (IMPROVEMENTS.md §1.4) is removed.
+ *
+ * @param {string} provider
+ * @returns {string}
+ */
+export function resolveApiKey(provider) {
+  if (savedConfig.provider === provider && typeof savedConfig.apiKey === 'string' && savedConfig.apiKey.length > 0) {
+    return savedConfig.apiKey;
+  }
+  const envVar = ENV_KEY_MAP[provider];
+  if (envVar && typeof process.env[envVar] === 'string' && process.env[envVar].length > 0) {
+    return process.env[envVar];
+  }
+  return '';
+}
+
 export const config = {
   provider: savedConfig.provider || process.env.EMILE_PROVIDER || 'requesty',
-  apiKey: savedConfig.apiKey || process.env.REQUESTY_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY || '',
+  apiKey: resolveApiKey(savedConfig.provider || process.env.EMILE_PROVIDER || 'requesty'),
   defaultModel: savedConfig.model || process.env.EMILE_DEFAULT_MODEL || 'anthropic/claude-3-5-sonnet',
   defaultEffort: savedConfig.effort || process.env.EMILE_DEFAULT_EFFORT || 'low',
   workspaceDir,
@@ -113,7 +142,12 @@ export function saveUserConfig(settings) {
   };
 
   try {
-    fs.writeFileSync(userConfigPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+    // Best-effort chmod on existing file (no-op if it doesn't exist yet
+    // or if the filesystem doesn't support permissions).
+    if (fs.existsSync(userConfigPath)) {
+      try { fs.chmodSync(userConfigPath, 0o600); } catch { /* best-effort */ }
+    }
+    fs.writeFileSync(userConfigPath, JSON.stringify(dataToSave, null, 2), { mode: 0o600, encoding: 'utf8' });
   } catch (err) {
     logError(`Error saving config.json: ${err.message}`);
   }
