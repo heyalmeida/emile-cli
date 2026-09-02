@@ -5,6 +5,7 @@
  * and compression.js. This barrel keeps the public import surface stable.
  */
 export { runAgent, resumePendingTools, FREE_FALLBACK_MODEL, isPaidModel } from './agent.js';
+export { createTurnControl } from './turn-control.js';
 export { sessionStats, calculateCost, getContextLimit, calculateContextUsage, initSessionStats } from './session-stats.js';
 export { compressContextIfNeeded } from './compression.js';
 export { countCompletedTurns, refreshSessionSummary } from './session-summary.js';

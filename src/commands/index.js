@@ -7,11 +7,16 @@ import {
   handleNewSession,
   handleRewind,
   handleThinking,
+  handleMaxLoop,
+  handleWebSearch,
+  handleTavily,
+  handleFirecrawl,
   handleHelp,
   handleUndo,
   handleCost,
   handleExport,
   handleRules,
+  handleSkills,
 } from './handlers.js';
 
 const COMMANDS = new Map([
@@ -23,11 +28,16 @@ const COMMANDS = new Map([
   ['/clear', handleNewSession],
   ['/rewind', handleRewind],
   ['/thinking', handleThinking],
+  ['/maxloop', handleMaxLoop],
+  ['/websearch', handleWebSearch],
+  ['/tavily', handleTavily],
+  ['/firecrawl', handleFirecrawl],
   ['/help', handleHelp],
   ['/undo', handleUndo],
   ['/cost', handleCost],
   ['/export', handleExport],
   ['/rules', handleRules],
+  ['/skills', handleSkills],
 ]);
 
 /**

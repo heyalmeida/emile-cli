@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Persistent prompt lifecycle** (`specs/2026-09-01-turn-interrupt-queue`): the same full prompt frame now remains visible and writable while the agent works; spinner/reasoning/output writes are routed above it and the real blinking cursor stays at the queue draft instead of on `thinking...`. Tab accepts the highlighted slash-command completion, whose selected `●` marker is distinct from the input's `❯`; nested pickers such as `/switch` receive exclusive stdin ownership and return it resumed. The bounded renderer preserves exact wrapped-cursor positions, `Shift+Enter` multiline input and ANSI resets at 60/80/120 columns.
+
 ### Added
+- **Opt-in OpenRouter web search** (`specs/2026-08-31-web-search-tool-reliability`): added `--web-search` and `/websearch`; the provider-operated server tool is only sent to OpenRouter and displays a warning that search charges may apply, including on free model routes.
 - **Documentation branch workflow** (`specs/2026-08-30-documentation-branch`): created `docs/documentation`, mapped every catalog feature to its canonical code branch and separated documentation commits from product implementation branches.
 - **Development-first Git workflow** (`specs/2026-08-30-branch-topology-migration`): active work now uses stable product-domain branches rooted at `development`, while legacy incident-oriented refs are preserved under `archive/legacy/`.
 - **Retroactive feature registry** (`IMPROVEMENTS.md` §8.4): documented the agent loop, built-in tools, plans mode and context compression and indexed the complete shipped-feature catalog.
@@ -19,8 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Forced compression on context overflow** (`IMPROVEMENTS.md` §3.3): a 413 / "context length exceeded" error now triggers one forced compression pass and retries the turn, instead of retrying the same oversized payload.
 - **Model validation on provider switch** (`IMPROVEMENTS.md` §4.2): after `/connect`, if the live catalog is active and the current model is unknown for the new provider, the wizard offers to pick a new model before the next turn fails.
 - **UI-layer logging surface** (`IMPROVEMENTS.md` §6.1): new `src/ui/log.js` (`warn`/`error`) backed by the Tokyo Night palette — `src/config.js` now routes its warnings through it instead of raw `console.warn`.
+- **Configurable agent-loop iteration cap**: the per-turn tool-loop safety cap (default `40`) is now settable via `EMILE_MAX_LOOP_ITERATIONS`, `--max-loop-iterations <n>`, or the in-session `/maxloop <n>` command.
+- **Turn interrupt and message queue** (`specs/2026-09-01-turn-interrupt-queue`): Esc/Ctrl+C now cancel the running agent turn gracefully (the CLI stays open, partial text is kept, pending tool calls are dropped or replaced with `[canceled by user]` results), and lines typed in the full active prompt are queued and run automatically as the next turns. The selected autocomplete row uses `●`, reserving `❯` for the actual input.
 
 ### Changed
+- **Live OpenCode model lists** (`specs/2026-09-01-opencode-model-list`): `/model` now fetches available models from OpenCode Zen (`opencode.ai/zen/v1/models`) and OpenCode Go (`opencode.ai/zen/go/v1/models`) and falls back to the curated options when the list is unavailable.
+- **Scrollable `/model` picker** (`specs/2026-09-01-opencode-model-list`): arrow keys now navigate the full live model list (not just the first seven), so models such as `grok-4.6` in OpenCode Go are reachable by scrolling in addition to incremental search.
+- **Aligned multiline tool output** (`specs/2026-08-31-aligned-multiline-tool-output`): multiline shell commands and other tool arguments now render continuation lines beneath the argument column instead of restarting at column zero; sanitization and width bounds remain active.
+- **Transient stream recovery** (`specs/2026-08-31-web-search-tool-reliability`): OpenRouter SSE errors with nested numeric status codes are classified correctly, and retryable failures before the first chunk are retried without replaying partially rendered reasoning, text or tool calls.
+- **Tool and session reliability** (`specs/2026-08-31-web-search-tool-reliability`): `runCommand` now carries a validated workspace-contained cwd across calls and persisted sessions; `writeFile`/`editFile` reject malformed arguments before touching state; provider errors include bounded status/detail classification with secret redaction.
+- **Streaming and multiline input integrity** (`specs/2026-08-30-streaming-input-integrity`): cumulative or overlapping reasoning snapshots are reduced to unseen text, legacy and structured reasoning are not rendered twice, prompt/thinking redraws are emitted as assembled terminal frames, and `Shift+Enter` inserts a newline while plain `Enter` submits.
+- **Compact token units** (`specs/2026-08-30-readable-token-units`): the input footer and status bar now display million-token contexts as `M` (for example, `1M`) instead of values such as `1000k`.
+- **Readable model context labels** (`specs/2026-08-30-model-context-display`): model picker metadata now displays million-token windows as `1M ctx` instead of `1000k ctx`, while smaller windows retain the `k` format.
+- **Searchable `/model` picker** (`specs/2026-08-30-model-search-picker`): replaced the unbounded provider list with case-insensitive incremental search, at most seven visible results, keyboard navigation, cancellation-safe terminal cleanup and the existing manual model-entry path. OpenRouter uses its live/cache catalog; other providers search their curated options.
 - **Branch cleanup** (`specs/2026-08-30-branch-retirement`): removed obsolete archive and migration refs from the active branch list after confirming canonical branches had no unmerged commits; `main`, `development` and all canonical domain branches remain.
 - **Improvements documentation**: marked all detailed remediation sections as delivered and labeled former gaps as historical context, eliminating stale proposed fixes from the source-of-truth backlog.
 - **MCP error safety**: authenticated URLs and Bearer values are redacted from connection and reconnect diagnostics.
@@ -49,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **`undoStack` capped at 50 entries** (`IMPROVEMENTS.md` §1.5): the documented cap now exists — `pushUndo()` trims the oldest entry once the limit is reached.
 
 ### Fixed
+- **Enhanced web settings not restored on startup**: `.emile/web.json` (Tavily/Firecrawl keys, enabled flags and mode) was saved by `/tavily` and `/firecrawl` but never loaded back — the CLI restarted with everything unset. `hydrateEnhancedWebConfig()` now runs during startup so configured keys survive restarts.
+- **OpenCode Zen base URL** (`specs/2026-09-01-opencode-model-list`): corrected from the defunct `https://api.opencode.ai/v1` to `https://opencode.ai/zen/v1`.
 - **Reasoning stream display** (`specs/2026-08-30-reasoning-details-display`): OpenRouter now receives its unified `reasoning` request object, structured `reasoning_details` deltas are rendered and preserved across tool calls, `/thinking` consistently controls live and completed reasoning, and expanded streams finish with a `Thought for Ns` duration header. The expanded header is one physical row, so redraws no longer overwrite the stream. Providers such as `openrouter/free` that return no reasoning remain silent rather than displaying fabricated thought content.
 - **Ambiguous `editFile` matches rejected** (`IMPROVEMENTS.md` §1.4): occurrences are counted at every matching level (exact, CRLF-normalized, whitespace-tolerant); a target appearing more than once returns an error asking for more context instead of silently replacing the first occurrence. Docs and code are back in sync.
 - **MCP tool-name collisions eliminated** (`IMPROVEMENTS.md` §5.2): tool resolution now uses an explicit `server__tool → { server, tool }` map built at connect time instead of parsing the first `__` at call time.

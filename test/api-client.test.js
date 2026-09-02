@@ -76,3 +76,22 @@ test('formats common API failures as actionable messages without exposing raw er
 test('uses a ten-second fallback delay for rate limits without Retry-After', () => {
   assert.equal(getRetryDelayMs({ status: 429 }, 1), 10_000);
 });
+
+test('classifies provider quota errors without exposing raw credentials', () => {
+  assert.match(
+    formatApiError({ status: 402, message: 'insufficient credits for api_key=secret-value' }),
+    /quota or billing.*402/,
+  );
+  const message = formatApiError({ status: 400, message: 'invalid api_key=secret-value' });
+  assert.match(message, /400/);
+  assert.doesNotMatch(message, /secret-value/);
+});
+
+test('classifies OpenRouter streaming errors that carry status in nested error.code', () => {
+  const message = formatApiError({
+    error: { code: 502, message: 'Provider returned an error' },
+  }, { model: 'minimax/minimax-m3:free' });
+
+  assert.match(message, /Provider server error \(502\)/);
+  assert.doesNotMatch(message, /Provider returned an error/);
+});

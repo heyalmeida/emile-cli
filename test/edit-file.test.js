@@ -106,6 +106,14 @@ describe('editFile', () => {
     assert.match(result, /targetContent must not be empty/);
   });
 
+  test('rejects malformed arguments before touching the file or undo stack', async () => {
+    const before = fs.readFileSync(path.join(tmpWorkspace, filePath), 'utf8');
+    assert.match(await editFile({ path: filePath, targetContent: 42, replacementContent: 'x' }), /targetContent must be a string/);
+    assert.match(await editFile({ path: filePath, targetContent: 'a', replacementContent: null }), /replacementContent must be a string/);
+    assert.equal(fs.readFileSync(path.join(tmpWorkspace, filePath), 'utf8'), before);
+    assert.equal(undoStack.length, 0);
+  });
+
   test('path traversal is rejected', async () => {
     const result = await editFile({ path: '../outside.js', targetContent: 'a', replacementContent: 'b' });
     assert.match(result, /Access denied/);

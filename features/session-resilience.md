@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-30 |
-| **Source spec** | `specs/2026-08-30-session-resilience` + `specs/2026-08-30-session-reasoning-retention` + `specs/2026-08-30-session-size-management` |
+| **Source spec** | `specs/2026-08-30-session-resilience` + `specs/2026-08-30-session-reasoning-retention` + `specs/2026-08-30-session-size-management` + `specs/2026-08-31-web-search-tool-reliability` |
 | **PRD RFs served** | RF-07, RF-13 |
 | **Owner/Area** | Agent Loop / Session persistence |
 
@@ -12,7 +12,7 @@
 
 Emile keeps session titles useful beyond the first prompt and protects work when a turn is interrupted during tool execution. Summaries are refreshed periodically using a short, low-effort completion, while failures leave the existing title untouched.
 
-Before a tool batch starts, the session records the assistant's pending calls. If the process stops, loading the session detects the checkpoint and resumes only calls without a matching persisted result through the normal tool security path.
+Before a tool batch starts, the session records the assistant's pending calls. If the process stops, loading the session detects the checkpoint and resumes only calls without a matching persisted result through the normal tool security path. Each session also stores a validated workspace-contained cwd so chained `runCommand` calls resume in the expected directory; `/new` resets it.
 
 ## How It Works
 
@@ -37,7 +37,7 @@ flowchart LR
 | **CLI flags** | `-H, --history` |
 | **Slash commands** | `/switch`, `/sessions`, `/sessions clean <days>`, `/export [--export-thinking]` |
 | **Tools** | Existing built-in and MCP tools; no new tool surface |
-| **Configuration** | Session records in `.emile/history/*.json`; `--max-session-size`/`EMILE_MAX_SESSION_SIZE`; `--export-thinking` is opt-in |
+| **Configuration** | Session records in `.emile/history/*.json`; `sessionCwd` is normalized against the workspace; `--max-session-size`/`EMILE_MAX_SESSION_SIZE`; `--export-thinking` is opt-in |
 | **Applicable security gates** | Existing tool handlers, safe mode, dry-run, command whitelist and `resolveSafePath` |
 
 ## Where It Lives in the Code
@@ -63,3 +63,4 @@ flowchart LR
 | 2026-08-30 | Added periodic titles and pending-tool checkpoints with safe reload recovery | `specs/2026-08-30-session-resilience` / CHANGELOG |
 | 2026-08-30 | Omitted reasoning from persisted snapshots and made export reasoning opt-in | `specs/2026-08-30-session-reasoning-retention` / CHANGELOG |
 | 2026-08-30 | Bounded persisted tool output and added age-based session cleanup | `specs/2026-08-30-session-size-management` / CHANGELOG |
+| 2026-08-31 | Persisted and restored the workspace-contained session cwd | `specs/2026-08-31-web-search-tool-reliability` / CHANGELOG |

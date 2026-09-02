@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
+import { normalizeWorkspaceCwd } from '../tools/security.js';
+import { saveUserConfig } from '../config.js';
+import { saveEnhancedWebConfig } from '../web/config.js';
+import { listSkills } from '../skills.js';
 import {
   C,
   printConfigBox,
@@ -9,6 +13,12 @@ import {
   promptSwitchSession,
   configureTerminalTitle,
   setTerminalActivity,
+  promptWebProviderCredential,
+  printWebProviderStatus,
+  printWebSearchStatus,
+  printWebCommandWarning,
+  printWebProviderConfigured,
+  printSkillsInfo,
 } from '../ui/index.js';
 
 export async function handleConnect(ctx) {
@@ -66,6 +76,8 @@ export async function handleSessions(ctx, args = []) {
     if (loaded) {
       ctx.setMessages(loaded);
       ctx.setSessionId(selectedId);
+      const record = ctx.getSessionRecord ? ctx.getSessionRecord(selectedId) : null;
+      ctx.config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || ctx.config.workspaceDir;
       const refreshedSessions = ctx.listSessions();
       const matched = refreshedSessions.find(s => s.id === selectedId);
       ctx.setSessionSummary(matched ? matched.summary : '');
@@ -84,6 +96,7 @@ export function handleNewSession(ctx) {
   ctx.setMessages([]);
   ctx.setSessionId(`session_${Date.now()}`);
   ctx.setSessionSummary('');
+  if (ctx.config) ctx.config.sessionCwd = ctx.config.workspaceDir;
   console.log(C.success('\n  New session started.'));
 }
 
@@ -116,6 +129,164 @@ export function handleThinking(ctx) {
   console.log();
   console.log(C.muted(`  Thinking output: ${ctx.config.expandThinking === true ? C.success('Expanded') : C.dim('Collapsed')}`));
   console.log();
+}
+
+export function handleMaxLoop(ctx, args = []) {
+  const value = Number(args[0]);
+  if (args.length !== 1 || !Number.isInteger(value) || value < 1) {
+    console.log();
+    console.log(C.warn('  Usage: /maxloop <number> — a whole number of at least 1.'));
+    console.log(C.muted(`  Current agent-loop cap: ${C.success(String(ctx.config.maxLoopIterations))} iterations per turn.`));
+    console.log();
+    return;
+  }
+  ctx.config.maxLoopIterations = value;
+  console.log();
+  console.log(C.muted(`  Agent-loop cap set to ${C.success(String(value))} iterations per turn.`));
+  console.log();
+}
+
+function saveWebSettings(ctx, settings) {
+  if (ctx.saveUserConfig && !ctx.saveWebToggle && !ctx.saveWebConfig) {
+    // Backward-compatible injection used by embedded callers and tests.
+    ctx.saveUserConfig(settings, { runtimeConfig: ctx.config });
+  } else {
+    if ('webSearch' in settings) {
+      const saveToggle = ctx.saveWebToggle || saveUserConfig;
+      saveToggle({ webSearch: settings.webSearch === true });
+    }
+    const enhancedSettings = Object.fromEntries(
+      Object.entries(settings).filter(([key]) => key !== 'webSearch'),
+    );
+    if (Object.keys(enhancedSettings).length > 0) {
+      const saveEnhanced = ctx.saveWebConfig || saveEnhancedWebConfig;
+      saveEnhanced(enhancedSettings, { runtimeConfig: ctx.config });
+    }
+  }
+  // Tests and embedded callers can inject an isolated config object instead
+  // of mutating the process-global config singleton.
+  Object.assign(ctx.config, settings);
+}
+
+function showWebSearchStatus(ctx) {
+  (ctx.printWebSearchStatus || printWebSearchStatus)(ctx.config);
+}
+
+function showWebProviderStatus(ctx, provider) {
+  (ctx.printWebProviderStatus || printWebProviderStatus)(provider, ctx.config);
+}
+
+function warnWebCommand(ctx, message) {
+  (ctx.printWebCommandWarning || printWebCommandWarning)(message);
+}
+
+function isEnhancedProviderReady(config, provider) {
+  return config?.[`${provider}Enabled`] === true && Boolean(config?.[`${provider}ApiKey`]);
+}
+
+export function handleWebSearch(ctx, args = []) {
+  const operation = String(args[0] || '').toLowerCase();
+  if (args.length > 1 || !['', 'on', 'off', 'native', 'enhanced', 'status'].includes(operation)) {
+    warnWebCommand(ctx, 'Usage: /websearch [on|off|native|enhanced|status]');
+    return;
+  }
+
+  if (operation === 'status') {
+    showWebSearchStatus(ctx);
+    return;
+  }
+
+  if (operation === 'native') {
+    if (ctx.config.provider !== 'openrouter') {
+      warnWebCommand(ctx, 'Native web search requires the OpenRouter provider.');
+      return;
+    }
+    saveWebSettings(ctx, { webSearchMode: 'native', webSearch: true });
+    showWebSearchStatus(ctx);
+    return;
+  }
+
+  if (operation === 'enhanced') {
+    saveWebSettings(ctx, { webSearchMode: 'enhanced', webSearch: true });
+    showWebSearchStatus(ctx);
+    if (!isEnhancedProviderReady(ctx.config, 'tavily') || !isEnhancedProviderReady(ctx.config, 'firecrawl')) {
+      warnWebCommand(ctx, 'Enhanced mode is active with partial capabilities. Configure /tavily and /firecrawl to enable both tools.');
+    }
+    return;
+  }
+
+  if (operation === 'off') {
+    saveWebSettings(ctx, { webSearch: false });
+    showWebSearchStatus(ctx);
+    return;
+  }
+
+  const shouldEnable = operation === 'on' || ctx.config.webSearch !== true;
+  const mode = ctx.config.webSearchMode === 'enhanced' ? 'enhanced' : 'native';
+  if (shouldEnable && mode === 'native' && ctx.config.provider !== 'openrouter') {
+    warnWebCommand(ctx, 'Native web search requires OpenRouter. Use /websearch enhanced for provider-independent search.');
+    return;
+  }
+  if (shouldEnable && mode === 'enhanced' &&
+      !isEnhancedProviderReady(ctx.config, 'tavily') &&
+      !isEnhancedProviderReady(ctx.config, 'firecrawl')) {
+    warnWebCommand(ctx, 'Configure /tavily or /firecrawl before enabling enhanced web search.');
+    return;
+  }
+
+  saveWebSettings(ctx, { webSearch: shouldEnable });
+  showWebSearchStatus(ctx);
+}
+
+async function handleEnhancedProvider(ctx, provider, args = []) {
+  const operation = String(args[0] || '').toLowerCase();
+  if (args.length > 1 || !['', 'on', 'off', 'status'].includes(operation)) {
+    warnWebCommand(ctx, `Usage: /${provider} [on|off|status]. API keys are accepted only by the masked setup.`);
+    return;
+  }
+
+  if (operation === 'status') {
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  if (operation === 'off') {
+    saveWebSettings(ctx, { [`${provider}Enabled`]: false });
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  if (operation === 'on') {
+    if (!ctx.config?.[`${provider}ApiKey`]) {
+      warnWebCommand(ctx, `Configure /${provider} before enabling it.`);
+      return;
+    }
+    saveWebSettings(ctx, { [`${provider}Enabled`]: true });
+    showWebProviderStatus(ctx, provider);
+    return;
+  }
+
+  setTerminalActivity(`configuring ${provider}`);
+  try {
+    const promptCredential = ctx.promptWebProviderCredential || promptWebProviderCredential;
+    const result = await promptCredential(provider);
+    if (!result || result.cancelled || !result.value) return;
+    saveWebSettings(ctx, {
+      [`${provider}ApiKey`]: result.value,
+      [`${provider}Enabled`]: true,
+    });
+    (ctx.printWebProviderConfigured || printWebProviderConfigured)(provider);
+  } finally {
+    setTerminalActivity('waiting');
+  }
+}
+
+export async function handleTavily(ctx, args = []) {
+  await handleEnhancedProvider(ctx, 'tavily', args);
+}
+
+export async function handleFirecrawl(ctx, args = []) {
+  await handleEnhancedProvider(ctx, 'firecrawl', args);
 }
 
 export function handleHelp() {
@@ -229,4 +400,8 @@ export function handleExport(ctx, args = []) {
 
 export async function handleRules(ctx) {
   await ctx.runRulesCommand();
+}
+
+export function handleSkills() {
+  printSkillsInfo(listSkills());
 }

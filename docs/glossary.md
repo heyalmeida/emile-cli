@@ -7,6 +7,8 @@
 | **Agent loop** | The core cycle: assemble prompt → call LLM → parse stream → execute tools → feed history, until the model stops requesting tools. Lives in `src/agent.js`. |
 | **Turn** | One complete agent-loop iteration: one API call + resulting tools, ending with a final reply to the user. |
 | **Tool** | A function exposed to the model (OpenAI function-calling format). Built-in in `src/tools.js` or provided via MCP. |
+| **Provider-operated tool** | A tool executed by the active provider rather than by emile's local dispatcher. OpenRouter web search is the current example and is composed only for OpenRouter requests. |
+| **Web search** | Optional OpenRouter provider-operated search, enabled with `--web-search` or `/websearch`; it can add provider charges and returns untrusted external data. |
 | **Safe mode** | Gate requiring user confirmation before running shell commands outside the whitelist. On by default; `--no-safe` disables it. |
 | **Dry-run** | Simulation mode: write and exec tools report what they would do without doing it. |
 | **Command whitelist** | List of commands considered safe (read-only) that skip confirmation: `git status/diff/log/show`, `npm test`, `ls`, `dir`, `pwd`. |
@@ -27,6 +29,7 @@
 | **Context compression** | In-memory summarization of older conversation history when the estimated full payload reaches 80% of the active model's context window; a 40% post-compression growth gate prevents immediate repetition. |
 | **Free-model fallback** | If a paid model call fails, the loop falls back to `openrouter/free` (`FREE_FALLBACK_MODEL`). |
 | **Workspace** | The user's working directory where emile operates; the confinement root for reads/writes. |
+| **Session cwd** | The workspace-contained current working directory carried between `runCommand` calls and persisted with a session; `/new` resets it to the workspace root. |
 | **TUI** | Terminal User Interface — emile's terminal interface, governed by `docs/visual-identity.md`. |
 | **Terminal title** | Best-effort OSC window/tab title showing Emile's sanitized runtime activity plus workspace/model identity; disabled outside supported TTYs. |
 | **Tokyo Night** | Emile's official color palette (defined in `src/ui.js`, exported as `C`). |

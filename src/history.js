@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { warn } from './ui/log.js';
+import { normalizeWorkspaceCwd } from './tools/security.js';
 
 const historyDir = path.join(config.workspaceDir, '.emile', 'history');
 
@@ -51,6 +52,7 @@ export function trimPersistedMessages(messages = [], maxBytes = config.maxSessio
  * @param {object} [metadata] Optional checkpoint metadata.
  * @param {'complete'|'tool_pending'} [metadata.status] Record lifecycle state.
  * @param {Array<object>} [metadata.pendingToolCalls] Tool calls awaiting results.
+ * @param {string} [metadata.sessionCwd] Workspace-contained working directory.
  */
 export function saveSession(sessionId, summary, messages, metadata = {}) {
   ensureHistoryDir();
@@ -64,6 +66,7 @@ export function saveSession(sessionId, summary, messages, metadata = {}) {
     updatedAt: new Date().toISOString(),
     messages: [],
     status,
+    sessionCwd: normalizeWorkspaceCwd(metadata.sessionCwd || config.sessionCwd) || config.workspaceDir,
   };
 
   if (status === 'tool_pending' && Array.isArray(metadata.pendingToolCalls)) {
@@ -107,6 +110,7 @@ export function getSessionRecord(sessionId) {
       ...data,
       status: data.status === 'tool_pending' ? 'tool_pending' : 'complete',
       pendingToolCalls: Array.isArray(data.pendingToolCalls) ? data.pendingToolCalls : [],
+      sessionCwd: normalizeWorkspaceCwd(data.sessionCwd) || config.workspaceDir,
     };
   } catch (err) {
     console.warn(`[Warning] Failed to read session record: ${err.message}`);

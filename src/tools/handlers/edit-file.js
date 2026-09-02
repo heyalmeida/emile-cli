@@ -1,15 +1,21 @@
 // handlers/edit-file.js — editFile tool handler.
 import fs from 'node:fs';
-import path from 'node:path';
-import { exec } from 'node:child_process';
-import { confirm, isCancel } from '@clack/prompts';
 import { config } from '../../config.js';
-import { resolveSafePath, isSafeCommand } from '../security.js';
+import { resolveSafePath } from '../security.js';
 import { fileCache, pushUndo } from '../file-state.js';
 import { showDiff } from '../show-diff.js';
 
-export async function editFile({ path: filePath, targetContent, replacementContent }) {
+export async function editFile({ path: filePath, targetContent, replacementContent } = {}) {
   try {
+    if (typeof filePath !== 'string' || filePath.trim() === '') {
+      return 'Error: path must be a non-empty string.';
+    }
+    if (typeof targetContent !== 'string') {
+      return 'Error: targetContent must be a string.';
+    }
+    if (typeof replacementContent !== 'string') {
+      return 'Error: replacementContent must be a string.';
+    }
     const targetPath = resolveSafePath(filePath);
     if (!fs.existsSync(targetPath)) {
       return `Error: File not found at "${filePath}"`;

@@ -8,5 +8,5 @@
 export { toolDefinitions } from './definitions.js';
 export { toolHandlers } from './handlers/index.js';
 export { fileCache, undoStack, pushUndo, UNDO_STACK_LIMIT, clearFileCache } from './file-state.js';
-export { resolveSafePath, isSafeCommand } from './security.js';
+export { resolveSafePath, normalizeWorkspaceCwd, isSafeCommand } from './security.js';
 export { showDiff } from './show-diff.js';

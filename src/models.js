@@ -243,3 +243,72 @@ export function isKnownModel(model) {
   if (_dynamicCatalog.byExact.has(m)) return true;
   return _dynamicCatalog.bySuffix.has(m.split('/').pop());
 }
+
+// ──────────────────────────────────────────────────────────────
+//  Provider model lists (OpenCode Zen / OpenCode Go)
+//
+//  OpenCode exposes an OpenAI-compatible `GET /models` endpoint per gateway:
+//    https://opencode.ai/zen/v1/models    (OpenCode Zen)
+//    https://opencode.ai/zen/go/v1/models (OpenCode Go)
+//  The payload carries only ids, so display metadata still resolves through
+//  getModelInfo() (static table + default fallback).
+// ──────────────────────────────────────────────────────────────
+
+const PROVIDER_MODEL_LIST_URLS = {
+  opencode: 'https://opencode.ai/zen/v1/models',
+  'opencode-go': 'https://opencode.ai/zen/go/v1/models',
+};
+
+const providerModelListCache = new Map(); // provider -> { fetchedAt, ids }
+
+/** Extracts non-empty model ids from an OpenAI-compatible /models payload. */
+export function parseProviderModelIds(data) {
+  return (Array.isArray(data?.data) ? data.data : [])
+    .map((entry) => (entry && typeof entry.id === 'string' ? entry.id.trim() : ''))
+    .filter(Boolean);
+}
+
+async function fetchProviderModelIds(provider) {
+  const url = PROVIDER_MODEL_LIST_URLS[provider];
+  if (!url) return [];
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(10_000),
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`model list HTTP ${res.status}`);
+  const ids = parseProviderModelIds(await res.json());
+  if (ids.length === 0) throw new Error('empty model list');
+  return ids;
+}
+
+/**
+ * Returns the live model list for the active provider as normalized
+ * `{ id, info }` entries. OpenRouter uses its metadata catalog; OpenCode Zen
+ * and OpenCode Go use their OpenAI-compatible `/models` endpoint. Returns []
+ * when the provider has no remote list or the fetch fails, so callers keep
+ * their curated options.
+ * @param {object} [options]
+ * @param {string} [options.provider]
+ * @returns {Promise<Array<{id:string, info:object}>>}
+ */
+export async function getProviderModelOptions({ provider = '' } = {}) {
+  const p = String(provider || '').toLowerCase();
+  if (p === 'openrouter') {
+    await initModelCatalog();
+    return getDynamicModels({ provider: p });
+  }
+  if (PROVIDER_MODEL_LIST_URLS[p]) {
+    const cached = providerModelListCache.get(p);
+    if (cached && Date.now() - cached.fetchedAt < CATALOG_TTL_MS) {
+      return cached.ids.map((id) => ({ id, info: getModelInfo(id) }));
+    }
+    try {
+      const ids = await fetchProviderModelIds(p);
+      providerModelListCache.set(p, { fetchedAt: Date.now(), ids });
+      return ids.map((id) => ({ id, info: getModelInfo(id) }));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
