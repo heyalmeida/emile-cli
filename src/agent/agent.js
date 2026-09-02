@@ -299,7 +299,7 @@ async function runAgentInner({
     }
     setTerminalActivity('thinking and responding');
     const spinner = createSpinner();
-    spinner.start(RESPONSE_WAITING_LABEL);
+    spinner.start('' + RESPONSE_WAITING_LABEL);
 
     let responseStream;
     try {
