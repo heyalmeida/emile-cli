@@ -11,6 +11,9 @@
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
 
+/** Approved activity copy shown while the first response chunk is pending. */
+export const RESPONSE_WAITING_LABEL = 'Thinking and responding…';
+
 // Tokyo Night amber for thinking, muted gray for other states
 
 // Opt-in diagnostic: log every stdout write to stderr with the
@@ -61,7 +64,7 @@ export function createSpinner() {
 
   function render() {
     // Use amber color for "thinking..." label, muted otherwise
-    const isThinking = currentLabel.includes('thinking');
+    const isThinking = currentLabel.toLowerCase().includes('thinking');
     const frame = isThinking ? amber(FRAMES[frameIndex]) : muted(FRAMES[frameIndex]);
     const label = isThinking ? amber(currentLabel) : muted(currentLabel);
     debugWrite('spinner.tick', `\r\x1B[K  ${frame} ${label}`); process.stdout.write(`\r\x1B[K  ${frame} ${label}`);
