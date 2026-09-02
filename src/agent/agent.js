@@ -486,7 +486,6 @@ async function runAgentInner({
       if (!control?.shouldStop()) {
         // Surface the failure — a silent swallow made mid-response failures
         // look like empty replies. Partial reasoning/text still renders below.
-        streamErrored = true;
         process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
       }
     }
