@@ -78,7 +78,7 @@
 - [x] T3.3 — `CHANGELOG.md`: add an `[Unreleased]` entry under `Added` (lifecycle, recovery, undo persistence, per-provider key, 0600, engines) and `Changed` (file-state split).
 - [x] T3.4 — `features/session-lifecycle.md`: create the feature registry entry (Rule 7) with a link to the spec and the AC table.
 - [x] T3.5 — Update the spec status to `implemented` and the plan status to `implemented`.
-- [x] T3.6 — Switch to `docs/documentation` and commit **only** the documentation paths above (Rule 8). Committed as `5c688bf` on `docs/documentation`; pushed to origin.
+- [ ] T3.6 — Switch to `docs/documentation` and commit **only** the documentation paths above (Rule 8).
 - [x] T3.7 — Record limitations, non-executed verifications and residual risk in the handoff section below.
 
 ---
