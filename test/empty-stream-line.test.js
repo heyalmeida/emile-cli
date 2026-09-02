@@ -9,11 +9,6 @@ async function* streamOf(...deltas) {
   for (const d of deltas) { yield { choices: [{ delta: d }] }; }
 }
 
-async function* emptyStream() {
-  // Generator that ends without yielding any chunk.
-  return;
-}
-
 function captureStdout() {
   const writes = [];
   const orig = process.stdout.write.bind(process.stdout);
@@ -41,7 +36,7 @@ async function runOnce(createCompletion) {
 }
 
 test('empty stream renders a one-liner instead of a blank line', async () => {
-  const text = await runOnce(async () => emptyStream());
+  const text = await runOnce(async () => streamOf());
   assert.match(text, /empty response/, 'the empty response notice must be written');
 });
 
