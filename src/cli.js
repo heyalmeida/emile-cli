@@ -54,7 +54,8 @@ export async function main() {
   const { initializeMcp, shutdownMcp } = await import('./mcp.js');
   const { runAgent, resumePendingTools, sessionStats, initSessionStats, createTurnControl } = await import('./agent/index.js');
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
-  const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions } = await import('./history.js');
+  const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions, flushSync, markAborted } = await import('./history.js');
+  const { installShutdownHandlers } = await import('./lifecycle/index.js');
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
@@ -131,11 +132,14 @@ export async function main() {
   // ── Clean screen & unified header moved below, after interactive setup prompts ──
   // (so the plan-confirmation and history-selection prompts are cleared away)
 
-  process.on('SIGINT', async () => {
-    setTerminalActivity('');
-    console.log(C.muted('\n  Disconnecting...'));
-    await shutdownMcp();
-    process.exit(0);
+  // Wire the lifecycle coordinator after MCP init. The coordinator handles
+  // SIGINT/SIGTERM/SIGHUP in order: stop-input → drain-tools →
+  // flush-session → close-mcp → restore-terminal.
+  installShutdownHandlers({
+    verbose,
+    shutdownMcp,
+    flushSync,
+    markAborted: (id, reason) => markAborted(id),
   });
 
   let messages = [];

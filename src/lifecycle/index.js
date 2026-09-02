@@ -11,8 +11,8 @@
 //   installShutdownHandlers({
 //     verbose: !!options.verbose,
 //     shutdownMcp,   // from the dynamic import of mcp.js
-//     flushSync,     // from history.js
-//     markAborted,   // from history.js
+//     flushSync,    // from history.js
+//     markAborted,  // from history.js
 //   });
 //
 // @ts-check
@@ -20,15 +20,10 @@ import { C } from '../ui/theme.js';
 import { setPromptShutdown, isShuttingDown, setActiveTool, clearActiveTool } from './stop-input.js';
 
 const PHASES = [
-  // eslint-disable-next-line import/extensions
   import('./stop-input.js').then(m => m.phase()),
-  // eslint-disable-next-line import/extensions
   import('./drain-tools.js').then(m => m.phase()),
-  // eslint-disable-next-line import/extensions
   import('./flush-session.js').then(m => m.phase()),
-  // eslint-disable-next-line import/segments
   import('./close-mcp.js').then(m => m.phase()),
-  // eslint-disable-next-line import/segments
   import('./restore-terminal.js').then(m => m.phase()),
 ];
 
@@ -36,8 +31,7 @@ const PHASES = [
 let _reEntrant = false;
 
 /**
- * Re-entrancy guard: subsequent signals after the first one become no-ops
- * except that SIGINT/SIGTERM may force an immediate exit if a phase is stuck.
+ * Re-entrancy guard: subsequent signals after the first one become no-ops.
  * @returns {boolean} true if shutdown is already running
  */
 function guard() {
@@ -66,14 +60,13 @@ export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markA
 
     const start = Date.now();
     const ctx = { verbose, shutdownMcp, flushSync, markAborted };
-    let stuckPhase = null;
 
     for (const phasePromise of PHASES) {
       const phase = await phasePromise;
       const phaseStart = Date.now();
 
       if (verbose) {
-        process.stdout.write(`\r\n${C.muted(`  [lifecycle] ${phase.name}…`)}\n`);
+        process.stdout.write(`\r\n${C.muted(`  [lifecycle] ${phase.name}\u2026`)}\n`);
       }
 
       try {
@@ -90,8 +83,7 @@ export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markA
 
       const elapsed = Date.now() - phaseStart;
       if (elapsed > phase.sliceMs && verbose) {
-        console.log(C.warn(`  [lifecycle] ⚠ ${phase.name} exceeded its ${phase.sliceMs}ms slice (${elapsed}ms)`));
-        stuckPhase = phase.name;
+        console.log(C.warn(`  [lifecycle] \u26a0 ${phase.name} exceeded its ${phase.sliceMs}ms slice (${elapsed}ms)`));
       } else if (verbose) {
         console.log(C.dim(`  [lifecycle] ${phase.name}: ${elapsed}ms`));
       }
