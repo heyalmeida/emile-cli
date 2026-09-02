@@ -19,6 +19,7 @@ import {
   setTerminalActivity,
 } from './ui/index.js';
 import { createSpinner } from './ui/spinner.js';
+import { clear } from 'node:console';
 
 
 program
@@ -428,7 +429,8 @@ export async function main() {
       }
     }
 
-    console.log(C.muted('\n  Goodbye.'));
+    clear();
+    console.log(C.muted('\n  Goodbye, see you later! \n'));
     setTerminalActivity('');
     await shutdownMcp();
   }
