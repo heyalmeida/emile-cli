@@ -18,7 +18,9 @@ model stream, so a rejected plan makes no model or tool call.
 
 The CLI enables the mode with `-p` or the prompt toggle. The agent presents a
 bounded task preview for approval, then follows the plan-aware system prompt
-and renders progress from `task.md` when present.
+and updates `task.md` as work progresses. The prompt footer shows
+`tasks: X/Y` (warn while incomplete, success when complete) so the user
+sees progress without re-reading the chat.
 
 ## Technical Details
 
@@ -28,6 +30,7 @@ and renders progress from `task.md` when present.
 | **Slash commands** | Prompt `Tab` toggle; `/help` documents the mode |
 | **Tools** | Existing built-in and MCP tools after approval |
 | **Configuration** | `implementation_plan.md` and `task.md` are read from the workspace |
+| **Progress indicator** | `tasks: X/Y` segment in the prompt footer (idle + active frames); `C.warn` while incomplete, `C.success` when complete. No per-iteration chat line. |
 | **Applicable security gates** | Approval precedes all model/tool activity; writes retain normal safe-mode gates |
 
 ## Where It Lives in the Code
@@ -48,3 +51,4 @@ against a formal task graph.
 | Date | Change | Reference |
 |------|--------|-----------|
 | 2026-08-30 | Registered plans preflight and progress behavior | `specs/2026-08-30-feature-registry-completion` |
+| 2026-09-02 | Moved plan progress to the prompt footer (`tasks: X/Y`); the loop no longer prints `Plan Progress:` on every iteration | `specs/2026-09-02-plans-progress-footer` |
