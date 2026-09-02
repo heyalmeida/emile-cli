@@ -196,7 +196,13 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
     // The simplest robust heuristic: if the str is multi-line OR the buffer
     // already has a newline, treat Enter as a newline insertion.
     if (key.name === 'return' || key.name === 'enter') {
-      if ((typeof str === 'string' && str.includes('\n')) || buffer.includes('\n')) {
+      // Multi-line commit escape: if the buffer is multi-line and the
+      // current line is empty (buffer ends with '\n' or the user just
+      // hit Enter on a blank line after a paste), treat the next Enter
+      // as a commit so the user can finish a multi-line input.
+      if (buffer.includes('\n') && (buffer.endsWith('\n') || buffer.slice(buffer.lastIndexOf('\n') + 1).trim() === '')) {
+        // fall through to commit logic below
+      } else if (buffer.includes('\n') || (typeof str === 'string' && str.includes('\n'))) {
         if (buffer.length < MAX_BUFFER_CHARS) {
           buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
           cursor++;
