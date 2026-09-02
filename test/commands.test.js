@@ -6,7 +6,7 @@ import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index
 const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
   '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
-  '/help', '/undo', '/cost', '/export', '/rules', '/skills',
+  '/help', '/undo', '/cost', '/export', '/rules', '/skills', '/skill',
 ];
 
 test('registry contains every existing slash command and aliases', () => {
@@ -30,6 +30,16 @@ test('/skills is a registered read-only command', async () => {
   console.log = () => {};
   try {
     assert.equal(await dispatchCommand('/skills', {}), true);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test('/skill is a registered alias for skills discovery', async () => {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await dispatchCommand('/skill', {}), true);
   } finally {
     console.log = originalLog;
   }

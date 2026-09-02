@@ -38,6 +38,7 @@ const COMMANDS = new Map([
   ['/export', handleExport],
   ['/rules', handleRules],
   ['/skills', handleSkills],
+  ['/skill', handleSkills],
 ]);
 
 /**
