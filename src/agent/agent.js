@@ -3,12 +3,13 @@ import { buildSystemPrompt } from '../prompt.js';
 import { createChatCompletion, formatApiError, getProviderToolDefinitions } from '../api/index.js';
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
-import { promptPlanApproval, renderPlanStatus } from '../plans.js';
+import { promptPlanApproval } from '../plans.js';
 import { config } from '../config.js';
 import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } from './session-stats.js';
 import { compressContextIfNeeded } from './compression.js';
 import {
   C,
+  GAP,
   printAssistantResponse,
   printThinking,
   startThinkingStream,
@@ -22,6 +23,12 @@ import {
 import { createSpinner } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
+
+// Opt-in diagnostic: log every reasoning/content delta that arrives
+// from the model so we can confirm whether the provider is actually
+// sending content alongside the reasoning. Activated by
+// EMILE_DEBUG_THINKING=1 (the same flag the spinner/thinking logs use).
+const DEBUG_THINKING = process.env.EMILE_DEBUG_THINKING === '1';
 import { getEnhancedWebToolDefinitions, modelSupportsImages, webToolHandlers } from '../web/index.js';
 
 export const FREE_FALLBACK_MODEL = 'openrouter/free';
@@ -302,13 +309,22 @@ async function runAgentInner({
         useCache: cache,
         effort,
         stream: true,
+        signal: control?.signal,
       });
       // Screenshot URLs are short-lived references for exactly one immediate
       // model request. They are deliberately absent from persisted history.
       pendingWebAttachments = [];
     } catch (err) {
-      spinner.stop('API error', '✗');
+      spinner.stop();
 
+      // Turn control: the request was aborted by a cancel while waiting for
+      // the response to start (e.g. the provider stalled in "thinking").
+      // Handle it as a graceful cancel — never as a compression/fallback
+      // trigger or a stream error.
+      if (control?.shouldStop()) {
+        process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled.')}\n`);
+        break;
+      }
       // IMPROVEMENTS.md §3.3: on context overflow, force-compress the history
       // and retry the turn once instead of entering the retry loop with the
       // same oversized payload.
@@ -357,6 +373,7 @@ async function runAgentInner({
     let reasoningDisplaySource = null;
 
     let streamCanceled = false;
+    let streamErrored = false;
     try {
       for await (const chunk of responseStream) {
         // Turn control: stop consuming the stream as soon as a cancel is
@@ -382,6 +399,19 @@ async function runAgentInner({
         if (!choice) continue;
 
         const delta = choice.delta || {};
+
+        if (DEBUG_THINKING) {
+          const summary = {
+            has_reasoning_content: typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0,
+            has_reasoning: typeof delta.reasoning === 'string' && delta.reasoning.length > 0,
+            has_reasoning_details: Array.isArray(delta.reasoning_details),
+            has_content: typeof delta.content === 'string' && delta.content.length > 0,
+            content_len: typeof delta.content === 'string' ? delta.content.length : 0,
+            has_tool_calls: Array.isArray(delta.tool_calls),
+            finish_reason: choice.finish_reason,
+          };
+          process.stderr.write(`[delta] ${JSON.stringify(summary)}\n`);
+        }
 
         const rawReasoning = delta.reasoning_content || delta.reasoning || '';
         if (rawReasoning && reasoningDisplaySource !== 'structured') {
@@ -435,16 +465,27 @@ async function runAgentInner({
         }
       }
     } catch (streamErr) {
-      // Surface the failure — a silent swallow made mid-response failures
-      // look like empty replies. Partial reasoning/text still renders below.
+      // A cancel that aborted the request mid-stream is not an error — it is
+      // handled below via streamCanceled/shouldStop with a proper notice.
       spinner.stop();
-      process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
+      if (!control?.shouldStop()) {
+        // Surface the failure — a silent swallow made mid-response failures
+        // look like empty replies. Partial reasoning/text still renders below.
+        streamErrored = true;
+        process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
+      }
     }
 
     if (isFirstChunk) {
       // Stream produced no chunks — clear the spinner silently (the error
       // path above already reported failures when applicable).
       spinner.stop();
+      if (!streamCanceled && !streamErrored && !control?.shouldStop()) {
+        // No chunk arrived, no cancel, no stream error: the model returned
+        // an empty response. Surface a one-liner so the user does not see a
+        // blank line where the spinner used to be.
+        process.stdout.write(`${GAP.section}  ${C.muted('· (empty response)')}\n`);
+      }
     }
 
     // Accumulate tokens and cost estimates
@@ -595,9 +636,9 @@ async function runAgentInner({
       // No "tools completed" footer — printAssistantResponse renders the dim
       // `↳ N tools` header above the next response box (premium pass).
 
-      if (plansMode) {
-        renderPlanStatus();
-      }
+      // Plan progress is surfaced through the prompt footer
+      // (buildPromptFooterSegments + getPlanProgress), not by printing to
+      // stdout on every iteration.
 
       isFirstTurn = false;
       continue;

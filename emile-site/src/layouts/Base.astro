@@ -1,0 +1,118 @@
+---
+import '~/styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  active?: 'home' | 'install' | 'docs';
+}
+
+const {
+  title = 'emile — a pair programmer that lives in the terminal',
+  description = 'A terminal-based AI coding agent. OpenAI-compatible. Built-in tools, MCP, prompt caching, reasoning control, skills system. Named for Émile Baudot.',
+  active = 'home'
+} = Astro.props;
+
+const year = new Date().getFullYear();
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <title>{title}</title>
+  </head>
+  <body class="paper min-h-screen antialiased">
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-paper focus:px-3 focus:py-1 focus:border focus:border-ink">
+      skip to content
+    </a>
+
+    <header class="relative z-10 border-b border-ink-line">
+      <div class="mx-auto max-w-telegraph px-6 py-5 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-3 group" aria-label="emile home">
+          <span class="inline-block w-3 h-3 bg-copper"></span>
+          <span class="font-display text-xl tracking-tight">emile</span>
+          <span class="tag hidden sm:inline-flex">v1.0</span>
+        </a>
+
+        <nav class="flex items-center gap-1 text-sm" aria-label="primary">
+          <a
+            href="/"
+            class:list={[
+              'px-3 py-1.5 hover:text-copper',
+              active === 'home' ? 'text-ink' : 'text-ink-muted'
+            ]}
+          >signal</a>
+          <a
+            href="/install"
+            class:list={[
+              'px-3 py-1.5 hover:text-copper',
+              active === 'install' ? 'text-ink' : 'text-ink-muted'
+            ]}
+          >install</a>
+          <a
+            href="https://github.com/mc33p/emile-cli"
+            class="px-3 py-1.5 text-ink-muted hover:text-copper"
+            rel="noopener"
+          >source ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main" class="relative z-10">
+      <slot />
+    </main>
+
+    <footer class="relative z-10 mt-32 border-t border-ink-line">
+      <div class="mx-auto max-w-telegraph px-6 py-10">
+        <div class="ticker">
+          <span><span class="text-ink-muted">station</span> · end · of · transmission</span>
+          <span class="text-ink-muted">© {year} emile · mit</span>
+        </div>
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm text-ink-muted">
+          <div>
+            <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">code</div>
+            <a href="https://github.com/mc33p/emile-cli" class="hover:text-copper block">github ↗</a>
+            <a href="https://www.npmjs.com/package/emile-cli" class="hover:text-copper block">npm ↗</a>
+          </div>
+          <div>
+            <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">read</div>
+            <a href="/install" class="hover:text-copper block">install</a>
+            <a href="https://github.com/mc33p/emile-cli#readme" class="hover:text-copper block">readme</a>
+          </div>
+          <div>
+            <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">credit</div>
+            <p class="leading-relaxed">
+              Named for <a href="https://en.wikipedia.org/wiki/%C3%89mile_Baudot" class="hover:text-copper">Émile Baudot</a>,
+              the French telegraph engineer whose 5-bit code became the baud.
+            </p>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script is:inline>
+      // Theme: respect user pref, default to system.
+      (() => {
+        const stored = localStorage.getItem('emile-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = stored ?? (prefersDark ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </body>
+</html>
