@@ -205,6 +205,36 @@ test('enter commits the line to onLine and restores the standard placeholder', (
   }
 });
 
+test('bracketed multiline paste queues the complete draft after Enter', () => {
+  const stdin = fakeStdin();
+  const restoreStdin = swapStdin(stdin);
+  const previousIsTTY = process.stdout.isTTY;
+  process.stdout.isTTY = true;
+
+  const out = captureStdout();
+  const captured = [];
+  try {
+    const keys = listenTurnKeys({ control: { requestStop() {} }, onLine: (line) => captured.push(line) });
+    stdin.emit('keypress', undefined, { name: 'paste-start' });
+    for (const char of 'Title') stdin.emit('keypress', char, { name: char });
+    stdin.emit('keypress', '', { name: 'return' });
+    for (const char of '- first') stdin.emit('keypress', char, { name: char });
+    stdin.emit('keypress', '', { name: 'return' });
+    for (const char of '- second') stdin.emit('keypress', char, { name: char });
+    stdin.emit('keypress', undefined, { name: 'paste-end' });
+    assert.deepEqual(captured, [], 'pasting must not queue an incomplete first line');
+    stdin.emit('keypress', '', { name: 'return' });
+    assert.deepEqual(captured, ['Title\n- first\n- second']);
+    assert.match(out.text(), /\x1B\[\?2004h/, 'active prompt enables bracketed paste');
+    keys.stop();
+    assert.match(out.text(), /\x1B\[\?2004l/, 'active prompt cleanup disables bracketed paste');
+  } finally {
+    out.restore();
+    process.stdout.isTTY = previousIsTTY;
+    restoreStdin();
+  }
+});
+
 test('active-turn autocomplete uses a distinct marker and Tab completes it', () => {
   const stdin = fakeStdin();
   const restoreStdin = swapStdin(stdin);

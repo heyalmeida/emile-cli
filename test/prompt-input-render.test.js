@@ -103,7 +103,7 @@ function withFakeTerminal(t, columns = 80) {
     Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
     fakeStdin.destroy();
   });
-  return { emu, fakeStdin };
+  return { emu, fakeStdin, writes };
 }
 
 function typeKeys(fakeStdin, keys) {
@@ -193,7 +193,7 @@ test('Tab accepts autocomplete and only toggles Plans mode without matches', asy
 });
 
 test('nested switch picker owns stdin exclusively and returns it resumed to the prompt', async (t) => {
-  const { emu, fakeStdin } = withFakeTerminal(t);
+  const { emu, fakeStdin, writes } = withFakeTerminal(t);
   const [{ persistentPromptInput }, { promptSwitchSession }] = await Promise.all([
     import('../src/ui/prompt-input-persistent.js'),
     import('../src/ui/switch-session.js'),
@@ -219,6 +219,7 @@ test('nested switch picker owns stdin exclusively and returns it resumed to the 
   assert.equal(selectedId, 'session_1');
   assert.equal(fakeStdin.listenerCount('keypress'), 1, 'the persistent prompt reacquires key ownership');
   assert.equal(fakeStdin.isPaused(), false, 'stdin is resumed after picker cleanup');
+  assert.equal((writes.join('').match(/\x1B\[\?2004h/g) || []).length, 2, 'the resumed idle prompt re-enables bracketed paste');
 
   typeKeys(fakeStdin, ['x']);
   assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /❯\s+x/, 'typing works immediately after /switch');
@@ -293,6 +294,25 @@ test('Shift+Enter keeps multiline input without submitting early', async (t) => 
   assert.deepEqual(submitted, [], 'Shift+Enter only inserts a newline');
   typeKeys(fakeStdin, [{ name: 'return' }]);
   assert.deepEqual(submitted, ['a\nb']);
+});
+
+test('bracketed multiline paste stays editable until a separate Enter', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t);
+  const submitted = [];
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: (line) => { submitted.push(line); return 'next'; } });
+
+  fakeStdin.emit('keypress', undefined, { name: 'paste-start' });
+  typeKeys(fakeStdin, [...'Title', { name: 'return' }, ...'- first', { name: 'return' }, ...'- second']);
+  fakeStdin.emit('keypress', undefined, { name: 'paste-end' });
+  assert.deepEqual(submitted, [], 'pasting must not submit the draft');
+  assert.match(emu.text(), /Title\n\s+- first\n\s+- second/, 'every pasted line remains visible');
+  assert.ok(writes.join('').includes('\x1B[?2004h'), 'the idle prompt enables bracketed paste');
+
+  fakeStdin.emit('keypress', '', { name: 'return' });
+  assert.deepEqual(submitted, ['Title\n- first\n- second'], 'Enter submits the complete normalized payload');
+  fakeStdin.emit('keypress', '', { ctrl: true, name: 'c' });
+  assert.ok(writes.join('').includes('\x1B[?2004l'), 'cleanup disables bracketed paste');
 });
 
 test('Esc clears the idle draft without shutting down the persistent prompt', async (t) => {

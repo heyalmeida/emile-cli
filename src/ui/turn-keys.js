@@ -125,16 +125,16 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
   const writeDirect = (chunk) => originalWrite.call(process.stdout, chunk);
   process.stdin.setRawMode(true);
   process.stdin.resume();
-  // Enable bracketed paste mode so multi-line pastes arrive as a single
-  // keypress with str containing the whole pasted text (and
-  // key.name === undefined) instead of one keypress per \n.
-  writeDirect('\x1b[?2004h');
+  // Compatible terminals now deliver a whole paste (including newlines) as
+  // text instead of emitting a Return key for every pasted line.
+  writeDirect('\x1B[?2004h');
   readline.emitKeypressEvents(process.stdin);
 
   let buffer = '';
   let cursor = 0;
   let selectedIndex = 0;
   let finished = false;
+  let isPasting = false;
   const live = createLiveInput(promptOptions, writeDirect);
 
   function currentMatches() {
@@ -171,51 +171,20 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
     if (process.stdout.write === interceptedWrite) {
       process.stdout.write = originalWrite;
     }
-    try {
-      // Disable bracketed paste mode before restoring the previous
-      // raw mode setting.
-      writeDirect('\x1b[?2004l');
-    } catch { /* best-effort */ }
+    try { writeDirect('\x1B[?2004l'); } catch { /* stdout may be gone */ }
     try { process.stdin.setRawMode(wasRaw); } catch { /* stdin may be gone */ }
     process.stdin.pause();
   }
 
-  // Burst-paste detection: when the terminal does not implement bracketed
-  // paste (older Linux terminals, some SSH clients), the readline streams
-  // each pasted character as a separate keypress. We collect rapid-fire
-  // keypresses into a buffer and, when the burst ends, treat the whole
-  // thing as a single paste.
-  let pasteBuffer = null;
-  let pasteTimer = null;
-  const PASTE_FLUSH_MS = 25;
-  function flushPaste() {
-    if (pasteBuffer === null) return;
-    const text = pasteBuffer;
-    pasteBuffer = null;
-    if (text.length === 0) return;
-    if (buffer.length + text.length <= MAX_BUFFER_CHARS) {
-      buffer = buffer.slice(0, cursor) + text + buffer.slice(cursor);
-      cursor += text.length;
-      selectedIndex = 0;
-      repaint();
-    }
-  }
-
   function onKeypress(str, key = {}) {
-    // Accumulate burst keypresses that look like pasted text.
-    // A burst is a sequence of printable characters (and \n) arriving
-    // within PASTE_FLUSH_MS of each other.
-    if (str && !key.ctrl && !key.meta && !key.name) {
-      if (pasteBuffer === null) pasteBuffer = '';
-      pasteBuffer += str;
-      if (pasteTimer) clearTimeout(pasteTimer);
-      pasteTimer = setTimeout(flushPaste, PASTE_FLUSH_MS);
+    if (key.name === 'paste-start') {
+      isPasting = true;
       return;
     }
-    // If we have a pending paste buffer and the user pressed a control
-    // key (Enter, Backspace, etc), flush the paste first.
-    if (pasteBuffer !== null) { flushPaste(); if (pasteTimer) clearTimeout(pasteTimer); pasteTimer = null; }
-
+    if (key.name === 'paste-end') {
+      isPasting = false;
+      return;
+    }
     if (key.ctrl && key.name === 'c') {
       control?.requestStop('interrupt');
       return;
@@ -233,20 +202,8 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       }
       return;
     }
-    // Multi-line paste: when a chunk of text containing newlines arrives
-    // in a single keypress (bracketed paste mode) OR the readline streams
-    // one \n as 'return' while there is more text buffered from the same
-    // paste, treat the newlines as literal inserts instead of commits.
-    // The simplest robust heuristic: if the str is multi-line OR the buffer
-    // already has a newline, treat Enter as a newline insertion.
     if (key.name === 'return' || key.name === 'enter') {
-      // Multi-line commit escape: if the buffer is multi-line and the
-      // current line is empty (buffer ends with '\n' or the user just
-      // hit Enter on a blank line after a paste), treat the next Enter
-      // as a commit so the user can finish a multi-line input.
-      if (buffer.includes('\n') && (buffer.endsWith('\n') || buffer.slice(buffer.lastIndexOf('\n') + 1).trim() === '')) {
-        // fall through to commit logic below
-      } else if (buffer.includes('\n') || (typeof str === 'string' && str.includes('\n'))) {
+      if (isPasting) {
         if (buffer.length < MAX_BUFFER_CHARS) {
           buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
           cursor++;
@@ -328,8 +285,11 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       return;
     }
     if (str && !key.ctrl && !key.meta && buffer.length < MAX_BUFFER_CHARS) {
-      buffer = buffer.slice(0, cursor) + str + buffer.slice(cursor);
-      cursor += str.length;
+      const text = str.replace(/\r\n?/g, '\n');
+      const available = MAX_BUFFER_CHARS - buffer.length;
+      const inserted = text.slice(0, available);
+      buffer = buffer.slice(0, cursor) + inserted + buffer.slice(cursor);
+      cursor += inserted.length;
       selectedIndex = 0;
       repaint();
     }

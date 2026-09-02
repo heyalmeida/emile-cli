@@ -100,6 +100,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
+| Paste | Bracketed-paste payloads remain editable, including embedded newlines; `Enter` sends the draft |
 | Risk confirmation | @clack `confirm` defaulting to **no** (fail-closed) |
 | Plans | `Tab` toggles plans mode at the prompt |
 

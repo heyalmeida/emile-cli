@@ -218,7 +218,7 @@ function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort,
     }
     if (stats.promptTokens > 0 && stats.cachedPromptTokens > 0) {
       const hitPct = Math.round((stats.cachedPromptTokens / stats.promptTokens) * 100);
-      infoSegments.push(C.muted(`cache: ${hitPct}%`));
+      infoSegments.push(C.muted(`cache hit: ${hitPct}%`));
     }
   }
   if (mcpInfo) infoSegments.push(C.muted(`MCP: ${mcpInfo}`));
@@ -285,6 +285,7 @@ export function persistentPromptInput({
     let lastTopOffset = null; // rows from the cursor to the top of the drawn block
     let settled = false;
     let keypressAttached = false;
+    let isPasting = false;
 
     function footerSegments() {
       return buildPromptFooterSegments({ stats, mcpInfo });
@@ -364,6 +365,10 @@ export function persistentPromptInput({
       // pause stdin during cleanup. Reassert both parts of our ownership.
       try { process.stdin.setRawMode(true); } catch { /* stdin may be gone */ }
       process.stdin.resume();
+      // The active-turn input temporarily owns this terminal mode and
+      // disables it on cleanup. Re-enable it whenever the idle prompt
+      // regains stdin so pasting works again after every completed turn.
+      try { process.stdout.write('\x1B[?2004h'); } catch { /* stdout may be gone */ }
       process.stdin.on('keypress', onKeypress);
       keypressAttached = true;
     }
@@ -415,6 +420,10 @@ export function persistentPromptInput({
       if (settled) return;
       settled = true;
       suspendInput();
+      // Restore the terminal mode we enabled when this prompt took ownership
+      // of raw stdin. This is deliberately best-effort: stdout can be gone
+      // while the process is shutting down.
+      try { process.stdout.write('\x1B[?2004l'); } catch { /* stdout may be gone */ }
       try { process.stdin.setRawMode(isRaw); } catch { /* stdin may be gone */ }
       if (isRaw) process.stdin.resume();
       else process.stdin.pause();
@@ -423,6 +432,14 @@ export function persistentPromptInput({
 
     function onKeypress(str, key = {}) {
       if (process.env.EMILE_DEBUG_RENDER) process.stderr.write(`[keypress] str=${JSON.stringify(str)} key=${JSON.stringify(key)}\n`);
+      if (key.name === 'paste-start') {
+        isPasting = true;
+        return;
+      }
+      if (key.name === 'paste-end') {
+        isPasting = false;
+        return;
+      }
       if (key.ctrl && key.name === 'c') {
         // While an agent turn is running, Esc/Ctrl+C cancel the turn
         // (graceful stop) — they must NOT tear down the REPL.
@@ -453,6 +470,13 @@ export function persistentPromptInput({
         return;
       }
       if (key.name === 'return' || key.name === 'enter') {
+        if (isPasting) {
+          input = input.slice(0, cursor) + '\n' + input.slice(cursor);
+          cursor++;
+          selectedIndex = 0;
+          render();
+          return;
+        }
         const matches = currentMatches();
         const visible = matches.slice(0, PROMPT_MATCH_LIMIT);
         // Slash-command completion: with the menu open, the first Enter
@@ -510,8 +534,9 @@ export function persistentPromptInput({
       } else if (key.ctrl && key.name === 'p') {
         config.expandThinking = config.expandThinking === true ? false : true;
       } else if (str && !key.meta && !key.ctrl && key.name !== 'escape') {
-        input = input.slice(0, cursor) + str + input.slice(cursor);
-        cursor += str.length;
+        const text = str.replace(/\r\n?/g, '\n');
+        input = input.slice(0, cursor) + text + input.slice(cursor);
+        cursor += text.length;
         selectedIndex = 0;
       }
       render();

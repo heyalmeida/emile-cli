@@ -269,6 +269,10 @@ export async function createChatCompletion({
   const activeModel = overrideModel || model;
 
   const body = { model: activeModel, messages };
+  if (process.env.EMILE_DEBUG_API) {
+    const rp = buildReasoningParams({ provider: config.provider, model: activeModel, effort: config.defaultEffort });
+    process.stderr.write(`[api] model=${activeModel} reasoning=${JSON.stringify(rp)}\n`);
+  }
 
   if (tools && tools.length > 0) {
     body.tools = tools;

@@ -23,6 +23,12 @@ import {
 import { createSpinner } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
+
+// Opt-in diagnostic: log every reasoning/content delta that arrives
+// from the model so we can confirm whether the provider is actually
+// sending content alongside the reasoning. Activated by
+// EMILE_DEBUG_THINKING=1 (the same flag the spinner/thinking logs use).
+const DEBUG_THINKING = process.env.EMILE_DEBUG_THINKING === '1';
 import { getEnhancedWebToolDefinitions, modelSupportsImages, webToolHandlers } from '../web/index.js';
 
 export const FREE_FALLBACK_MODEL = 'openrouter/free';
@@ -393,6 +399,19 @@ async function runAgentInner({
         if (!choice) continue;
 
         const delta = choice.delta || {};
+
+        if (DEBUG_THINKING) {
+          const summary = {
+            has_reasoning_content: typeof delta.reasoning_content === 'string' && delta.reasoning_content.length > 0,
+            has_reasoning: typeof delta.reasoning === 'string' && delta.reasoning.length > 0,
+            has_reasoning_details: Array.isArray(delta.reasoning_details),
+            has_content: typeof delta.content === 'string' && delta.content.length > 0,
+            content_len: typeof delta.content === 'string' ? delta.content.length : 0,
+            has_tool_calls: Array.isArray(delta.tool_calls),
+            finish_reason: choice.finish_reason,
+          };
+          process.stderr.write(`[delta] ${JSON.stringify(summary)}\n`);
+        }
 
         const rawReasoning = delta.reasoning_content || delta.reasoning || '';
         if (rawReasoning && reasoningDisplaySource !== 'structured') {

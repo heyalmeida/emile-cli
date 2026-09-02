@@ -133,6 +133,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `Up` `Down` | Navigate autocomplete entries |
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
+| Paste | Keep the complete pasted text, including multiple lines, editable; press `Enter` separately to send it |
 
 **While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
