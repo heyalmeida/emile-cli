@@ -32,20 +32,20 @@ export function getClient() {
     if (config.provider === 'openrouter') {
       options.baseURL = 'https://openrouter.ai/api/v1';
       options.defaultHeaders = {
-        'HTTP-Referer': 'https://github.com/ArctisDev/emile-cli',
-        'X-Title': 'Emile CLI',
+        'HTTP-Referer': 'https://emile.luarvia.dev',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode') {
       // OpenCode Zen — OpenAI-compatible gateway (https://opencode.ai)
       options.baseURL = 'https://api.opencode.ai/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else if (config.provider === 'opencode-go') {
       // OpenCode Go — curated open-source models (https://opencode.ai)
       options.baseURL = 'https://opencode.ai/zen/go/v1';
       options.defaultHeaders = {
-        'X-Title': 'Emile CLI',
+        'X-Title': 'Émile CLI',
       };
     } else {
       // Default to Requesty
