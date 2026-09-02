@@ -165,7 +165,7 @@ export function buildPromptLayout({
     const selected = index === selectedIndex;
     // Reserve `❯` for the actual writing field. Reusing it here made the
     // selected suggestion look like a second prompt/input row.
-    const marker = selected ? C.accent('●') : C.muted('·');
+    const marker = selected ? C.accent('●') : C.muted('・');
     const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
     lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
   }
