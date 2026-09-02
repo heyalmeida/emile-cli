@@ -142,6 +142,8 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 
 **While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
+**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
+
 ---
 
 ## Built-in tools
