@@ -9,6 +9,7 @@ import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } f
 import { compressContextIfNeeded } from './compression.js';
 import {
   C,
+  GAP,
   printAssistantResponse,
   printThinking,
   startThinkingStream,
@@ -366,6 +367,7 @@ async function runAgentInner({
     let reasoningDisplaySource = null;
 
     let streamCanceled = false;
+    let streamErrored = false;
     try {
       for await (const chunk of responseStream) {
         // Turn control: stop consuming the stream as soon as a cancel is
@@ -450,6 +452,7 @@ async function runAgentInner({
       if (!control?.shouldStop()) {
         // Surface the failure — a silent swallow made mid-response failures
         // look like empty replies. Partial reasoning/text still renders below.
+        streamErrored = true;
         process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.dim(`Stream error: ${formatApiError(streamErr, { model: activeModel })}`)}\n`);
       }
     }
@@ -458,6 +461,12 @@ async function runAgentInner({
       // Stream produced no chunks — clear the spinner silently (the error
       // path above already reported failures when applicable).
       spinner.stop();
+      if (!streamCanceled && !streamErrored && !control?.shouldStop()) {
+        // No chunk arrived, no cancel, no stream error: the model returned
+        // an empty response. Surface a one-liner so the user does not see a
+        // blank line where the spinner used to be.
+        process.stdout.write(`${GAP.section}  ${C.muted('· (empty response)')}\n`);
+      }
     }
 
     // Accumulate tokens and cost estimates
