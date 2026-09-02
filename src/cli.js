@@ -316,20 +316,26 @@ export async function main() {
     const pendingQueue = [];
 
     // Runs one agent turn with an active key listener: Esc/Ctrl+C request a
-    // graceful stop and typed lines are queued for the next turn.
+    // graceful stop and typed lines are queued for the next turn. The
+    // listener reserves a row at the bottom of the screen for the live
+    // "❯ <buffer>" prompt and redraws it after the agent finishes writing
+    // so it stays visible throughout the turn.
     const runAgentTurn = async (initialPrompt) => {
       const control = createTurnControl();
-      const stopKeys = listenTurnKeys({
+      const keys = listenTurnKeys({
         control,
         onLine: (line) => {
           pendingQueue.push(line);
+          // The live row already shows the buffer; print a confirmation on
+          // the line above it. Then redraw the live row to stay anchored.
           process.stdout.write(
             `\r\x1B[K  ${C.muted(`queued: ${line.slice(0, 90)}${line.length > 90 ? '…' : ''}`)}\n`
           );
+          keys.redraw('');
         },
       });
       try {
-        return await runAgent({
+        const result = await runAgent({
           model: config.defaultModel,
           plansMode: config.plansMode,
           skills: activeSkills,
@@ -340,8 +346,12 @@ export async function main() {
           control,
           checkpointSession,
         });
+        // Bring the live input row back to the bottom of the screen so the
+        // user can keep typing immediately between turns.
+        keys.redraw('');
+        return result;
       } finally {
-        stopKeys();
+        keys.stop();
       }
     };
 

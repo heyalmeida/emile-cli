@@ -50,7 +50,7 @@ During an agent turn the user can (a) cancel the running turn with Esc or Ctrl+C
 - **AC-02:** Given a cancel request mid-stream with partial text, when the loop stops, then the partial text is kept and no tool calls from that response are executed.
 - **AC-03:** Given a cancel request mid-tool-batch, when the loop stops, then unexecuted tool calls get `[canceled by user]` results and history stays request-valid.
 - **AC-04:** Given a running turn, when the user types a line and presses Enter, then it is queued with a visible notice and runs as the next turn after the current one ends.
-- **AC-05:** `node --check` passes on touched files and the test suite stays green (new tests cover the control semantics and cancel paths).
+- **AC-05:** `node --check` passes on touched files and the test suite stays green (new tests cover the control semantics, cancel paths and the live input row visibility).
 
 ## 7. Risks and Open Questions
 
