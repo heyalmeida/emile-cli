@@ -20,13 +20,10 @@ import {
   setTerminalActivity,
   describeToolActivity,
 } from '../ui/index.js';
-import { createSpinner } from '../ui/spinner.js';
+import { createSpinner, RESPONSE_WAITING_LABEL } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
 import { compileMentionAttachments } from '../mentions.js';
-// Lifecycle: register the active tool with the shutdown coordinator so the drain
-// phase can await or abort it during shutdown.
-import { setActiveTool, clearActiveTool } from '../lifecycle/index.js';
 
 // Opt-in diagnostic: log every reasoning/content delta that arrives
 // from the model so we can confirm whether the provider is actually
@@ -299,9 +296,9 @@ async function runAgentInner({
         `\r\x1B[K  ${C.warn('⚠')} ${C.dim(`Agent loop at the ${MAX_LOOP_ITERATIONS}-iteration limit — this is the last iteration.`)}\n`
       );
     }
-    setTerminalActivity('thinking');
+    setTerminalActivity('thinking and responding');
     const spinner = createSpinner();
-    spinner.start('thinking...');
+    spinner.start(RESPONSE_WAITING_LABEL);
 
     let responseStream;
     try {

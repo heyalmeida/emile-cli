@@ -13,6 +13,7 @@ import {
   setTerminalActivity,
   writeTerminalTitle,
 } from '../src/ui/title.js';
+import { RESPONSE_WAITING_LABEL } from '../src/ui/spinner.js';
 
 test('formats an activity-first title with stable workspace and model identity', () => {
   assert.equal(
@@ -22,6 +23,14 @@ test('formats an activity-first title with stable workspace and model identity',
       model: 'anthropic/claude-sonnet-4',
     }),
     'thinking · emile · emile-cli · claude-sonnet-4',
+  );
+});
+
+test('uses the combined response activity copy after a prompt is sent', () => {
+  assert.equal(RESPONSE_WAITING_LABEL, 'Thinking and responding…');
+  assert.equal(
+    formatTerminalTitle({ activity: 'thinking and responding', workspace: '/work/emile-cli' }),
+    'thinking and responding · emile · emile-cli',
   );
 });
 

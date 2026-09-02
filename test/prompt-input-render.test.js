@@ -137,19 +137,19 @@ test('typing a slash command keeps a single clean block with the menu', async (t
 
   const text = emu.text();
   const plainText = text.replace(/\x1B\[[0-9;]*m/g, '');
-  assert.match(plainText, /❯\s+\/m\b/, 'input row shows the typed command');
+  assert.match(plainText, /›\s+\/m\b/, 'input row shows the typed command');
   assert.ok(text.includes('/model'), 'menu shows /model');
   assert.ok(text.includes('/maxloop'), 'menu shows /maxloop');
   assert.match(plainText, /●\s+\/model/, 'selected suggestion uses a distinct menu marker');
-  assert.doesNotMatch(plainText, /❯\s+\/model/, 'the input glyph is never reused as a suggestion marker');
+  assert.doesNotMatch(plainText, /›\s+\/model/, 'the input glyph is never reused as a suggestion marker');
   const borderCount = emu.lines.filter(l => l.includes('─') && !l.includes('·')).length;
   assert.equal(borderCount, 3, 'top border, menu/input border, bottom border — no residue');
-  assert.equal(emu.lines.filter(l => /❯\s+\/m\b/.test(l.replace(/\x1B\[[0-9;]*m/g, ''))).length, 1, 'input row appears exactly once');
+  assert.equal(emu.lines.filter(l => /›\s+\/m\b/.test(l.replace(/\x1B\[[0-9;]*m/g, ''))).length, 1, 'input row appears exactly once');
   assert.ok(emu.wrapped === false);
   // Cursor sits right after the typed text on the input row.
-  const inputRow = emu.lines.findIndex(l => /❯\s+\/m\b/.test(l.replace(/\x1B\[[0-9;]*m/g, '')));
+  const inputRow = emu.lines.findIndex(l => /›\s+\/m\b/.test(l.replace(/\x1B\[[0-9;]*m/g, '')));
   assert.equal(emu.row, inputRow, 'cursor is on the input row');
-  assert.equal(emu.lines[emu.row].replace(/\x1B\[[0-9;]*m/g, '').slice(0, emu.col), '  ❯  /m', 'cursor is exactly after the typed text');
+  assert.equal(emu.lines[emu.row].replace(/\x1B\[[0-9;]*m/g, '').slice(0, emu.col), '  ›  /m', 'cursor is exactly after the typed text');
 });
 
 test('arrow keys move the menu selection and Enter completes the command', async (t) => {
@@ -163,7 +163,7 @@ test('arrow keys move the menu selection and Enter completes the command', async
   typeKeys(fakeStdin, [{ name: 'return' }]); // complete, not submit
 
   assert.deepEqual(submitted, [], 'first Enter only completes the command');
-  assert.ok(emu.text().replace(/\x1B\[[0-9;]*m/g, '').includes('❯  /maxloop'), 'input completed to the selected command');
+  assert.ok(emu.text().replace(/\x1B\[[0-9;]*m/g, '').includes('›  /maxloop'), 'input completed to the selected command');
   typeKeys(fakeStdin, [{ name: 'return' }]); // submit (input === '/maxloop', menu closed by exact match)
   await new Promise(r => setImmediate(r)); // deferred redraw after the async onSubmit settles
   assert.deepEqual(submitted, ['/maxloop'], 'second Enter submits');
@@ -185,7 +185,7 @@ test('Tab accepts autocomplete and only toggles Plans mode without matches', asy
 
   typeKeys(fakeStdin, ['/', 'm', { name: 'tab' }]);
   const stripped = emu.text().replace(/\x1B\[[0-9;]*m/g, '');
-  assert.ok(stripped.includes('❯  /model'), 'Tab fills the highlighted slash command');
+  assert.ok(stripped.includes('›  /model'), 'Tab fills the highlighted slash command');
   assert.equal(config.plansMode, false, 'autocomplete does not toggle Plans mode');
 
   typeKeys(fakeStdin, [{ name: 'backspace' }, { name: 'backspace' }, { name: 'backspace' }, { name: 'backspace' }, { name: 'backspace' }, { name: 'backspace' }, { name: 'tab' }]);
@@ -222,7 +222,7 @@ test('nested switch picker owns stdin exclusively and returns it resumed to the 
   assert.equal((writes.join('').match(/\x1B\[\?2004h/g) || []).length, 2, 'the resumed idle prompt re-enables bracketed paste');
 
   typeKeys(fakeStdin, ['x']);
-  assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /❯\s+x/, 'typing works immediately after /switch');
+  assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /›\s+x/, 'typing works immediately after /switch');
 });
 
 test('backspace and narrowing keep the screen residue-free', async (t) => {
@@ -235,10 +235,10 @@ test('backspace and narrowing keep the screen residue-free', async (t) => {
   typeKeys(fakeStdin, [{ name: 'backspace' }, { name: 'backspace' }]); // '/w'
   const stripped = emu.lines.map(l => l.replace(/\x1B\[[0-9;]*m/g, ''));
   assert.ok(stripped.some(l => l.includes('/websearch')), 'menu still lists /websearch for /w');
-  assert.ok(stripped.some(l => /❯\s+\/w$/.test(l)), 'input narrowed to /w');
-  assert.ok(!stripped.some(l => /❯\s+\/web$/.test(l)), 'old longer input fully erased');
+  assert.ok(stripped.some(l => /›\s+\/w$/.test(l)), 'input narrowed to /w');
+  assert.ok(!stripped.some(l => /›\s+\/web$/.test(l)), 'old longer input fully erased');
   typeKeys(fakeStdin, [{ name: 'backspace' }]); // '/'
-  assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /❯\s+\/$/m);
+  assert.match(emu.text().replace(/\x1B\[[0-9;]*m/g, ''), /›\s+\/$/m);
   typeKeys(fakeStdin, [{ name: 'backspace' }]); // '' — placeholder back
   assert.ok(emu.text().includes('Enter prompt or /help'));
   assert.ok(emu.wrapped === false);
@@ -252,7 +252,7 @@ test('long input lines are clipped, never wrapped', async (t) => {
   typeKeys(fakeStdin, Array.from({ length: 120 }, () => 'a'));
   assert.equal(emu.wrapped, false, 'no line ever exceeded the terminal width');
   assert.ok(emu.lines.every(l => l.length <= 80), 'every drawn line fits in 80 columns');
-  assert.ok(/❯\s+a{20}/.test(emu.text().replace(/\x1B\[[0-9;]*m/g, '')), 'text is visible from the start of the line');
+  assert.ok(/›\s+a{20}/.test(emu.text().replace(/\x1B\[[0-9;]*m/g, '')), 'text is visible from the start of the line');
 });
 
 test('prompt layout stays bounded at 60, 80 and 120 columns', async () => {
@@ -322,7 +322,7 @@ test('Esc clears the idle draft without shutting down the persistent prompt', as
 
   typeKeys(fakeStdin, [...'draft', { name: 'escape' }, 'x']);
   const stripped = emu.text().replace(/\x1B\[[0-9;]*m/g, '');
-  assert.match(stripped, /❯\s+x/, 'keypress handling remains active after Esc');
+  assert.match(stripped, /›\s+x/, 'keypress handling remains active after Esc');
   assert.doesNotMatch(stripped, /draft/, 'the canceled draft is erased');
 });
 

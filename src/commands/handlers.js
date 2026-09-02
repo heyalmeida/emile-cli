@@ -19,6 +19,7 @@ import {
   printWebCommandWarning,
   printWebProviderConfigured,
   printSkillsInfo,
+  promptSkillsPicker,
 } from '../ui/index.js';
 
 export async function handleConnect(ctx) {
@@ -405,6 +406,14 @@ export async function handleRules(ctx) {
   await ctx.runRulesCommand();
 }
 
-export function handleSkills() {
-  printSkillsInfo(listSkills());
+export async function handleSkills() {
+  const skills = listSkills();
+  if (skills.length === 0) {
+    printSkillsInfo([]);
+    return;
+  }
+  setTerminalActivity('browsing skills');
+  const selected = await promptSkillsPicker(skills);
+  setTerminalActivity('waiting');
+  if (selected) printSkillsInfo([selected]);
 }
