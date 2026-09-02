@@ -47,7 +47,8 @@ const COMMANDS = [
   { name: '/cost', desc: 'Show session token usage and costs' },
   { name: '/export', desc: 'Export the current session as Markdown' },
   { name: '/rules', desc: 'Inspect user-authored project rules' },
-  { name: '/skills', desc: 'List available workspace skills' },
+  { name: '/skills', desc: 'Search available workspace skills' },
+  { name: '/skill', desc: 'Search available workspace skills' },
   { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
   { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
   { name: '/websearch', desc: 'Control native or enhanced web search' },
@@ -120,7 +121,7 @@ export function clipLine(line, columns) {
 export function buildPromptLayout({
   input = '',
   cursor = 0,
-  message = '❯',
+  message = '›',
   placeholder = '',
   matches = [],
   selectedIndex = 0,
@@ -174,17 +175,19 @@ export function buildPromptLayout({
   // narrows the match list) would leave no highlighted row.
   selectedIndex = Math.min(selectedIndex, Math.max(visibleMatches.length - 1, 0));
   const lines = [];
-  const border = C.muted('  ' + '─'.repeat(Math.max(columns - GUTTER - 2, 1)));
-  lines.push(border);
+  const frameWidth = Math.max(columns - GUTTER - 3, 1);
+  const topBorder = C.muted(`  ╭${'─'.repeat(frameWidth)}`);
+  const bottomBorder = C.muted(`  ╰${'─'.repeat(frameWidth)}`);
+  lines.push(topBorder);
   for (const [index, cmd] of visibleMatches.entries()) {
     const selected = index === selectedIndex;
-    // Reserve `❯` for the actual writing field. Reusing it here made the
+    // Reserve `›` for the actual writing field. Reusing it here made the
     // selected suggestion look like a second prompt/input row.
     const marker = selected ? C.accent('●') : C.muted('・');
     const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
     lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
   }
-  if (visibleMatches.length > 0) lines.push(border);
+  if (visibleMatches.length > 0) lines.push(C.muted(`  ├${'─'.repeat(frameWidth)}`));
   const inputRowIndex = lines.length;
   for (const [index, row] of rows.entries()) {
     if (index === 0) {
@@ -193,7 +196,7 @@ export function buildPromptLayout({
       lines.push(`  ${' '.repeat(promptLength)}${row.text}`);
     }
   }
-  lines.push(border);
+  lines.push(bottomBorder);
   if (footerSegments.length > 0) {
     lines.push('  ' + footerSegments.join(C.muted(' · ')));
   }
@@ -220,7 +223,7 @@ export function buildPromptLayout({
 }
 
 function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort, mcpInfo) {
-  const infoSegments = [];
+  const infoSegments = [C.warn(`${config.plansMode ? 'plan' : 'build'} (Tab)`)];
   infoSegments.push(C.muted(`${modelName}${supportsReasoning ? ` (${effort})` : ''}`));
   if (stats) {
     const limit = stats.contextLimit || modelInfo.context;
@@ -263,7 +266,7 @@ export function buildPromptFooterSegments({ stats = null, mcpInfo = null } = {})
  */
 export function persistentPromptInput({
   onSubmit,
-  message = '❯',
+  message = '›',
   placeholder = 'Enter prompt or /help',
   initial = '',
   stats = null,

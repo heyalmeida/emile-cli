@@ -425,7 +425,7 @@ export async function main() {
     };
 
     await persistentPromptInput({
-      message: '❯',
+      message: '›',
       placeholder: 'Enter prompt or /help',
       initial: prefill,
       stats: sessionStats,
