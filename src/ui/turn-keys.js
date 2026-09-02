@@ -180,7 +180,42 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
     process.stdin.pause();
   }
 
+  // Burst-paste detection: when the terminal does not implement bracketed
+  // paste (older Linux terminals, some SSH clients), the readline streams
+  // each pasted character as a separate keypress. We collect rapid-fire
+  // keypresses into a buffer and, when the burst ends, treat the whole
+  // thing as a single paste.
+  let pasteBuffer = null;
+  let pasteTimer = null;
+  const PASTE_FLUSH_MS = 25;
+  function flushPaste() {
+    if (pasteBuffer === null) return;
+    const text = pasteBuffer;
+    pasteBuffer = null;
+    if (text.length === 0) return;
+    if (buffer.length + text.length <= MAX_BUFFER_CHARS) {
+      buffer = buffer.slice(0, cursor) + text + buffer.slice(cursor);
+      cursor += text.length;
+      selectedIndex = 0;
+      repaint();
+    }
+  }
+
   function onKeypress(str, key = {}) {
+    // Accumulate burst keypresses that look like pasted text.
+    // A burst is a sequence of printable characters (and \n) arriving
+    // within PASTE_FLUSH_MS of each other.
+    if (str && !key.ctrl && !key.meta && !key.name) {
+      if (pasteBuffer === null) pasteBuffer = '';
+      pasteBuffer += str;
+      if (pasteTimer) clearTimeout(pasteTimer);
+      pasteTimer = setTimeout(flushPaste, PASTE_FLUSH_MS);
+      return;
+    }
+    // If we have a pending paste buffer and the user pressed a control
+    // key (Enter, Backspace, etc), flush the paste first.
+    if (pasteBuffer !== null) { flushPaste(); if (pasteTimer) clearTimeout(pasteTimer); pasteTimer = null; }
+
     if (key.ctrl && key.name === 'c') {
       control?.requestStop('interrupt');
       return;
