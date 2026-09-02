@@ -56,6 +56,7 @@ export async function main() {
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
   const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions, flushSync, markAborted } = await import('./history.js');
   const { installShutdownHandlers } = await import('./lifecycle/index.js');
+  const { runStartupRecovery } = await import('./recovery.js');
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
@@ -127,6 +128,17 @@ export async function main() {
   } else {
     if (verbose) mcpSpinner.stop('No MCP servers', 'ℹ');
     else process.stdout.write('\r\x1B[K');
+  }
+
+  // ── Recovery scan: inspect persisted sessions for pending checkpoints ────
+  // Runs before the REPL; never blocks startup. In --verbose, log the report.
+  const recoveryReport = await runStartupRecovery();
+  if (verbose && recoveryReport.sessionsScanned > 0) {
+    console.log(C.muted(`  [recovery] scanned ${recoveryReport.sessionsScanned} sessions`));
+    if (recoveryReport.recoverable > 0) console.log(C.success(`  [recovery] ${recoveryReport.recoverable} recoverable pending`));
+    if (recoveryReport.corrupt > 0)   console.log(C.warn(`  [recovery] ${recoveryReport.corrupt} corrupt`));
+    if (recoveryReport.abandoned > 0) console.log(C.muted(`  [recovery] ${recoveryReport.abandoned} abandoned`));
+    if (recoveryReport.scanErrors.length > 0) console.log(C.warn(`  [recovery] ${recoveryReport.scanErrors.length} scan errors`));
   }
 
   // ── Clean screen & unified header moved below, after interactive setup prompts ──
