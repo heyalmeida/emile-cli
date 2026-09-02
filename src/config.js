@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { warn, error as logError } from './ui/log.js';
@@ -7,8 +8,10 @@ import { warn, error as logError } from './ui/log.js';
 dotenv.config();
 
 const workspaceDir = process.cwd();
-const emileDir = path.join(workspaceDir, '.emile');
-const userConfigPath = path.join(emileDir, 'config.json');
+const projectEmileDir = path.join(workspaceDir, '.emile');
+// Global config lives in ~/.emile/ so credentials persist across projects
+const globalEmileDir = path.join(os.homedir(), '.emile');
+const userConfigPath = path.join(globalEmileDir, 'config.json');
 
 // Find and load mcp.json if it exists
 function loadMcpConfig() {
@@ -31,7 +34,7 @@ function loadUserConfig() {
       const content = fs.readFileSync(userConfigPath, 'utf8');
       return JSON.parse(content);
     } catch (err) {
-      warn(`Failed to parse .emile/config.json: ${err.message}`);
+      warn(`Failed to parse ~/.emile/config.json: ${err.message}`);
     }
   }
   return null;
@@ -114,7 +117,7 @@ export const config = {
 };
 
 /**
- * Saves user settings persistently to .emile/config.json.
+ * Saves user settings persistently to ~/.emile/config.json (global).
  * @param {object} settings 
  * @param {string} [settings.provider] 
  * @param {string} [settings.apiKey] 
@@ -122,8 +125,8 @@ export const config = {
  * @param {string} [settings.effort] 
  */
 export function saveUserConfig(settings) {
-  if (!fs.existsSync(emileDir)) {
-    fs.mkdirSync(emileDir, { recursive: true });
+  if (!fs.existsSync(globalEmileDir)) {
+    fs.mkdirSync(globalEmileDir, { recursive: true });
   }
 
   // Update in-memory configuration

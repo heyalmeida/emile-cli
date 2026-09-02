@@ -139,9 +139,9 @@ test('the standard full prompt frame is drawn during the turn and survives agent
     const initial = stripTerminalCodes(out.text());
     assert.match(initial, /Enter prompt or \/help/);
     assert.match(initial, /─{10,}/, 'the standard bordered frame is visible');
-    // The MCP info may be truncated by the terminal emulator at 80 columns,
-    // so we check for the unique prefix instead of the full text.
-    assert.match(initial, /MCP: 1\/1 \(13 tools/, 'the standard footer MCP info is visible');
+    // The MCP info is truncated by the terminal emulator at 80 columns.
+    // Check for the unique prefix that appears before truncation.
+    assert.match(initial, /MCP: 1\/1 \(13/, 'the standard footer MCP info is visible');
     assert.doesNotMatch(initial, /type a message and press Enter to queue/);
     assert.equal(out.text().endsWith('\x1B8'), false, 'the real cursor stays in the prompt instead of returning to the spinner');
 

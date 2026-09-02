@@ -150,7 +150,7 @@ export async function runConnectWizard() {
 
   console.log(pc.green(`\n  Connected to ${providerDef.keyLabel} successfully.`));
   console.log(pc.gray(`  Default model: ${providerDef.defaultModel}`));
-  console.log(pc.gray(`  Settings saved to .emile/config.json\n`));
+  console.log(pc.gray(`  Settings saved to ~/.emile/config.json\n`));
   return true;
 }
 
@@ -213,7 +213,7 @@ export async function runModelWizard() {
   saveUserConfig({ model: finalModel });
 
   console.log(pc.green(`  Model changed to: ${finalModel}`));
-  console.log(pc.gray(`  Settings updated in .emile/config.json\n`));
+  console.log(pc.gray(`  Settings updated in ~/.emile/config.json\n`));
 }
 
 /** Formats remote catalog data as a readable, bounded select label. */

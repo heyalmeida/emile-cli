@@ -9,20 +9,22 @@ const PROJECT = process.cwd();
 
 /**
  * Runs a test script in a fresh Node.js subprocess. The script is written to a
- * temp directory whose CWD is used for config.js — so config.js reads a clean
- * temp .emile/config.json, never touching the user's real config.
+ * temp directory. Since config now lives in ~/.emile/ (global), we create
+ * a fake HOME directory with a .emile/config.json for each test.
  */
 function runSubprocess(testScript) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `emile-test-${Date.now()}-`));
-  fs.mkdirSync(path.join(tmp, '.emile'), { recursive: true });
-  fs.writeFileSync(path.join(tmp, '.emile', 'config.json'),
+  const fakeHome = path.join(tmp, 'home');
+  fs.mkdirSync(path.join(fakeHome, '.emile'), { recursive: true });
+  // Create a dummy global config that won't interfere with tests
+  fs.writeFileSync(path.join(fakeHome, '.emile', 'config.json'),
     JSON.stringify({ provider: 'unknown', apiKey: 'unused' }));
 
   const scriptPath = path.join(tmp, 'test.mjs');
-  fs.writeFileSync(scriptPath, testScript({ project: PROJECT }));
+  fs.writeFileSync(scriptPath, testScript({ project: PROJECT, fakeHome }));
 
   try {
-    const r = execSync(`node ${scriptPath}`, { cwd: tmp });
+    const r = execSync(`node ${scriptPath}`, { cwd: tmp, env: { ...process.env, HOME: fakeHome } });
     return { ok: true, out: r.toString().trim() };
   } catch (err) {
     return { ok: false, out: err.stdout?.toString().trim() ?? '', err: err.message };
@@ -74,13 +76,13 @@ test('resolveApiKey: returns empty string when no matching env', () => {
 // ── Config file mode 0600 ─────────────────────────────────────────────────
 
 test('saveUserConfig writes config.json with mode 0600', () => {
-  const { out } = runSubprocess(({ project }) => [
+  const { out } = runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
-    `const {config, saveUserConfig} = await import('${project}/src/config.js');`,
-    `config.workspaceDir = process.cwd();`,
+    `import os from 'node:os';`,
+    `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const files = fs.readdirSync('.emile');`,
-    `const mode = fs.statSync('.emile/' + files[0]).mode & 0o777;`,
+    `const configPath = os.homedir() + '/.emile/config.json';`,
+    `const mode = fs.statSync(configPath).mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
@@ -88,13 +90,14 @@ test('saveUserConfig writes config.json with mode 0600', () => {
 });
 
 test('saveUserConfig chmods existing 0644 config to 0600', () => {
-  const { out } = runSubprocess(({ project }) => [
+  const { out } = runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
-    `fs.writeFileSync('.emile/config.json', '{}', { mode: 0o644 });`,
-    `const {config, saveUserConfig} = await import('${project}/src/config.js');`,
-    `config.workspaceDir = process.cwd();`,
+    `import os from 'node:os';`,
+    `const configPath = os.homedir() + '/.emile/config.json';`,
+    `fs.writeFileSync(configPath, '{}', { mode: 0o644 });`,
+    `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const mode = fs.statSync('.emile/config.json').mode & 0o777;`,
+    `const mode = fs.statSync(configPath).mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
