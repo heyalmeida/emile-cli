@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Single-development-branch workflow:** SDD implementation, documentation and closeout commits now stay directly on `development`. Routine work must not switch branches, create worktrees, pull, merge, rebase, reset, clean or stash; those operations require an explicit user request.
+
 ### Fixed
 - **CI lint for the empty-stream regression**: the test now reuses its existing empty async iterable helper instead of declaring an async generator with no `yield`, satisfying ESLint's `require-yield` rule without changing the scenario.
 - **Multiline prompt paste no longer submits the first line** (`specs/2026-09-02-prompt-paste`): the idle and active prompt owners now use terminal bracketed-paste markers and explicitly treat `Enter` between `paste-start`/`paste-end` as a literal newline. Pasted text remains one editable, CRLF-normalized draft and a separate `Enter` sends it. Cleanup restores the terminal mode after either prompt releases raw stdin.

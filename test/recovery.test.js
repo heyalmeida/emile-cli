@@ -3,22 +3,23 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-function withTmpDir(fn) {
+async function withTmpDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `emile-recovery-${Date.now()}-`));
-  try { return fn(dir); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  try {
+    return await fn(dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
-// Stub resolveSafePath to always return the path as-is (the actual
-// security check is tested in security.test.js; recovery just needs
-// it to not throw for valid paths).
-const originalResolveSafePath = await import('../src/tools/security.js').then(m => m.resolveSafePath);
+// We cannot monkey-patch ES modules directly. Instead we test recovery with
+// paths that are guaranteed to exist in the actual workspace (config.workspaceDir).
+// The security check itself is tested in security.test.js.
 
-// Patch resolveSafePath in the recovery module.
-// We do this by monkey-patching the security module before recovery runs.
-await import('../src/tools/security.js').then(m => {
-  m.resolveSafePath = (p) => p; // accept all paths in tests
-});
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WS_ROOT = path.resolve(__dirname, '..');
 
 // Now import recovery — it will use the patched resolveSafePath.
 async function runRecovery(sessionsDir) {
@@ -55,12 +56,13 @@ test('classifies a valid pending session as recoverable', async () => {
   await withTmpDir(async (dir) => {
     const historyDir = path.join(dir, '.emile', 'history');
     fs.mkdirSync(historyDir, { recursive: true });
+    // Use a path that exists in the actual workspace since we cannot mock resolveSafePath
     fs.writeFileSync(path.join(historyDir, 'pending_ok.json'), JSON.stringify({
       id: 'pending_ok',
       status: 'pending',
       pendingToolCalls: [{
         id: 'call_1', type: 'function',
-        function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'README.md' }) },
+        function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'package.json' }) },
       }],
       messages: [],
     }));
@@ -147,9 +149,10 @@ test('multiple sessions are each classified independently', async () => {
   await withTmpDir(async (dir) => {
     const historyDir = path.join(dir, '.emile', 'history');
     fs.mkdirSync(historyDir, { recursive: true });
+    // Use package.json which exists in the actual workspace
     fs.writeFileSync(path.join(historyDir, 's1.json'), JSON.stringify({
       id: 's1', status: 'pending',
-      pendingToolCalls: [{ id: 'c1', type: 'function', function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'README.md' }) } }],
+      pendingToolCalls: [{ id: 'c1', type: 'function', function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'package.json' }) } }],
       messages: [],
     }));
     fs.writeFileSync(path.join(historyDir, 's2.json'), JSON.stringify({

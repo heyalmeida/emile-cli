@@ -36,7 +36,5 @@
 | **Spec / Plan / Tasks** | Spec-Driven Development artifacts in `specs/` — the what / how / doing. |
 | **Feature registry** | Catalog of delivered features in `features/`, each traceable to its source spec. |
 | **ADR** | Architecture Decision Record — versioned record of an architectural decision in `docs/adr/`. |
-| **Integration branch** | `development`, the shared parent and integration base from which active domain branches are created and to which reviewed work returns. |
-| **Feature branch** | Git branch dedicated to one stable product domain (e.g., `feat/mcp-system`), created from `development` and mandated by Rule 8 of `.clinerules`. |
-| **Documentation branch** | `docs/documentation`, the branch dedicated to README, docs, specs, feature registry, CHANGELOG and workflow-rule commits. |
+| **Development branch** | `development`, the single active branch for ongoing code, specifications, documentation and scoped commits. Routine tasks must not switch branches, create worktrees, pull, merge or rebase. |
 | **Legacy branch archive** | Read-only `archive/legacy/...` refs preserving historical branch tips after an active branch is renamed or retired. |
