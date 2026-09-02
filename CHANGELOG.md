@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Persistent prompt lifecycle** (`specs/2026-09-01-turn-interrupt-queue`): the same full prompt frame now remains visible and writable while the agent works; spinner/reasoning/output writes are routed above it and the real blinking cursor stays at the queue draft instead of on `thinking...`. Tab accepts the highlighted slash-command completion, whose selected `●` marker is distinct from the input's `❯`; nested pickers such as `/switch` receive exclusive stdin ownership and return it resumed. The bounded renderer preserves exact wrapped-cursor positions, `Shift+Enter` multiline input and ANSI resets at 60/80/120 columns.
+
 ### Added
 - **Opt-in OpenRouter web search** (`specs/2026-08-31-web-search-tool-reliability`): added `--web-search` and `/websearch`; the provider-operated server tool is only sent to OpenRouter and displays a warning that search charges may apply, including on free model routes.
 - **Documentation branch workflow** (`specs/2026-08-30-documentation-branch`): created `docs/documentation`, mapped every catalog feature to its canonical code branch and separated documentation commits from product implementation branches.
