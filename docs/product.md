@@ -49,7 +49,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-05** | Execution gate: safe mode with a safe-command whitelist, `--no-safe` and `--dry-run` | ✅ |
 | **RF-06** | `/undo [N]` to revert the agent's last or last N file modifications (undo stack) | ✅ |
 | **RF-07** | Session persistence per workspace: save, list, resume with pending-tool recovery (`-H`, `/switch`, `/sessions`), bounded export/storage, and reasoning omitted by default | ✅ |
-| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
+| **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) with live provider catalogs where available (OpenRouter, OpenCode, OpenCode Go) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
 | **RF-10** | Plans mode (`-p`): agent previews the task, asks for approval before model execution, drafts a plan, then executes | ✅ |
 | **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |

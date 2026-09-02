@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MODEL_PICKER_LIMIT,
   filterModelOptions,
+  matchModelOptions,
   sanitizeModelPickerText,
 } from '../src/ui/model-picker.js';
 
@@ -43,4 +44,11 @@ test('sanitizes control characters from picker text', () => {
   const safe = sanitizeModelPickerText('provider/model\u001b[31m\nname\t');
   assert.equal(safe, 'provider/model [31m name');
   assert.doesNotMatch(safe, /[\u0000-\u001f\u007f\u0080-\u009f]/);
+});
+
+test('matchModelOptions returns the full unbounded match list', () => {
+  const matched = matchModelOptions(models);
+  assert.equal(matched.length, models.length);
+  assert.equal(matchModelOptions(models, 'model-11')[0].value, 'provider/model-11');
+  assert.equal(matchModelOptions(models, 'does-not-exist').length, 0);
 });

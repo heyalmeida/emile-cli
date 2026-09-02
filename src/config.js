@@ -47,6 +47,11 @@ function readBoolean(value, fallback = false) {
   return fallback;
 }
 
+function readPositiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
 const webSearch = readBoolean(
   savedConfig.webSearch ?? process.env.EMILE_WEB_SEARCH,
   false,
@@ -70,8 +75,13 @@ export const config = {
   // Thinking expanded by default (live muted text after a prompt). Collapse
   // it with /thinking or Ctrl+P when the reasoning should stay in the background.
   expandThinking: true,
-  // Safety cap for the agentic tool loop per user request (agent.js §3.1)
-  maxLoopIterations: 40,
+  // Safety cap for the agentic tool loop per user request (agent.js §3.1).
+  // Raise via EMILE_MAX_LOOP_ITERATIONS, --max-loop-iterations, or the
+  // persisted `maxLoopIterations` config value.
+  maxLoopIterations: readPositiveInt(
+    savedConfig.maxLoopIterations ?? process.env.EMILE_MAX_LOOP_ITERATIONS,
+    40,
+  ),
 };
 
 /**
