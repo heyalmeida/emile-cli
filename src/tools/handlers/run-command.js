@@ -1,18 +1,43 @@
 // handlers/run-command.js — runCommand tool handler.
-import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { confirm, isCancel } from '@clack/prompts';
 import { config } from '../../config.js';
-import { resolveSafePath, isSafeCommand } from '../security.js';
-import { fileCache, undoStack } from '../file-state.js';
-import { showDiff } from '../show-diff.js';
+import { isSafeCommand, normalizeWorkspaceCwd } from '../security.js';
 import { stripTerminalControls } from '../../ui/control.js';
 
 const NETWORK_PIPE_PATTERN = /\b(?:curl|wget)\b[^\n]*\|\s*(?:ba|z|fi)?sh\b/i;
 
 export function isNetworkPipeCommand(command) {
   return NETWORK_PIPE_PATTERN.test(String(command || ''));
+}
+
+function getSessionCwd() {
+  const current = normalizeWorkspaceCwd(config.sessionCwd);
+  if (current) {
+    config.sessionCwd = current;
+    return current;
+  }
+  config.sessionCwd = config.workspaceDir;
+  return config.workspaceDir;
+}
+
+function buildCwdProbe(marker) {
+  if (process.platform === 'win32') {
+    return `\r\nset "EMILE_COMMAND_STATUS=%ERRORLEVEL%"\r\necho ${marker}%CD%\r\nexit /b %EMILE_COMMAND_STATUS%`;
+  }
+  return `\nEMILE_COMMAND_STATUS=$?\nprintf '\\n%s%s\\n' '${marker}' "$PWD"\nexit "$EMILE_COMMAND_STATUS"`;
+}
+
+function stripCwdProbe(output, marker) {
+  const markerIndex = output.lastIndexOf(marker);
+  if (markerIndex < 0) return { output, cwd: null };
+
+  const lineStart = output.lastIndexOf('\n', markerIndex - 1);
+  const valueStart = markerIndex + marker.length;
+  const lineEnd = output.indexOf('\n', valueStart);
+  const cwd = output.slice(valueStart, lineEnd < 0 ? output.length : lineEnd).replace(/\r$/, '');
+  return { output: output.slice(0, lineStart < 0 ? markerIndex : lineStart), cwd };
 }
 
 export async function runCommand({ command }) {
@@ -42,11 +67,23 @@ export async function runCommand({ command }) {
 
   return new Promise((resolve) => {
     const timeout = config.commandTimeout || 30000;
-    
-    exec(command, { cwd: config.workspaceDir, timeout }, (error, stdout, stderr) => {
-      let output = '';
-      if (stdout) output += stdout;
+    const commandCwd = getSessionCwd();
+    const marker = `__EMILE_CWD_${process.pid}_${Date.now()}__`;
+    const commandWithProbe = `${command}\n${buildCwdProbe(marker)}`;
+
+    exec(commandWithProbe, { cwd: commandCwd, timeout }, (error, stdout, stderr) => {
+      const probe = stripCwdProbe(stdout || '', marker);
+      let output = probe.output;
       if (stderr) output += `[stderr]\n${stderr}`;
+      let cwdWarning = '';
+      if (probe.cwd) {
+        const nextCwd = normalizeWorkspaceCwd(probe.cwd);
+        if (nextCwd) {
+          config.sessionCwd = nextCwd;
+        } else {
+          cwdWarning = '\n[working directory unchanged: command left the workspace]';
+        }
+      }
 
       // IMPROVEMENTS.md §3.2: a verbose build log or a cat of a big file can
       // flood the context window in a single tool result. Truncate with an
@@ -67,6 +104,8 @@ export async function runCommand({ command }) {
           output += `\n[Command failed with code ${error.code}]\n${error.message}`;
         }
       }
+      const relativeCwd = path.relative(config.workspaceDir, config.sessionCwd || commandCwd) || '.';
+      output += `\n[working directory: ${relativeCwd}]${cwdWarning}`;
       resolve(output.trim() || '(command returned no output)');
     });
   });

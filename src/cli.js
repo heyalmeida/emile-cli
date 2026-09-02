@@ -3,10 +3,11 @@ import { text, select, isCancel, cancel, confirm } from '@clack/prompts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, hasCredentials } from './config.js';
+import { normalizeWorkspaceCwd } from './tools/security.js';
 // All user-facing output goes through the C palette exported by ui.js —
 // the single source of colors per the visual identity doc (the legacy
 // picocolors remap was removed in the TUI overhaul pass 1).
-import { C, stripTerminalControls } from './ui/index.js';
+import { C, stripTerminalControls, listenTurnKeys } from './ui/index.js';
 
 import {
   printStartupScreen,
@@ -32,8 +33,10 @@ program
   .option('-H, --history', 'Select and resume a past conversation history', false)
   .option('--no-safe', 'Bypass command execution safe gate', false)
   .option('--dry-run', 'Simulate changes and command execution', false)
+  .option('--web-search', 'Allow OpenRouter web search (additional provider charges may apply)', config.webSearch)
   .option('--export-thinking', 'Include model reasoning in /export output', false)
   .option('--max-session-size <bytes>', 'Maximum persisted session size in bytes', String(config.maxSessionSize))
+  .option('--max-loop-iterations <n>', 'Maximum agent tool-loop iterations per turn', String(config.maxLoopIterations))
   .option('--verbose', 'Show setup and initialization logs', false);
 
 export async function main() {
@@ -48,7 +51,7 @@ export async function main() {
 
   // Dynamically import heavy dependencies to optimize startup time (e.g. for --help)
   const { initializeMcp, shutdownMcp } = await import('./mcp.js');
-  const { runAgent, resumePendingTools, sessionStats, initSessionStats } = await import('./agent/index.js');
+  const { runAgent, resumePendingTools, sessionStats, initSessionStats, createTurnControl } = await import('./agent/index.js');
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
   const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions } = await import('./history.js');
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
@@ -59,8 +62,17 @@ export async function main() {
   config.dryRun = !!options.dryRun;
   config.safeMode = options.safe !== false;
   config.plansMode = !!options.plans;
+  config.webSearch = options.webSearch === true;
   const maxSessionSize = Number(options.maxSessionSize);
   if (Number.isFinite(maxSessionSize) && maxSessionSize > 0) config.maxSessionSize = maxSessionSize;
+  const maxLoopIterations = Number(options.maxLoopIterations);
+  if (Number.isFinite(maxLoopIterations) && maxLoopIterations > 0) config.maxLoopIterations = maxLoopIterations;
+
+  // Load persisted enhanced-web settings and credentials (.emile/web.json)
+  // into the runtime config — without this, keys configured via /tavily or
+  // /firecrawl are saved but never restored on the next startup.
+  const { hydrateEnhancedWebConfig } = await import('./web/index.js');
+  hydrateEnhancedWebConfig(config);
 
   // Refresh the dynamic model catalog (OpenRouter public endpoint) in the
   // background — effort gating and cost/context metadata use live data when
@@ -154,6 +166,8 @@ export async function main() {
       if (loaded) {
         messages = loaded;
         sessionId = selectedId;
+        const record = getSessionRecord(selectedId);
+        config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || config.workspaceDir;
         const refreshedSessions = listSessions();
         const matched = refreshedSessions.find(s => s.id === selectedId);
         sessionSummary = matched ? matched.summary : '';
@@ -298,6 +312,39 @@ export async function main() {
     // ── Interactive REPL loop ────────────────────────────────────
     let isRunning = true;
     let prefill = '';
+    // Lines typed while the agent is working (spec 2026-09-01-turn-interrupt-queue).
+    const pendingQueue = [];
+
+    // Runs one agent turn with an active key listener: Esc/Ctrl+C request a
+    // graceful stop and typed lines are queued for the next turn.
+    const runAgentTurn = async (initialPrompt) => {
+      const control = createTurnControl();
+      const stopKeys = listenTurnKeys({
+        control,
+        onLine: (line) => {
+          pendingQueue.push(line);
+          process.stdout.write(
+            `\r\x1B[K  ${C.muted(`queued: ${line.slice(0, 90)}${line.length > 90 ? '…' : ''}`)}\n`
+          );
+        },
+      });
+      try {
+        return await runAgent({
+          model: config.defaultModel,
+          plansMode: config.plansMode,
+          skills: activeSkills,
+          cache: options.cache,
+          effort: config.defaultEffort,
+          messages,
+          initialPrompt,
+          control,
+          checkpointSession,
+        });
+      } finally {
+        stopKeys();
+      }
+    };
+
     const commandContext = {
       config,
       options,
@@ -323,6 +370,7 @@ export async function main() {
       setSessionId: (nextSessionId) => { sessionId = nextSessionId; },
       getSessionSummary: () => sessionSummary,
       setSessionSummary: (nextSummary) => { sessionSummary = nextSummary; },
+      getSessionRecord,
       setPrefill: (nextPrefill) => { prefill = nextPrefill; },
       resumeSession: resumeLoadedSession,
     };
@@ -354,24 +402,28 @@ export async function main() {
       }
 
       if (cleanInput) {
-        try {
-          messages = await runAgent({
-            model: config.defaultModel,
-            plansMode: config.plansMode,
-            skills: activeSkills,
-            cache: options.cache,
-            effort: config.defaultEffort,
-            messages,
-            initialPrompt: cleanInput,
-            checkpointSession,
-          });
-
-          if (!sessionSummary) {
-            sessionSummary = cleanInput.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
+        // Run the turn, then drain whatever was queued while it was working.
+        let nextPrompt = cleanInput;
+        while (nextPrompt && isRunning) {
+          if (nextPrompt.toLowerCase() === 'exit') {
+            isRunning = false;
+            break;
           }
-          await finalizeSessionTurn();
-        } catch (err) {
-          console.error(C.red(`\n  Error: ${err.message}`));
+          try {
+            messages = await runAgentTurn(nextPrompt);
+
+            if (!sessionSummary) {
+              sessionSummary = nextPrompt.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
+            }
+            await finalizeSessionTurn();
+          } catch (err) {
+            console.error(C.red(`\n  Error: ${err.message}`));
+          }
+          nextPrompt = pendingQueue.shift() || '';
+          // Queued slash commands run between turns, in the idle REPL.
+          if (nextPrompt && await dispatchCommand(nextPrompt, commandContext)) {
+            nextPrompt = pendingQueue.shift() || '';
+          }
         }
       }
     }

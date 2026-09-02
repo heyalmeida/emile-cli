@@ -1,10 +1,8 @@
 // thinking.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
-import { getModelInfo } from '../models.js';
-import readline from 'node:readline';
 
 /**
  * Live thinking stream — renders reasoning deltas in real time as they arrive
@@ -37,8 +35,7 @@ export function startThinkingStream() {
   // stays until the stream ends. GAP.section provides the single gap after the
   // user divider (vertical rhythm rule).
   if (_startedAsExpanded) {
-    process.stdout.write(GAP.section);
-    process.stdout.write(`  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
+    process.stdout.write(`${GAP.section}  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
     _thinkingHeaderPrinted = true;
     _thinkingHeaderLineCount = 1;
   } else {
@@ -67,31 +64,33 @@ export function appendThinkingStream(delta) {
 
   const oldTotal = _thinkingHeaderLineCount + _thinkingLinesPrinted;
   const newTotal = _thinkingHeaderLineCount + newLines.length;
+  let output = '';
 
   // Move cursor up to the start of the thinking block (header + old muted lines)
   if (oldTotal > 0) {
-    process.stdout.write(`\x1B[${oldTotal}A`);
+    output += `\x1B[${oldTotal}A`;
   }
 
   // Re-render header
   if (_thinkingHeaderPrinted) {
-    process.stdout.write('\r\x1B[K' + `  ${C.muted('✻')} ${C.muted('Thinking…')}\n`);
+    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted('Thinking…')}\n`;
   }
 
   // Re-render muted lines, each with line-erase prefix
   for (const line of newLines) {
-    process.stdout.write('\r\x1B[K' + '  ' + C.muted(line) + '\n');
+    output += '\r\x1B[K' + '  ' + C.muted(line) + '\n';
   }
 
   // If new content has fewer lines, clear the leftover lines
   if (newTotal < oldTotal) {
     for (let i = 0; i < oldTotal - newTotal; i++) {
-      process.stdout.write('\r\x1B[K\n');
+      output += '\r\x1B[K\n';
     }
     // Move cursor back up so position is consistent
-    process.stdout.write(`\x1B[${oldTotal - newTotal}A`);
+    output += `\x1B[${oldTotal - newTotal}A`;
   }
 
+  process.stdout.write(output);
   _thinkingLinesPrinted = newLines.length;
 }
 
@@ -108,8 +107,7 @@ export function endThinkingStream() {
     // one-liner (`··· thought Ns`). Exactly one line — rhythm preserved, no
     // cursor-up math beyond the single line itself.
     if (wordCount > 0) {
-      process.stdout.write('\x1B[1A\r\x1B[2K');
-      process.stdout.write(`  ${C.ghost(`··· thought ${durationStr}`)}\n`);
+      process.stdout.write(`\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`);
     }
   } else {
     // Expanded: keep the streamed text in place and update only the known
@@ -117,11 +115,12 @@ export function endThinkingStream() {
     // afterwards so the next renderer starts at the correct cursor position.
     if (_thinkingHeaderPrinted) {
       const totalLines = _thinkingHeaderLineCount + _thinkingLinesPrinted;
-      process.stdout.write(`\x1B[${totalLines}A`);
-      process.stdout.write('\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`);
+      let output = `\x1B[${totalLines}A`;
+      output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
       if (totalLines > _thinkingHeaderLineCount) {
-        process.stdout.write(`\x1B[${totalLines - _thinkingHeaderLineCount}B`);
+        output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
       }
+      process.stdout.write(output);
     }
   }
 
@@ -145,8 +144,6 @@ export function printThinking(content) {
   const innerWidth = Math.max((process.stdout.columns || 80) - 10, 40);
 
   const allLines = cleanContent.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
-  const lineCount = allLines.length;
-
   // Word-count heuristic for duration estimate
   const wordCount = cleanContent.trim().split(/\s+/).length;
   const secs = Math.max(1, Math.round(wordCount / 50));

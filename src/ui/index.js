@@ -18,11 +18,19 @@ export { startThinkingStream, appendThinkingStream, endThinkingStream, printThin
 export { printHelp } from './help.js';
 export { printDiffBlock } from './diff-block.js';
 export { printConversationHistory } from './history-replay.js';
-export { promptInput } from './prompt-input.js';
-export { MODEL_PICKER_LIMIT, filterModelOptions, promptModelPicker, sanitizeModelPickerText } from './model-picker.js';
+export { promptInput, isShiftEnterKey } from './prompt-input.js';
+export { MODEL_PICKER_LIMIT, filterModelOptions, matchModelOptions, promptModelPicker, sanitizeModelPickerText } from './model-picker.js';
+export { listenTurnKeys } from './turn-keys.js';
 export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';
+export {
+  promptWebProviderCredential,
+  printWebProviderStatus,
+  printWebSearchStatus,
+  printWebCommandWarning,
+  printWebProviderConfigured,
+} from './web-config.js';
 export {
   MAX_TERMINAL_TITLE_LENGTH,
   sanitizeTitlePart,

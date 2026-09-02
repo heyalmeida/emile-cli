@@ -102,6 +102,7 @@ emile -H                          # resume a previous session
 | `--web-search` | Enable OpenRouter web search; additional provider charges may apply | `false` |
 | `--export-thinking` | Include model reasoning in `/export` output (explicit opt-in) | `false` |
 | `--max-session-size <bytes>` | Maximum size of each persisted session snapshot; old tool results are trimmed when needed | `10485760` |
+| `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `40` |
 | `--verbose` | Show setup and MCP initialization logs | `false` |
 
 ---
@@ -113,7 +114,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | Command | Description |
 |---------|-------------|
 | `/connect` | Reconfigure API provider and key |
-| `/model` | Search and switch the active model; type to filter by model id/name, with up to 7 results visible |
+| `/model` | Search and switch the active model; type to filter or use ↑/↓ to scroll the full live list |
 | `/switch` `/sessions` | Resume a previous session |
 | `/sessions clean <days>` | Delete saved sessions older than the specified number of days |
 | `/new` `/clear` | Start a fresh session |
@@ -123,6 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap for the session (default `40`) |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -136,6 +138,8 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `Shift+Enter` | Insert a newline without sending the prompt |
 | `Esc` | Clear the current draft without sending |
 | `Ctrl+C` | Exit immediately |
+
+**While the agent is working** you are not locked out: `Esc` or `Ctrl+C` cancel the current turn gracefully (the CLI keeps running), and any text you type followed by `Enter` is queued and runs automatically as the next turn. Queued lines starting with `/` run as slash commands between turns.
 
 ---
 
@@ -229,6 +233,7 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 | `OPENCODE_API_KEY` | API key for OpenCode | — |
 | `EMILE_DEFAULT_MODEL` | Default model ID | `anthropic/claude-3.5-sonnet` |
 | `EMILE_DEFAULT_EFFORT` | Default reasoning effort | `low` |
+| `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `40` |
 
 ### Config file
 
@@ -244,8 +249,8 @@ To apply your own always-on preferences to a workspace, create `.emilerules` at 
 |----------|----------|-------|
 | Requesty | `https://router.requesty.ai/v1` | Default; supports prompt caching |
 | OpenRouter | `https://openrouter.ai/api/v1` | Broad live/cache-backed model catalog; searchable from `/model` |
-| OpenCode | `https://api.opencode.ai/v1` | OpenAI-compatible gateway |
-| OpenCode Go | `https://opencode.ai/zen/go/v1` | Curated open-source models |
+| OpenCode | `https://opencode.ai/zen/v1` | Curated gateway; live model list searchable from `/model` |
+| OpenCode Go | `https://opencode.ai/zen/go/v1` | Curated open-source models; live model list searchable from `/model` |
 
 Any OpenAI-compatible endpoint works — the client uses the `openai` SDK under the hood.
 

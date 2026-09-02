@@ -3,6 +3,9 @@ import { getModelInfo } from '../models.js';
 import { buildSystemPrompt } from '../prompt.js';
 import { toolDefinitions } from '../tools/index.js';
 import { getMcpToolDefinitions } from '../mcp.js';
+import { getProviderToolDefinitions } from '../api/provider-tools.js';
+import { config } from '../config.js';
+import { getEnhancedWebToolDefinitions } from '../web/index.js';
 
 export const sessionStats = {
   promptTokens: 0,
@@ -68,7 +71,15 @@ export function calculateContextUsage({ systemPrompt, tools, messages }) {
  */
 export function initSessionStats(model, plansMode, skills, messages = []) {
   const systemPrompt = buildSystemPrompt({ plansMode, skills });
-  const allTools = [...toolDefinitions, ...getMcpToolDefinitions()];
+  const allTools = [
+    ...toolDefinitions,
+    ...getMcpToolDefinitions(),
+    ...getProviderToolDefinitions({
+      provider: config.provider,
+      webSearch: config.webSearch && config.webSearchMode === 'native',
+    }),
+    ...getEnhancedWebToolDefinitions(config),
+  ];
   const usage = calculateContextUsage({ systemPrompt, tools: allTools, messages });
   sessionStats.estimatedContextTokens = usage.estimatedTokens;
   sessionStats.contextLimit = getContextLimit(model);

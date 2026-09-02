@@ -1,6 +1,6 @@
 // prompt-input.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, stripAnsi, wrapText, fmtK } from './theme.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
@@ -49,6 +49,10 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       { name: '/export', desc: 'Export the current session as Markdown' },
       { name: '/rules', desc: 'Inspect user-authored project rules' },
       { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
+      { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
+      { name: '/websearch', desc: 'Control native or enhanced web search' },
+      { name: '/tavily', desc: 'Configure Tavily enhanced search' },
+      { name: '/firecrawl', desc: 'Configure Firecrawl page rendering' },
       { name: '/help', desc: 'Display this help menu' },
       { name: 'exit', desc: 'Quit the CLI' }
     ];
@@ -173,18 +177,20 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       const linesBelow = 1 + matchLines.length + (footerLine ? 1 : 0); // bottom border + matches + footer
       const oldBlockHeight = linesAbove + lastInputLinesCount + lastRenderedHeight;
 
+      let output = '';
+
       // Cursor is on the input line (left there by previous render).
       // Move up from input line to the top border of the old block.
       const distToTop = linesAbove + lastCursorLine;
 
       if (distToTop > 0 && lastRenderedHeight > 0) {
-        process.stdout.write(`\x1B[${distToTop}A`);
+        output += `\x1B[${distToTop}A`;
       }
 
       // ── Re-draw every line (safe: only clears each line, never erases below) ─
 
       // Top border
-      process.stdout.write('\r\x1B[K' + C.muted('  ' + '─'.repeat(lineW)) + '\n');
+      output += '\r\x1B[K' + C.muted('  ' + '─'.repeat(lineW)) + '\n';
 
       // The writing field — ONE explicit write per wrapped row, each row
       // ≤ terminal width (the terminal must never auto-wrap: auto-wrapped
@@ -194,22 +200,22 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       const contIndent = ' '.repeat(promptLength);
       for (let i = 0; i < rows.length; i++) {
         const prefix = i === 0 ? styledPrompt : contIndent;
-        process.stdout.write('\r\x1B[K' + prefix + rows[i].text + '\n');
+        output += '\r\x1B[K' + prefix + rows[i].text + '\n';
       }
 
       // Bottom border
-      process.stdout.write('\r\x1B[K' + C.muted('  ' + '─'.repeat(lineW)) + '\n');
+      output += '\r\x1B[K' + C.muted('  ' + '─'.repeat(lineW)) + '\n';
 
       // Autocomplete dropdown (if any)
       if (matchLines.length > 0) {
         for (const ml of matchLines) {
-          process.stdout.write('\r\x1B[K' + ml + '\n');
+          output += '\r\x1B[K' + ml + '\n';
         }
       }
 
       // Footer infos (below the box)
       if (footerLine) {
-        process.stdout.write('\r\x1B[K' + footerLine + '\n');
+        output += '\r\x1B[K' + footerLine + '\n';
       }
 
       // Compute how many lines we just drew
@@ -218,9 +224,9 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       // If old block was taller, clear the leftover lines
       if (newTotal < oldBlockHeight) {
         for (let i = 0; i < oldBlockHeight - newTotal; i++) {
-          process.stdout.write('\r\x1B[K\n');
+          output += '\r\x1B[K\n';
         }
-        process.stdout.write(`\x1B[${oldBlockHeight - newTotal}A`);
+        output += `\x1B[${oldBlockHeight - newTotal}A`;
       }
 
       // Reposition the cursor onto its rendered row, at its column (always
@@ -228,12 +234,13 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       // next line and corrupted the display)
       const cursorFromBottom = linesBelow + (currentInputLinesCount - absCursorLine);
       if (cursorFromBottom > 0) {
-        process.stdout.write(`\x1B[${cursorFromBottom}A`);
+        output += `\x1B[${cursorFromBottom}A`;
       }
-      process.stdout.write('\r');
+      output += '\r';
       if (cursorCol > 0) {
-        process.stdout.write(`\x1B[${cursorCol}C`);
+        output += `\x1B[${cursorCol}C`;
       }
+      process.stdout.write(output);
 
       lastInputLinesCount = currentInputLinesCount;
       lastCursorLine = absCursorLine;
@@ -244,6 +251,7 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
 
     const onKeypress = (str, key) => {
       const matches = getMatches();
+      const isShiftEnter = isShiftEnterKey(key);
 
       if (key.ctrl && key.name === 'c') {
         cleanup();
@@ -254,6 +262,14 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
         // Esc cancels the current draft — clear the input without sending.
         input = '';
         cursor = 0;
+        selectedIndex = 0;
+        render();
+        return;
+      }
+
+      if (isShiftEnter) {
+        input = input.slice(0, cursor) + '\n' + input.slice(cursor);
+        cursor++;
         selectedIndex = 0;
         render();
         return;
@@ -343,4 +359,14 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
 
     process.stdin.on('keypress', onKeypress);
   });
+}
+
+/**
+ * Recognizes the Shift+Enter encodings emitted by readline-compatible
+ * terminals. Kitty and modifyOtherKeys terminals do not always populate
+ * readline's `key.shift` flag, so their CSI sequences are handled explicitly.
+ */
+export function isShiftEnterKey(key = {}) {
+  return ((key.name === 'return' || key.name === 'enter') && key.shift === true) ||
+    key.sequence === '\x1B[13;2u' || key.sequence === '\x1B[27;2;13~';
 }
