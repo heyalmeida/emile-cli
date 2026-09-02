@@ -6,6 +6,8 @@
 | **Delivery date** | 2026-08-25 |
 | **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-09-01-opencode-model-list` |
 | **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19 |
+| **Source spec** | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-anthropic-thinking-budget` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-08-30-readable-token-units` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-web-search-tool-reliability` |
+| **PRD RFs served** | RF-06, RF-08, RF-09, RF-13, RF-19, RF-20 |
 | **Owner/Area** | Agent Loop / API / UI (`src/models.js`, `src/api/`, `src/agent/`, `src/ui/model-picker.js`) |
 
 ---
@@ -13,6 +15,8 @@
 ## Description
 
 The model knowledge and session-telemetry system: a dynamic catalog with static fallbacks answers context windows, pricing and reasoning capability; reasoning effort is normalized and capability-gated before reaching the API; context tracking distinguishes the pre-call estimate from measured API usage; and history compression scales to 80% of that same model window instead of treating every paid/free route alike. The conversation prefix remains byte-stable per session to maximize provider prompt-cache hits, with the hit rate visible in the status bar and `/cost`. `/model` provides incremental, case-insensitive search with at most seven visible results; OpenRouter uses its live/cache catalog, OpenCode Zen and OpenCode Go use their live `/models` lists, and providers without a supported list endpoint use curated options.
+
+The model knowledge and session-telemetry system: a dynamic catalog with static fallbacks answers context windows, pricing and reasoning capability; reasoning effort is normalized and capability-gated before reaching the API; context tracking distinguishes the pre-call estimate from measured API usage; and history compression scales to 80% of that same model window instead of treating every paid/free route alike. The conversation prefix remains byte-stable per session to maximize provider prompt-cache hits, with the hit rate visible in the status bar and `/cost`. `/model` provides incremental, case-insensitive search with at most seven visible results; OpenRouter uses its live/cache catalog and providers without a supported catalog endpoint use curated options. Streamed reasoning is normalized to prevent cumulative snapshots and structured/legacy dual emission from duplicating the visible thought. OpenRouter web search is an explicit, cost-visible option composed only for that provider.
 
 ## How It Works
 
@@ -24,6 +28,7 @@ flowchart LR
     SP["Frozen system prompt<br/>(per plansMode+skills key)"] --> PREFIX["Byte-stable prefix<br/>→ provider cache hits"]
     API --> U["usage chunk<br/>prompt/completion/cached tokens"]
     U --> SB["Session bar + /cost<br/>~estimate · cache N%"]
+    API --> WS["Optional OpenRouter<br/>provider web search"]
 ```
 
 ## Technical Details
@@ -38,6 +43,8 @@ flowchart LR
 | **Context compression** | Full payload compresses at 80% of the active catalog window; secondary system summaries are counted, same-session retry requires >40% post-compression history growth, and failed summarization drops oldest complete groups toward 70% |
 | **Cache stability** | System prompt frozen per `(plansMode, skills)` key — workspace snapshot does not change mid-session |
 | **Cache telemetry** | `cached_tokens` accumulated from usage (defensive field fallbacks); `cache: N%` segment in the status bar/footer; hit rate in `/cost` |
+| **Reasoning stream integrity** | `src/agent/reasoning.js` reduces cumulative/overlapping snapshots to unseen suffixes; `src/agent/agent.js` renders one readable reasoning channel while preserving structured details |
+| **Provider web search** | `src/api/provider-tools.js` adds the bounded OpenRouter server tool only when `webSearch` is explicitly enabled; `/websearch` and `--web-search` expose the opt-in |
 
 ## Where It Lives in the Code
 
@@ -47,6 +54,8 @@ flowchart LR
 | API call + retry | `src/api/client.js` (`reasoning_effort` gate, `getRetryDelayMs`) |
 | Agent loop + context policy | `src/agent/agent.js`, `src/agent/session-stats.js`, `src/agent/compression.js` |
 | Rendering | `src/ui/status-bar.js`, `src/ui/prompt-input.js`, `src/cli.js` (`/cost`) |
+| Stream/input reliability | `src/agent/reasoning.js`, `src/agent/agent.js`, `src/ui/thinking.js`, `src/ui/prompt-input.js` |
+| Provider-owned tools | `src/api/provider-tools.js`, `src/api/client.js`, `src/commands/handlers.js` |
 
 ## Known Limitations
 
