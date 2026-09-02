@@ -87,7 +87,7 @@ export async function runStartupRecovery({ sessionsDir } = {}) {
 
   for (const entry of entries) {
     if (!entry.endsWith('.json')) continue;
-    const filePath = path.join(sessionsDir, entry);
+    const filePath = path.join(scanDir, entry);
     const sessionId = entry.replace(/\.json$/, '');
     report.sessionsScanned++;
     try {
