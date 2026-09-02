@@ -1,0 +1,158 @@
+---
+import { encodeBaudot, pulsePattern, bitString } from '~/lib/baudot.js';
+
+const seed = encodeBaudot('Hello, émile.');
+const initial = seed.frames.slice(0, 12);
+---
+<div class="border border-ink-line bg-paper-warm p-6 sm:p-8" data-encoder>
+  <div class="flex flex-wrap items-baseline justify-between gap-4 mb-6">
+    <div>
+      <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-1">live · 5-bit</div>
+      <h3 class="font-display text-2xl text-ink">baudot encoder</h3>
+    </div>
+    <div class="flex items-center gap-4 text-xs text-ink uppercase tracking-signal">
+      <span><span class="text-ink-muted">baud</span> <span data-stat="baud" class="text-ink">50</span></span>
+      <span><span class="text-ink-muted">frames</span> <span data-stat="frames" class="text-ink">{seed.frames.length}</span></span>
+      <span><span class="text-ink-muted">bits</span> <span data-stat="bits" class="text-ink">{seed.bits}</span></span>
+    </div>
+  </div>
+
+  <label class="block">
+    <span class="block text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">type · a · message</span>
+    <input
+      type="text"
+      value="Hello, emile."
+      data-input
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      class="w-full bg-paper border border-ink-line px-4 py-3 font-mono text-lg text-ink placeholder:text-ink-muted focus:outline-none focus:border-copper"
+      placeholder="Type something…"
+    />
+  </label>
+
+  <div class="mt-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
+    <div>
+      <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">frames · on · wire</div>
+      <div data-tape class="space-y-1.5 font-mono text-sm max-h-72 overflow-y-auto pr-2" aria-live="polite"></div>
+    </div>
+    <div>
+      <div class="text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">roundtrip</div>
+      <div data-roundtrip class="border border-ink-line bg-paper px-4 py-3 font-mono text-sm min-h-[3rem] text-ink whitespace-pre-wrap break-words"></div>
+      <div class="mt-4 text-ink-muted uppercase tracking-signal text-[0.6875rem] mb-2">stats</div>
+      <dl class="text-xs space-y-1 font-mono">
+        <div class="flex justify-between"><dt class="text-ink-muted">letters</dt><dd data-stat="letters" class="text-ink">{seed.letters}</dd></div>
+        <div class="flex justify-between"><dt class="text-ink-muted">figures</dt><dd data-stat="figures" class="text-ink">{seed.figures}</dd></div>
+        <div class="flex justify-between"><dt class="text-ink-muted">shifts</dt><dd data-stat="shifts" class="text-ink">{seed.shifts}</dd></div>
+        <div class="flex justify-between"><dt class="text-ink-muted">ratio</dt><dd data-stat="ratio" class="text-ink">{Math.round((seed.bits / (seed.frames.length || 1)) * 100) / 100} b/f</dd></div>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (() => {
+    // The encoder runs client-side from the same logic used in /install's
+    // previews. Inline so the page is interactive without bundling a runtime.
+
+    const LTRS = {
+      A: 0b11000, B: 0b10011, C: 0b01110, D: 0b10010, E: 0b10000,
+      F: 0b10110, G: 0b01011, H: 0b00101, I: 0b01100, J: 0b11010,
+      K: 0b11110, L: 0b01001, M: 0b00111, N: 0b00110, O: 0b00011,
+      P: 0b01101, Q: 0b11101, R: 0b01010, S: 0b10100, T: 0b00001,
+      U: 0b11100, V: 0b01111, W: 0b11001, X: 0b10111, Y: 0b10101,
+      Z: 0b10001
+    };
+    const FIGS = {
+      '1': 0b11000, '2': 0b10011, '3': 0b01110, '4': 0b10010, '5': 0b10000,
+      '6': 0b10110, '7': 0b01011, '8': 0b00101, '9': 0b01100, '0': 0b11010,
+      '\n': 0b01010, '\r': 0b00010, ' ': 0b00100
+    };
+    const SHIFT = { LTRS: 0b11111, FIGS: 0b11011, NULL: 0b00000 };
+
+    const pulse = (code) =>
+      Array.from({ length: 5 }, (_, i) => ((code >> (4 - i)) & 1 ? '◼' : '◻')).join('');
+    const bits = (code) =>
+      Array.from({ length: 5 }, (_, i) => ((code >> (4 - i)) & 1)).join('');
+
+    function encode(text) {
+      const frames = [];
+      let mode = 'LTRS';
+      let rt = '';
+      for (const ch of text) {
+        if (ch === ' ') {
+          if (mode !== 'FIGS') { frames.push({ code: SHIFT.FIGS, sym: 'FIGS', mode, ctl: true }); mode = 'FIGS'; }
+          frames.push({ code: FIGS[' '], sym: ' ', mode, ctl: false });
+          rt += ' ';
+          continue;
+        }
+        const upper = ch.toUpperCase();
+        if (LTRS[upper]) {
+          if (mode !== 'LTRS') { frames.push({ code: SHIFT.LTRS, sym: 'LTRS', mode, ctl: true }); mode = 'LTRS'; }
+          frames.push({ code: LTRS[upper], sym: upper, mode, ctl: false });
+          rt += upper;
+        } else if (FIGS[ch]) {
+          if (mode !== 'FIGS') { frames.push({ code: SHIFT.FIGS, sym: 'FIGS', mode, ctl: true }); mode = 'FIGS'; }
+          frames.push({ code: FIGS[ch], sym: ch, mode, ctl: false });
+          rt += ch;
+        } else {
+          frames.push({ code: SHIFT.NULL, sym: '∅', mode, ctl: true });
+        }
+      }
+      return {
+        frames,
+        bits: frames.length * 5,
+        letters: frames.filter(f => !f.ctl && f.mode === 'LTRS').length,
+        figures: frames.filter(f => !f.ctl && f.mode === 'FIGS').length,
+        shifts: frames.filter(f => f.ctl).length,
+        roundtrip: rt
+      };
+    }
+
+    function render(root, text) {
+      const data = encode(text);
+      const tape = root.querySelector('[data-tape]');
+      const roundtrip = root.querySelector('[data-roundtrip]');
+
+      tape.innerHTML = '';
+      for (const f of data.frames) {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-3 group';
+        const pulseEl = document.createElement('span');
+        pulseEl.className = f.ctl ? 'text-copper tracking-widest' : 'text-ink';
+        pulseEl.textContent = pulse(f.code);
+        const bitEl = document.createElement('span');
+        bitEl.className = 'text-ink-muted text-[0.6875rem] tracking-signal';
+        bitEl.textContent = bits(f.code);
+        const modeEl = document.createElement('span');
+        modeEl.className = 'text-ink-muted text-[0.6875rem] tracking-signal w-12';
+        modeEl.textContent = f.mode;
+        const symEl = document.createElement('span');
+        symEl.className = f.ctl ? 'text-copper-deep text-xs' : 'text-ink-muted text-xs';
+        symEl.textContent = f.ctl ? '◦ ' + f.sym : '"' + f.sym + '"';
+        row.append(pulseEl, bitEl, modeEl, symEl);
+        tape.appendChild(row);
+      }
+
+      roundtrip.textContent = data.roundtrip || '';
+
+      root.querySelector('[data-stat="frames"]').textContent = data.frames.length;
+      root.querySelector('[data-stat="bits"]').textContent = data.bits;
+      root.querySelector('[data-stat="letters"]').textContent = data.letters;
+      root.querySelector('[data-stat="figures"]').textContent = data.figures;
+      root.querySelector('[data-stat="shifts"]').textContent = data.shifts;
+      root.querySelector('[data-stat="ratio"]').textContent =
+        (data.frames.length ? Math.round((data.bits / data.frames.length) * 100) / 100 : 0) + ' b/f';
+    }
+
+    document.querySelectorAll('[data-encoder]').forEach((root) => {
+      const input = root.querySelector('[data-input]');
+      const initial = input.value;
+      render(root, initial);
+      input.addEventListener('input', (e) => {
+        render(root, e.target.value);
+      });
+    });
+  })();
+</script>

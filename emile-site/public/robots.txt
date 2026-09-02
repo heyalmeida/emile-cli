@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://emile.dev/sitemap-index.xml
