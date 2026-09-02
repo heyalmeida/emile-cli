@@ -63,10 +63,9 @@ export function clearActiveTool() {
 /** Returns a promise that resolves when the next tool starts, or the already-active one. */
 export function waitForActiveTool() {
   if (currentToolController) return Promise.resolve(currentToolController);
-  if (!currentToolWaiter) {
-    currentToolWaiter = new Promise(r => { resolveToolWaiter = r; });
-  }
-  return currentToolWaiter;
+  // No tool in flight and no pending waiter — resolve immediately with null
+  // so drain-tools does not hang waiting for a tool that will never start.
+  return Promise.resolve(null);
 }
 
 /** Module-level flag; set by phase 1, checked by cli.js before starting a new turn. */

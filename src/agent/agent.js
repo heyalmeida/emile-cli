@@ -24,6 +24,7 @@ import { createSpinner, RESPONSE_WAITING_LABEL } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
 import { compileMentionAttachments } from '../mentions.js';
+import { setActiveTool, clearActiveTool } from '../lifecycle/index.js';
 
 // Opt-in diagnostic: log every reasoning/content delta that arrives
 // from the model so we can confirm whether the provider is actually

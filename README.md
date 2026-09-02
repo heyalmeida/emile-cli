@@ -328,8 +328,8 @@ User input
 
 This project follows formal Software Engineering practices (documentation as the single source of truth, Spec-Driven Development, feature registry and disciplined Git workflow):
 
-- **[`.clinerules`](./.clinerules)** / [`AGENTS.md`](./AGENTS.md) — mandatory AI-agent rules loaded every session: required context reading (cache-conscious), doc synchronization after every change, SDD adherence, security gates and the **feature-branch Git workflow**.
-- **Git workflow** — `development` is the integration parent for active domain branches such as `feat/ux-ui`, `feat/mcp-system`, `feat/system-prompt` and `feat/cli-commands`; documentation has its own `docs/documentation` branch, and commits stage **only the files of the current scope** — never `git add .`. See [`.clinerules` Rule 8](./.clinerules) and [CONTRIBUTING.md](./CONTRIBUTING.md).
+- **[`.clinerules`](./.clinerules)** / [`AGENTS.md`](./AGENTS.md) — mandatory AI-agent rules loaded every session: required context reading (cache-conscious), doc synchronization after every change, SDD adherence, security gates and the **single-branch Git workflow**.
+- **Git workflow** — ongoing code and documentation work stays on `development`; commits stage **only the files of the current scope** — never `git add .`. The workflow does not switch branches, create worktrees, merge, rebase or pull as a routine task step. See [`.clinerules` Rule 8](./.clinerules) and [CONTRIBUTING.md](./CONTRIBUTING.md).
 - **[`specs/`](./specs/)** — **Spec-Driven Development (SDD)**: every implementation starts from a spec (`spec.md` → `plan.md` → `tasks.md`), with standardized templates and a traceable lifecycle. See the [full workflow](./specs/README.md).
 - **[`features/`](./features/)** — catalog of delivered features, each traceable to its source spec. See the [index](./features/README.md).
 - **ADRs** — architecture decisions documented in [`docs/adr/`](./docs/adr/).
