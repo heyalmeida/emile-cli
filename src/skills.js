@@ -73,6 +73,19 @@ export function loadAllSkills() {
   return loadedSkills;
 }
 
+/** Read-only metadata used by `/skills`; skill bodies are never rendered. */
+export function listSkills() {
+  return loadAllSkills()
+    .map(skill => ({
+      name: skill.name,
+      description: skill.description,
+      keywords: Array.isArray(skill.frontmatter?.keywords)
+        ? skill.frontmatter.keywords.map(value => String(value)).filter(Boolean)
+        : [],
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /**
  * Auto-detects relevant skills by looking at workspace package.json and project files
  * @returns {string[]} List of auto-detected skill names
