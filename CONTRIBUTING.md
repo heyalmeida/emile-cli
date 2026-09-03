@@ -71,7 +71,7 @@ npm install
 node bin/emile.js --verbose   # run from source with debug output
 ```
 
-**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or `.emile/config.json` (never commit that file).
+**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or user-global `~/.emile/config.json`. Workspace runtime data stays in the gitignored `.emile/` directory.
 
 ---
 
@@ -124,5 +124,5 @@ A contribution is only ready when:
 - [ ] Affected documentation was synced (Rule 2 of `.clinerules`)
 - [ ] New/changed features have a `features/` registry entry (Rule 7)
 - [ ] `CHANGELOG.md` received the entry
-- [ ] Code was committed on its product branch and documentation was committed separately on `docs/documentation` (Rule 8)
+- [ ] Code and documentation were committed directly on `development` in coherent, explicitly staged units (Rule 8)
 - [ ] No Critical/High finding was left untreated

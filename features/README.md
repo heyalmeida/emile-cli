@@ -44,5 +44,6 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 | [Skills System](./skills-system.md) | active | `feat/skills-system` | `specs/2026-08-30-skill-relevance` |
 | [Open-source Quality Gates](./open-source-readiness.md) | active | `chore/quality-gates` | `specs/2026-08-30-open-source-readiness` |
 
-All documentation, including this registry and the source specs, is committed
-on `docs/documentation` rather than on the code branch listed above.
+All implementation and documentation work is committed directly on
+`development`; the code-branch column records the feature's historical delivery
+branch and is not a current workflow instruction.

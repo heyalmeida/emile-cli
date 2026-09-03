@@ -47,7 +47,7 @@ flowchart LR
 | **CLI flags** | `--verbose` (phase timing) |
 | **Slash commands** | `/undo`, `/undo N`, `/delete`, `/sessions` |
 | **Tools** | Existing built-in tools; no new tool surface |
-| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); `.emile/config.json` mode `0600`; session cwd persisted per session |
+| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); user-global `~/.emile/config.json` mode `0600`; session cwd persisted per session |
 | **Applicable security gates** | `resolveSafePath` (undo files confined to `.emile/undo/`); existing safe mode, dry-run, whitelist unchanged; `resolveApiKey` enforces provider-specific env vars only |
 
 ## Where It Lives in the Code
@@ -78,3 +78,4 @@ flowchart LR
 | 2026-09-02 | Undo stack persisted under `.emile/undo/<sessionId>/` and rehydrated on boot; cap at 50 enforced | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | Per-provider `resolveApiKey` (no cross-provider fallback); config file mode `0600` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | `package.json` engines field `node >=18` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
+| 2026-09-02 | Moved the protected provider configuration to user-global `~/.emile/config.json` | `76e3f96` / CHANGELOG |

@@ -75,6 +75,7 @@ Goal: reliability in real-world scenarios.
 - [x] `readFile` cap for paid models (`IMPROVEMENTS.md` § 3.4) — delivered in `specs/2026-08-25-model-system`
 - [x] Multi-level `/undo` (with an undo-stack limit — `IMPROVEMENTS.md` § 1.5)
 - [x] Single model table (`src/models.js`) replacing hardcoded prices/context (`IMPROVEMENTS.md` § 3.2) — delivered in `specs/2026-08-25-model-system`
+- [x] User-global provider configuration and credentials in `~/.emile/config.json`, while project runtime state remains workspace-scoped
 - [ ] Guaranteed graceful shutdown (MCP, readline, session) on every exit path
 - [ ] Formal security audit of the tool handlers (full threat model, including `IMPROVEMENTS.md` § 2: `0600` permissions on the key file and expanded whitelist)
 
@@ -94,6 +95,5 @@ Goal: installation with one command.
 
 ## Backlog (no phase yet)
 
-- Global/shared config installation across workspaces
 - Additional MCP transport (SSE/HTTP)
 - New providers on demand

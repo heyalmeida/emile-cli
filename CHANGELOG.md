@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **Global provider configuration:** provider credentials, model, effort, web-search toggle and loop cap now persist in `~/.emile/config.json` with mode `0600`, while sessions, undo, web-provider settings and MCP consent remain scoped to each workspace's `.emile/` directory.
+- **Current SDD workflow templates:** new specs, tasks and documentation closeouts now explicitly stay on `development`, matching the mandatory single-branch workflow.
 - **Single-development-branch workflow:** SDD implementation, documentation and closeout commits now stay directly on `development`. Routine work must not switch branches, create worktrees, pull, merge, rebase, reset, clean or stash; those operations require an explicit user request.
 
 ### Fixed

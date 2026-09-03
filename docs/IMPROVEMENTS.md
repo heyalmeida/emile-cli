@@ -136,12 +136,13 @@ if (undoStack.length > MAX_UNDO_ENTRIES) undoStack.shift();
 
 ### 2.1 API key stored in plain text
 
-> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `saveUserConfig` writes `.emile/config.json` with `mode: 0600`; an existing file is `chmod`'d on the next save; if the filesystem rejects the permission (e.g. FAT), a `--verbose` warning is logged and the write continues.
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle` introduced mode `0600`; commit `76e3f96` subsequently moved the same protected file to user-global `~/.emile/config.json`, so credentials persist across workspaces. An existing file is `chmod`'d on the next save; unsupported permission changes degrade without blocking the write.
 
 **File:** `src/config.js` → `saveUserConfig`
 
-The key sits in `.emile/config.json`, readable by any process/user on the
-machine, and an accidental commit would leak credentials.
+The key originally sat in workspace-local `.emile/config.json`, where a weak
+process umask or accidental commit could leak credentials. It now lives in
+user-global `~/.emile/config.json` with mode `0600`.
 
 **Minimum actions:**
 
@@ -261,7 +262,6 @@ with explicit truncation notice and an instruction for the model to use
 | 10 | 3.4 — `readFile` cap for paid models | Low | Medium |
 | 11 | 2.2 — Expanded whitelist | Low | Low |
 
-> Each item should become its own small spec in `specs/` and be implemented on
-> its own feature branch (e.g., `fix/editfile-ambiguous-match`,
-> `feat/retry-after`, `chore/engines-field`) per the Git workflow in
-> [`.clinerules`](../.clinerules) (Rule 8).
+> Each item should become its own small spec in `specs/` and be implemented as
+> a coherent, explicitly staged unit directly on `development`, per the Git
+> workflow in [`.clinerules`](../.clinerules) (Rule 8).

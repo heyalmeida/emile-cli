@@ -32,7 +32,7 @@ free-model fallback and iteration limits protect the turn.
 | **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--web-search` |
 | **Slash commands** | `/thinking`, `/cost` |
 | **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
-| **Configuration** | Provider/model/effort in `.emile/config.json` and environment variables |
+| **Configuration** | Provider/model/effort in user-global `~/.emile/config.json` and environment variables |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop; the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
@@ -58,3 +58,4 @@ OpenRouter-specific and may incur provider charges, including on free routes.
 | 2026-08-31 | Added provider-gated OpenRouter web search to the effective tool set | `specs/2026-08-31-web-search-tool-reliability` |
 | 2026-09-01 | Added graceful turn interrupt/queue and serialized stdin ownership across the persistent prompt, active-turn input and `/switch`; restored Tab completion and post-picker typing | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
 | 2026-09-02 | Replaced the compact active row with the shared full prompt frame; preserved drafts and the real caret across spinner/reasoning/output writes | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
+| 2026-09-02 | Moved provider/model/effort configuration to user-global `~/.emile/config.json` so it follows the user across workspaces | `76e3f96` / CHANGELOG |

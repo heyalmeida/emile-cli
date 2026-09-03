@@ -124,7 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `.emile/config.json` |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `~/.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -240,7 +240,7 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 
 ### Config file
 
-Settings are persisted in `.emile/config.json` (auto-created on first run via the connect wizard). This takes precedence over environment variables. The `.emile/` and `.agent/` directories are gitignored by default.
+User-wide settings and credentials are persisted in `~/.emile/config.json` (auto-created on first run via the connect wizard), so provider setup follows the user across workspaces. This takes precedence over environment variables. Workspace-scoped sessions, undo state and web configuration remain under the project's gitignored `.emile/` directory; `.agent/` is also gitignored by default.
 
 ### Project rules
 
