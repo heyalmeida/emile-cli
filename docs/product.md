@@ -36,6 +36,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 - **US-12:** As a dev with several terminal tabs, I want Emile's tab title to show its current activity, so I can tell waiting and active sessions apart without opening each tab.
 - **US-13:** As a dev using a large-context model, I want history compression to respect that model's real window, so useful context is not summarized prematurely.
 - **US-14:** As a dev researching a current implementation or design, I want to opt into provider web search when supported, so the agent can use fresh external information while I remain aware of search costs.
+- **US-15:** As a dev working across projects and providers, I want Emile to remember my confirmed preferences, workflow and recurring corrections globally, while letting me inspect, pause and forget them.
 
 ---
 
@@ -65,6 +66,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-18** | Dynamic terminal title driven by real runtime states, with sanitized/allowlisted activity labels and no prompt, command or query leakage | ✅ |
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
 | **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
+| **RF-21** | Native user-global agent memory with conservative formation, bounded retrieval, conflict handling, crash-safe local storage and explicit privacy/deletion controls | 📝 Approved design ([spec](../specs/2026-09-03-global-agent-memory/spec.md)) |
 
 ---
 

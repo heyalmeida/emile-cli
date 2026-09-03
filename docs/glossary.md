@@ -17,6 +17,9 @@
 | **Plans mode** | Mode (`-p`) where the agent drafts an implementation plan and waits for approval before writing any file. |
 | **Skill** | Knowledge module in YAML frontmatter + markdown (`.agent/skills/`) injected into the system prompt when the user's prompt matches its keywords. |
 | **Project rules** | Optional always-on preferences authored by the workspace maintainer in `.emilerules`, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks; inspected read-only via `/rules`. |
+| **Global agent memory** | Planned provider-independent state under `~/.emile/memory/v1/` for confirmed user preferences, workflow and recurring corrections across workspaces; current user intent and project rules outrank it. |
+| **Memory candidate** | Planned, non-active memory proposal that passed source/privacy validation but still needs explicit acceptance or corroboration in a distinct session. |
+| **Memory retrieval** | Planned deterministic selection of a bounded, diverse set of active global memories for one user turn without changing the frozen system-prompt prefix. |
 | **Keyword matching** | The conditional skill-activation mechanism (`src/skills.js`) so context isn't bloated on every message. |
 | **MCP** | Model Context Protocol — protocol exposing external tools to the agent. STDIO, SSE and streamable HTTP transports are configured in `mcp.json`; tools are namespaced `mcp__<server>__<tool>`. |
 | **MCP consent** | One-time per-workspace approval required before a new configured MCP server is connected; only the server name is persisted in `.emile/mcp-consent.json`. |

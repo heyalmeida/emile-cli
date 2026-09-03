@@ -99,6 +99,7 @@ flowchart LR
 | [ADR-0001](adr/0001-tech-stack-choice.md) | Stack: Node.js + pure ES modules, no build step, `openai` SDK as client, commander + @clack/prompts |
 | [ADR-0002](adr/0002-quality-gates.md) | Native `node:test`, ESLint and CI quality gates |
 | [ADR-0003](adr/0003-active-prompt-output-arbitration.md) | Temporary stdout arbitration keeps the full active prompt and real caret stable during streamed output |
+| [ADR-0004](adr/0004-global-agent-memory.md) | Approved native user-global memory boundary, conservative formation, crash-safe storage and bounded dynamic retrieval; implementation pending |
 
 > Every new architectural decision requires an ADR (Rule 2 of `.clinerules`).
 

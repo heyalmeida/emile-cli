@@ -32,6 +32,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 | **MCP** | Malicious external server exposing tools with colliding names | `mcp__<server>__<tool>` namespacing; server failure degrades without crashing |
 | **API failures** | Raw provider responses may expose implementation details or sensitive error text | Common statuses are mapped to bounded actionable messages; original error objects remain internal for retry/fallback |
 | **Sessions** | History with sensitive content or unbounded tool output saved to disk | Sessions stay in `.emile/` (gitignored); reasoning is omitted, old tool results are bounded, and cleanup accepts only positive ages |
+| **Global agent memory (planned)** | A false, malicious, stale or sensitive record could influence every workspace; corrupt/concurrent writes could lose personal state | `ask` default, exact current-user evidence, two-session auto corroboration, conflict review, dedicated root confinement, bounded snapshot/WAL recovery, no raw transcripts/secrets and complete application-level forget — see ADR-0004 |
 | **Web search** | External results may be stale, malicious or unexpectedly billable | Search is explicit opt-in, provider-gated to OpenRouter, bounded to 5/15 results, and the UI warns that provider charges may apply; results remain untrusted model input |
 | **Session cwd** | A command could persist a directory outside the workspace | Shell-reported and persisted cwd values pass through `normalizeWorkspaceCwd`/`resolveSafePath`; invalid or external values fall back to the workspace root |
 | **Supply chain** | Malicious dependency | Justification + official origin + `npm audit` + lockfile for every new dependency |
@@ -68,6 +69,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 | **UI/TUI** | Verification at 60/80/120 columns; no ANSI leakage; `Esc`/`Ctrl+C` don't corrupt the readline; [design system](visual-identity.md#6-visual-review-checklist) checklist |
 | **MCP** | Missing/invalid server degrades with a warning and the CLI continues; first connection is fail-closed without interactive approval; remote URLs are limited to HTTP(S), header interpolation fails closed, reconnects are bounded, and nonexistent MCP tools return an error to the model |
 | **Provider web search** | Disabled by default; OpenRouter-only schema; bounded search parameters; no search tool is sent to other providers; cost warning and provider error classification are covered |
+| **Global agent memory (planned, high)** | Path traversal/symlink/special-file rejection; torn-WAL/corrupt-snapshot recovery; live/stale/stolen-lock concurrency; source binding; secret/identifier denial; instruction-priority regression; off/pause/dry-run; bounded retrieval; full managed-copy purge; two-workspace compatibility |
 | **New dependency** | Justification + official origin + `npm audit` recorded in `tasks.md` |
 
 ---
