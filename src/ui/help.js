@@ -1,48 +1,73 @@
 // help.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
-import { config } from '../config.js';
-import { getModelInfo } from '../models.js';
-import readline from 'node:readline';
+import { C, BOX_INDENT, getW, stripAnsi, wrapText, boxTopOpen, boxBottomOpen } from './theme.js';
+import { buildHelpTable } from '../commands/registry.js';
 
-// ──────────────────────────────────────────────
-//  Help Box
-// ──────────────────────────────────────────────
+const COL_ROOT = 14;
+const COL_SUB = 14;
+const COL_ARGS = 16;
+const COL_DESC_MIN = 24;
+
+function width() { return Math.min(getW(), 80); }
+
+function visibleWidth(s) { return stripAnsi(s).length; }
+
+function padRight(styled, width) {
+  const v = visibleWidth(styled);
+  if (v >= width) return styled;
+  return styled + ' '.repeat(width - v);
+}
+
+function truncate(styled, max) {
+  if (visibleWidth(styled) <= max) return styled;
+  const plain = stripAnsi(styled);
+  return plain.slice(0, Math.max(0, max - 1)) + '…';
+}
 
 export function printHelp() {
-  const boxW = Math.min(getW(), 56);
-
-  const cmds = [
-    ['/connect',  'Configure API provider and key'],
-    ['/model',    'Select the active AI model'],
-    ['/switch',   'Switch to a previous session'],
-    ['/new',      'Start a new clean session'],
-    ['/rewind',   'Rewind & edit your last message'],
-    ['/undo',     'Revert the last file modification'],
-    ['/cost',     'Show token usage and costs'],
-    ['/export',   'Export session as Markdown'],
-    ['/rules',    'Inspect user-authored project rules'],
-    ['/skills',   'Search available workspace skills (`/skill` also works)'],
-    ['/memory',   'Inspect and control global memory'],
-    ['/remember', 'Store an explicit global preference'],
-    ['/forget',   'Forget global memory by ID or query'],
-    ['/thinking', 'Toggle reasoning visibility'],
-    ['/maxloop',  'Set agent loop iteration cap'],
-    ['/websearch', 'Control native/enhanced web search'],
-    ['/tavily',   'Configure Tavily web search'],
-    ['/firecrawl','Configure Firecrawl rendering'],
-    ['/help',     'Display this help menu'],
-    ['exit',      'Quit the CLI'],
-  ];
-
+  const boxW = width();
+  const descW = Math.max(COL_DESC_MIN, boxW - COL_ROOT - COL_SUB - COL_ARGS - 6);
+  const rows = buildHelpTable();
   console.log();
   process.stdout.write(boxTopOpen('Commands', boxW) + '\n');
 
-  for (const [cmd, desc] of cmds) {
-    const line = `${C.bold(C.accent(cmd.padEnd(13)))} ${C.muted(desc)}`;
-    process.stdout.write(`${BOX_INDENT}${line}\n`);
-  }
+  // Header
+  const header =
+    BOX_INDENT
+    + C.muted(padRight('Command', COL_ROOT))
+    + C.muted(padRight('Subcommand', COL_SUB))
+    + C.muted(padRight('Args', COL_ARGS))
+    + C.muted('Description');
+  process.stdout.write(header + '\n');
+  const sep =
+    BOX_INDENT
+    + C.muted(padRight('─'.repeat(COL_ROOT - 1), COL_ROOT))
+    + C.muted(padRight('─'.repeat(COL_SUB - 1), COL_SUB))
+    + C.muted(padRight('─'.repeat(COL_ARGS - 1), COL_ARGS))
+    + C.muted('─'.repeat(descW));
+  process.stdout.write(sep + '\n');
 
+  let lastRoot = null;
+  for (const row of rows) {
+    const isFirstOfGroup = row.root !== lastRoot;
+    lastRoot = row.root;
+    const rootCell = isFirstOfGroup
+      ? C.bold(C.accent(padRight(row.root, COL_ROOT)))
+      : C.muted(padRight('', COL_ROOT));
+    const subCell = row.sub === '—'
+      ? C.muted(padRight('—', COL_SUB))
+      : C.info(padRight(row.sub, COL_SUB));
+    const argsCell = row.args
+      ? C.warn(padRight(row.args, COL_ARGS))
+      : C.muted(padRight('—', COL_ARGS));
+    const desc = wrapText(row.desc, descW);
+    const descFirst = C.fg(truncate(desc[0] || '', descW));
+    process.stdout.write(BOX_INDENT + rootCell + subCell + argsCell + descFirst + '\n');
+    for (let i = 1; i < desc.length; i += 1) {
+      const indent = ' '.repeat(COL_ROOT + COL_SUB + COL_ARGS);
+      process.stdout.write(BOX_INDENT + indent + C.fg(truncate(desc[i], descW)) + '\n');
+    }
+  }
   process.stdout.write(boxBottomOpen(boxW) + '\n');
   console.log();
 }

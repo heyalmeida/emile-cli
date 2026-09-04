@@ -35,37 +35,17 @@ import { findMentionCandidates } from '../mentions.js';
 export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
 
-const COMMANDS = [
-  { name: '/connect', desc: 'Configure API provider and key' },
-  { name: '/model', desc: 'Select the active AI model' },
-  { name: '/switch', desc: 'Switch to a previous session' },
-  { name: '/sessions', desc: 'List and switch previous sessions' },
-  { name: '/new', desc: 'Start a new clean session' },
-  { name: '/clear', desc: 'Clear the current conversation session' },
-  { name: '/rewind', desc: 'Rewind & edit your last message' },
-  { name: '/undo', desc: 'Revert the last file modification' },
-  { name: '/cost', desc: 'Show session token usage and costs' },
-  { name: '/export', desc: 'Export the current session as Markdown' },
-  { name: '/rules', desc: 'Inspect user-authored project rules' },
-  { name: '/skills', desc: 'Search available workspace skills' },
-  { name: '/skill', desc: 'Search available workspace skills' },
-  { name: '/memory', desc: 'Inspect and control global memory' },
-  { name: '/remember', desc: 'Store an explicit global memory' },
-  { name: '/forget', desc: 'Forget one or more memory records' },
-  { name: '/thinking', desc: 'Toggle expanding/collapsing reasoning output' },
-  { name: '/maxloop', desc: 'Set the agent loop iteration cap' },
-  { name: '/websearch', desc: 'Control native or enhanced web search' },
-  { name: '/tavily', desc: 'Configure Tavily enhanced search' },
-  { name: '/firecrawl', desc: 'Configure Firecrawl page rendering' },
-  { name: '/help', desc: 'Display this help menu' },
-  { name: 'exit', desc: 'Quit the CLI' },
-];
+import { matchCommands as matchRegistryCommands } from '../commands/registry.js';
 
-/** Returns slash commands matching the current prompt draft. */
-export function matchPromptCommands(input = '') {
-  return input.startsWith('/')
-    ? COMMANDS.filter(cmd => cmd.name.startsWith(input))
-    : [];
+/** Returns slash commands matching the current prompt draft, including
+ *  subcommand and argument completers from the command registry.
+ *
+ *  Shape is the same as before: { name, desc, mentionStart? }.
+ *  When the registry suggests an argument value (e.g. a pending memory id),
+ *  `name` is the value and `desc` is a short hint of the argument context.
+ */
+export function matchPromptCommands(input = '', ctx = {}) {
+  return matchRegistryCommands(input, ctx);
 }
 
 function currentMentionFragment(input, cursor) {
@@ -279,6 +259,7 @@ export function persistentPromptInput({
   busy = null,
   onCancel = null,
   onReady = null,
+  ctx = null,
 } = {}) {
   return new Promise((resolve) => {
     if (typeof process.stdin.setRawMode !== 'function' || process.stdin.isTTY === false) {
@@ -312,7 +293,8 @@ export function persistentPromptInput({
     }
 
     function currentMatches() {
-      return matchPromptCommands(input).length ? matchPromptCommands(input) : matchPromptMentions(input, cursor);
+      const cmds = matchPromptCommands(input, ctx || {});
+      return cmds.length ? cmds : matchPromptMentions(input, cursor);
     }
 
     function erasePreviousBlock() {

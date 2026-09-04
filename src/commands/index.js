@@ -65,3 +65,5 @@ export function hasCommand(input) {
 export function listCommands() {
   return [...COMMANDS.keys()];
 }
+
+export { matchCommands, buildHelpTable, listRootCommands } from './registry.js';

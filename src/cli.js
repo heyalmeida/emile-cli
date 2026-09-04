@@ -471,6 +471,7 @@ export async function main() {
       stats: sessionStats,
       sessionId,
       mcpInfo,
+      ctx: { config, memoryRoot },
       onReady: (api) => { promptApi = api; },
       async onSubmit(submitted) {
         const clean = String(submitted || '').trim();
