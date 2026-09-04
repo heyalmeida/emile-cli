@@ -60,6 +60,7 @@ export async function main() {
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
+  const { initializeGlobalMemory, flushGlobalMemory } = await import('./memory/index.js');
 
   // Set runtime configurations
   config.dryRun = !!options.dryRun;
@@ -70,6 +71,16 @@ export async function main() {
   if (Number.isFinite(maxSessionSize) && maxSessionSize > 0) config.maxSessionSize = maxSessionSize;
   const maxLoopIterations = Number(options.maxLoopIterations);
   if (Number.isFinite(maxLoopIterations) && maxLoopIterations > 0) config.maxLoopIterations = maxLoopIterations;
+
+  try {
+    const memory = await initializeGlobalMemory({ dryRun: config.dryRun });
+    if (verbose) {
+      const replay = memory.replayed ? `, replayed ${memory.replayed}` : '';
+      console.log(C.muted(`  [memory] ${memory.state.mode}, ${memory.health}${replay}`));
+    }
+  } catch {
+    if (verbose) console.log(C.warn('  [memory] unavailable; continuing without persistent memory'));
+  }
 
   // Load persisted enhanced-web settings and credentials (.emile/web.json)
   // into the runtime config — without this, keys configured via /tavily or
@@ -146,11 +157,12 @@ export async function main() {
 
   // Wire the lifecycle coordinator after MCP init. The coordinator handles
   // SIGINT/SIGTERM/SIGHUP in order: stop-input → drain-tools →
-  // flush-session → close-mcp → restore-terminal.
+  // flush-session → flush-memory → close-mcp → restore-terminal.
   installShutdownHandlers({
     verbose,
     shutdownMcp,
     flushSync,
+    flushMemory: () => flushGlobalMemory({ dryRun: config.dryRun }),
     markAborted: (id, reason) => markAborted(id),
   });
 
@@ -264,6 +276,7 @@ export async function main() {
       checkpointSession: async (checkpointMessages, metadata) => {
         saveSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
       },
+      memorySessionId: loadedSessionId,
     });
     sessionId = loadedSessionId;
     await finalizeSessionTurn();
@@ -315,6 +328,7 @@ export async function main() {
       messages,
       initialPrompt: promptInput,
       checkpointSession,
+      memorySessionId: sessionId,
     });
 
     if (!sessionSummary) {
@@ -360,6 +374,7 @@ export async function main() {
           initialPrompt,
           control,
           checkpointSession,
+          memorySessionId: sessionId,
         });
       } finally {
         keys.stop();

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { warn } from './ui/log.js';
 import { normalizeWorkspaceCwd } from './tools/security.js';
+import { MEMORY_TOOL_NAMES } from './memory/constants.js';
 
 const historyDir = path.join(config.workspaceDir, '.emile', 'history');
 
@@ -19,12 +20,33 @@ function ensureHistoryDir(directory = historyDir) {
  * session snapshots to reduce size and accidental disclosure.
  */
 export function preparePersistedMessages(messages = []) {
+  const memoryCallIds = new Set();
+  for (const message of messages) {
+    for (const toolCall of message?.tool_calls || []) {
+      if (MEMORY_TOOL_NAMES.has(toolCall?.function?.name)) memoryCallIds.add(toolCall.id);
+    }
+  }
   return messages.map(message => {
     if (!message || typeof message !== 'object') return message;
     const persisted = { ...message };
     delete persisted.reasoning_content;
+    if (Array.isArray(message.tool_calls)) {
+      persisted.tool_calls = message.tool_calls.map(toolCall => {
+        if (!MEMORY_TOOL_NAMES.has(toolCall?.function?.name)) return { ...toolCall, function: { ...toolCall.function } };
+        return { ...toolCall, function: { ...toolCall.function, arguments: '{"omitted":true}' } };
+      });
+    }
+    if (persisted.role === 'tool' && memoryCallIds.has(persisted.tool_call_id)) {
+      persisted.content = '[global memory tool result omitted from session storage]';
+    }
     return persisted;
   });
+}
+
+function preparePersistedToolCalls(toolCalls = []) {
+  return toolCalls.map(toolCall => MEMORY_TOOL_NAMES.has(toolCall?.function?.name)
+    ? { ...toolCall, function: { ...toolCall.function, arguments: '{"omitted":true}' } }
+    : toolCall);
 }
 
 /** Trims oldest tool outputs in a copy until the persisted payload fits. */
@@ -70,7 +92,7 @@ export function saveSession(sessionId, summary, messages, metadata = {}) {
   };
 
   if (status === 'tool_pending' && Array.isArray(metadata.pendingToolCalls)) {
-    data.pendingToolCalls = metadata.pendingToolCalls;
+    data.pendingToolCalls = preparePersistedToolCalls(metadata.pendingToolCalls);
   }
 
   // If file already exists, preserve original createdAt

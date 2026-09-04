@@ -19,9 +19,20 @@ const pendingTouches = new Map();
 
 function touchKey(options) { return options.root || 'default'; }
 function runtimeOptions(options = {}) { return { ...options, paused }; }
+function disabledResult(options, snapshot = {}) {
+  return {
+    ...snapshot,
+    root: snapshot.root || options.root,
+    value: { status: 'disabled' },
+    changed: false,
+    simulated: options.dryRun === true,
+    paused,
+  };
+}
 
 export function setMemoryPaused(value) {
   paused = value === true;
+  if (paused) pendingTouches.clear();
   return paused;
 }
 
@@ -39,13 +50,14 @@ export function getGlobalMemoryStatus(options = {}) {
 }
 
 export async function getGlobalMemoryContext(query, options = {}) {
+  if (paused) return { records: [], text: '', estimatedTokens: 0, paused: true };
   const snapshot = readMemoryState(options);
-  if (paused || snapshot.state.mode === 'off' || !query) {
+  if (snapshot.state.mode === 'off' || !query) {
     return { ...snapshot, records: [], text: '', estimatedTokens: 0, paused };
   }
   const selected = retrieveMemories(snapshot.state, query);
   const fitted = fitMemoryContext(selected.records, MEMORY_CONTEXT_TOKENS);
-  if (fitted.records.length > 0) {
+  if (fitted.records.length > 0 && !options.dryRun) {
     const key = touchKey(options);
     const ids = pendingTouches.get(key) || new Set();
     for (const record of fitted.records) ids.add(record.id);
@@ -55,15 +67,20 @@ export async function getGlobalMemoryContext(query, options = {}) {
 }
 
 export function recallGlobalMemories(query, options = {}) {
+  if (paused) return { records: [], estimatedTokens: 0, paused: true };
   const snapshot = readMemoryState(options);
-  if (paused || snapshot.state.mode === 'off') return { ...snapshot, records: [], estimatedTokens: 0, paused };
+  if (snapshot.state.mode === 'off') return { ...snapshot, records: [], estimatedTokens: 0, paused };
   return { ...snapshot, ...retrieveMemories(snapshot.state, query), paused };
 }
 
 export async function flushGlobalMemory(options = {}) {
   const key = touchKey(options);
   const ids = pendingTouches.get(key);
-  if (!ids?.size || options.dryRun) return { changed: false };
+  if (!ids?.size) return { changed: false };
+  if (paused || options.dryRun) {
+    pendingTouches.delete(key);
+    return { changed: false };
+  }
   pendingTouches.delete(key);
   try {
     return await mutateMemoryState(draft => {
@@ -82,8 +99,18 @@ export async function flushGlobalMemory(options = {}) {
   }
 }
 
-export async function rememberGlobalMemory(text, options = {}) { return rememberMemory(text, runtimeOptions(options)); }
-export async function proposeGlobalMemory(proposal, options = {}) { return proposeMemory(proposal, runtimeOptions(options)); }
+export async function rememberGlobalMemory(text, options = {}) {
+  if (paused) return disabledResult(options);
+  const snapshot = readMemoryState(options);
+  if (snapshot.state.mode === 'off') return disabledResult(options, snapshot);
+  return rememberMemory(text, runtimeOptions(options));
+}
+export async function proposeGlobalMemory(proposal, options = {}) {
+  if (paused) return disabledResult(options);
+  const snapshot = readMemoryState(options);
+  if (snapshot.state.mode === 'off') return disabledResult(options, snapshot);
+  return proposeMemory(proposal, runtimeOptions(options));
+}
 export async function setGlobalMemoryMode(mode, options = {}) {
   const result = await setMemoryMode(mode, options);
   if (mode === 'off') pendingTouches.clear();

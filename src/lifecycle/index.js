@@ -12,6 +12,7 @@
 //     verbose: !!options.verbose,
 //     shutdownMcp,   // from the dynamic import of mcp.js
 //     flushSync,    // from history.js
+//     flushMemory,  // from memory/index.js
 //     markAborted,  // from history.js
 //   });
 //
@@ -23,6 +24,7 @@ const PHASES = [
   import('./stop-input.js').then(m => m.phase()),
   import('./drain-tools.js').then(m => m.phase()),
   import('./flush-session.js').then(m => m.phase()),
+  import('./flush-memory.js').then(m => m.phase()),
   import('./close-mcp.js').then(m => m.phase()),
   import('./restore-terminal.js').then(m => m.phase()),
 ];
@@ -46,9 +48,9 @@ function guard() {
  * Wire all shutdown handlers (SIGINT, SIGTERM, SIGHUP) and inject
  * the prompt shutdown function so phase 1 can call it.
  *
- * @param {{ verbose: boolean, shutdownMcp: () => Promise<void>, flushSync: () => void, markAborted: (id: string, reason: string) => void }} opts
+ * @param {{ verbose: boolean, shutdownMcp: () => Promise<void>, flushSync: () => void, flushMemory?: () => Promise<object>, markAborted: (id: string, reason: string) => void }} opts
  */
-export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markAborted }) {
+export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, flushMemory, markAborted }) {
   // Phase 1 needs to call the prompt shutdown.
   setPromptShutdown(() => {
     // The actual shutdown is deferred: the prompt handles its own cleanup
@@ -59,7 +61,7 @@ export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markA
     if (guard()) return;
 
     const start = Date.now();
-    const ctx = { verbose, shutdownMcp, flushSync, markAborted };
+    const ctx = { verbose, shutdownMcp, flushSync, flushMemory, markAborted };
 
     for (const phasePromise of PHASES) {
       const phase = await phasePromise;

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { MEMORY_FILES } from './constants.js';
-import { inspectMemoryEntry, resolveMemoryPath } from './path.js';
+import { readRegularMemoryFile, resolveMemoryPath } from './path.js';
 
 const RETRIES = 8;
 const RETRY_MS = 25;
@@ -21,8 +21,7 @@ function processIsAlive(pid) {
 }
 
 function readLock(lockPath) {
-  inspectMemoryEntry(lockPath, { allowMissing: false, maxBytes: 2048 });
-  const parsed = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+  const parsed = JSON.parse(readRegularMemoryFile(lockPath, { maxBytes: 2048 }));
   if (!parsed || typeof parsed.token !== 'string' || !Number.isFinite(parsed.createdAt)) {
     throw new Error('Memory lock is malformed.');
   }

@@ -18,6 +18,7 @@ import {
   handleRules,
   handleSkills,
 } from './handlers.js';
+import { handleForget, handleMemory, handleRemember } from './memory.js';
 
 const COMMANDS = new Map([
   ['/connect', handleConnect],
@@ -39,6 +40,9 @@ const COMMANDS = new Map([
   ['/rules', handleRules],
   ['/skills', handleSkills],
   ['/skill', handleSkills],
+  ['/memory', handleMemory],
+  ['/remember', handleRemember],
+  ['/forget', handleForget],
 ]);
 
 /**

@@ -25,6 +25,20 @@ test('persisted message projection removes reasoning without mutating live histo
   assert.deepEqual(persisted[1].tool_calls, messages[1].tool_calls);
 });
 
+test('persisted projection redacts memory tool arguments and results', () => {
+  const messages = [
+    {
+      role: 'assistant', content: null,
+      tool_calls: [{ id: 'memory_1', function: { name: 'recallMemory', arguments: '{"query":"private preference"}' } }],
+    },
+    { role: 'tool', tool_call_id: 'memory_1', content: 'private preference from global memory' },
+  ];
+  const persisted = preparePersistedMessages(messages);
+  assert.equal(persisted[0].tool_calls[0].function.arguments, '{"omitted":true}');
+  assert.equal(persisted[1].content, '[global memory tool result omitted from session storage]');
+  assert.match(messages[1].content, /private preference/);
+});
+
 async function exportedMarkdown({ includeThinking }) {
   const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-export-'));
   try {

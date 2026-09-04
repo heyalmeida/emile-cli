@@ -25,6 +25,7 @@ export { listenTurnKeys } from './turn-keys.js';
 export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';
+export { printMemoryStatus, printMemoryRecords, printMemoryDoctor, printMemoryNotice } from './memory-panel.js';
 export { printSkillsInfo } from './skills-panel.js';
 export { SKILLS_PICKER_LIMIT, skillPickerOptions, promptSkillsPicker } from './skills-picker.js';
 export {

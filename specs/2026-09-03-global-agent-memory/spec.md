@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-09-03-global-agent-memory` |
-| **Status** | `approved` |
+| **Status** | `implementing` |
 | **Phase/Context** | Phase 3 — Agent Robustness |
 | **Related documents** | [Research](research.md), [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [ADR-0004](../../docs/adr/0004-global-agent-memory.md), [Security](../../docs/code-quality-and-security.md) |
 
@@ -90,7 +90,10 @@ The implementation must threat-model prompt injection that asks the agent to rem
 - Cloud sync, multi-device merge, multi-user profiles, encryption at rest or OS keychain integration.
 - Memories that execute actions, approve tools or modify project rules.
 - Filesystem/media-level secure erasure guarantees.
-- Implementing the runtime feature in this documentation-only SDD task.
+
+### 5.1 Scope change
+
+On 2026-09-04, after approving the design, the user explicitly requested the runtime integration. The implementation, verification and documentation closeout described by this spec are therefore in scope; its requirements and acceptance criteria are unchanged.
 
 ## 6. Acceptance Criteria
 

@@ -24,7 +24,7 @@
 - [x] T1.4 — Implement the token-owned writer lock with bounded retry, conservative stale recovery and ownership-checked release *(verifies AC-08)*
 - [x] T1.5 — Implement snapshot + WAL transactions, checksums/revisions, atomic replacement, backup and generated `MEMORY.md` *(verifies AC-03, AC-08)*
 - [x] T1.6 — Implement startup validation, replay, quarantine, read-only degradation and typed health results *(verifies AC-08, AC-12)*
-- [ ] T1.7 — Add fault-injection and concurrent-process tests for every interruption point and path/file-type boundary *(verifies AC-08, AC-12)*
+- [x] T1.7 — Add fault-injection and concurrent-process tests for every interruption point and path/file-type boundary *(verifies AC-08, AC-12)*
 
 > Commit this coherent storage/security unit on `development`, staging only its explicit files.
 
@@ -44,35 +44,35 @@
 - [x] T3.1 — Implement Portuguese/English query normalization, lexical/tag/type/recency/use scoring and deterministic tie-breaking *(verifies AC-07)*
 - [x] T3.2 — Implement diversity selection and hard always/relevant/token budgets *(verifies AC-07)*
 - [x] T3.3 — Implement the delimited untrusted memory projection with the required instruction precedence *(verifies AC-06, AC-07)*
-- [ ] T3.4 — Integrate one retrieval per user turn without mutating persisted history or the frozen system-prompt prefix *(verifies AC-06, AC-07, AC-15)*
+- [x] T3.4 — Integrate one retrieval per user turn without mutating persisted history or the frozen system-prompt prefix *(verifies AC-06, AC-07, AC-15)*
 - [x] T3.5 — Implement best-effort usage accounting that cannot delay/fail a turn *(verifies AC-12)*
-- [ ] T3.6 — Add deterministic ranking, diversity, prompt-prefix snapshot and graceful-degradation tests *(verifies AC-06, AC-07, AC-12)*
+- [x] T3.6 — Add deterministic ranking, diversity, prompt-prefix snapshot and graceful-degradation tests *(verifies AC-06, AC-07, AC-12)*
 
 > Commit this coherent retrieval/context unit on `development`, staging only its explicit files.
 
 ## Phase 4 — Commands, private tools and lifecycle
 
-- [ ] T4.1 — Add the `/memory` status/list/show/mode/pause/resume/accept/reject/doctor/export/clear command family *(verifies AC-02, AC-11, AC-13, AC-14)*
-- [ ] T4.2 — Add `/remember` and `/forget` with ambiguity previews and destructive confirmation *(verifies AC-03, AC-10, AC-13)*
-- [ ] T4.3 — Add strict private `proposeMemory` and read-only `recallMemory` schemas/handlers without exposing storage primitives *(verifies AC-04, AC-06, AC-07)*
+- [x] T4.1 — Add the `/memory` status/list/show/mode/pause/resume/accept/reject/doctor/export/clear command family *(verifies AC-02, AC-11, AC-13, AC-14)*
+- [x] T4.2 — Add `/remember` and `/forget` with ambiguity previews and destructive confirmation *(verifies AC-03, AC-10, AC-13)*
+- [x] T4.3 — Add strict private `proposeMemory` and read-only `recallMemory` schemas/handlers without exposing storage primitives *(verifies AC-04, AC-06, AC-07)*
 - [ ] T4.4 — Add sanitized memory UI components through `src/ui/` and document their visual contract before code *(verifies AC-13, AC-16)*
-- [ ] T4.5 — Wire lazy initialization, session-local pause, existing dry-run and bounded lifecycle flush *(verifies AC-11, AC-12, AC-15)*
-- [ ] T4.6 — Implement forget/clear purging across snapshot, WAL, backup and overview plus complete quarantine removal; add a full managed-artifact content scan test *(verifies AC-10)*
-- [ ] T4.7 — Implement confirmed, workspace-confined, sanitized `0600` export and prove it remains separate from session `/export` *(verifies AC-14, AC-15)*
-- [ ] T4.8 — Add command/tool/TUI/integration tests including cancellation, 60/79/80/120-column layouts and prompt ownership *(verifies AC-13, AC-16)*
+- [x] T4.5 — Wire lazy initialization, session-local pause, existing dry-run and bounded lifecycle flush *(verifies AC-11, AC-12, AC-15)*
+- [x] T4.6 — Implement forget/clear purging across snapshot, WAL, backup and overview plus complete quarantine removal; add a full managed-artifact content scan test *(verifies AC-10)*
+- [x] T4.7 — Implement confirmed, workspace-confined, sanitized `0600` export and prove it remains separate from session `/export` *(verifies AC-14, AC-15)*
+- [x] T4.8 — Add command/tool/TUI/integration tests including cancellation, 60/79/80/120-column layouts and prompt ownership *(verifies AC-13, AC-16)*
 
 > Commit this coherent commands/tools/UI integration unit on `development`, staging only its explicit files.
 
 ## Phase 5 — Testing, security and verification
 
-- [ ] T5.1 — Run `node --check` on every touched source file and record full results
-- [ ] T5.2 — Run targeted memory, agent, tool, command, lifecycle, history and UI tests; triage every failure *(verifies AC-01 through AC-16)*
-- [ ] T5.3 — Run `npm run lint` and `npm test`; record warnings, failures and limitations
+- [x] T5.1 — Run `node --check` on every touched source file and record full results
+- [x] T5.2 — Run targeted memory, agent, tool, command, lifecycle, history and UI tests; triage every failure *(verifies AC-01 through AC-16)*
+- [x] T5.3 — Run `npm run lint` and `npm test`; record warnings, failures and limitations
 - [ ] T5.4 — Run the verbose smoke test in isolated temporary home/workspace state without real credentials
 - [ ] T5.5 — Run and record the manual two-workspace workflow below
 - [ ] T5.6 — Run the negative fault/path/privacy/deletion matrix below
 - [ ] T5.7 — Verify all acceptance criteria individually and update the verification log
-- [ ] T5.8 — Run `npm audit` only if implementation adds a dependency; record origin, license, maintenance and audit findings
+- [x] T5.8 — Run `npm audit` only if implementation adds a dependency; not applicable because the implementation adds no dependency
 
 ### Manual two-workspace workflow
 
@@ -104,7 +104,7 @@
 
 ## Phase 6 — Documentation and closing
 
-- [ ] T6.1 — Update `.clinerules`, README command reference, PRD delivery status, architecture modules/flows, visual identity, security guide, glossary and roadmap to match implemented reality
+- [ ] T6.1 — Update README command reference, PRD delivery status, architecture modules/flows, visual identity, security guide, glossary and roadmap to match implemented reality; keep local-only `.clinerules` out of project changes per user direction
 - [ ] T6.2 — Create `features/global-agent-memory.md` from the template and index it only after implementation is verified *(Rule 7)*
 - [ ] T6.3 — Add the implementation entry to `CHANGELOG.md`
 - [ ] T6.4 — Validate all touched Markdown tables, relative links and Mermaid blocks

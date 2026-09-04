@@ -36,7 +36,9 @@ export function ensureMemoryRoot(root) {
   }
   if (fs.existsSync(cursor)) assertDirectory(cursor);
   for (const directory of missing.reverse()) {
-    fs.mkdirSync(directory, { mode: 0o700 });
+    try { fs.mkdirSync(directory, { mode: 0o700 }); }
+    catch (error) { if (error?.code !== 'EEXIST') throw error; }
+    assertDirectory(directory);
     try { fs.chmodSync(directory, 0o700); } catch { /* unsupported permissions */ }
   }
   assertDirectory(target);
@@ -45,7 +47,10 @@ export function ensureMemoryRoot(root) {
 
 export function ensureMemoryDirectory(root, name) {
   const target = resolveMemoryPath(root, name);
-  if (!fs.existsSync(target)) fs.mkdirSync(target, { mode: 0o700 });
+  if (!fs.existsSync(target)) {
+    try { fs.mkdirSync(target, { mode: 0o700 }); }
+    catch (error) { if (error?.code !== 'EEXIST') throw error; }
+  }
   assertDirectory(target);
   const realRoot = fs.realpathSync(getMemoryRoot(root));
   const realTarget = fs.realpathSync(target);
@@ -81,6 +86,22 @@ export function inspectMemoryEntry(filePath, { allowMissing = true, maxBytes = M
   }
   if (stat.size > maxBytes) throw new Error('Memory artifact exceeds its size cap.');
   return stat;
+}
+
+export function readRegularMemoryFile(filePath, { maxBytes = MAX_ARTIFACT_BYTES } = {}) {
+  inspectMemoryEntry(filePath, { allowMissing: false, maxBytes });
+  const flags = fs.constants.O_RDONLY |
+    (fs.constants.O_NOFOLLOW || 0) |
+    (fs.constants.O_NONBLOCK || 0);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, flags);
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size > maxBytes) throw new Error('Memory artifact is not a bounded regular file.');
+    return fs.readFileSync(fd, 'utf8');
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* best-effort */ }
+  }
 }
 
 export function ensurePrivateFile(filePath) {

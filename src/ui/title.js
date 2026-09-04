@@ -98,6 +98,8 @@ export function describeToolActivity(toolCall) {
   if (name === 'searchWeb') return 'searching web';
   if (name === 'browsePage') return 'reading web page';
   if (name === 'runCommand') return 'running command';
+  if (name === 'proposeMemory') return 'reviewing memory';
+  if (name === 'recallMemory') return 'recalling memory';
   if (name === 'createPlan') return 'creating plan';
   if (name === 'updateTask') return 'updating plan';
 

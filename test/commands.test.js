@@ -7,6 +7,7 @@ const expectedCommands = [
   '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
   '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
   '/help', '/undo', '/cost', '/export', '/rules', '/skills', '/skill',
+  '/memory', '/remember', '/forget',
 ];
 
 test('registry contains every existing slash command and aliases', () => {

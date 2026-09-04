@@ -15,14 +15,18 @@ function serializeState(state) {
   return serialized;
 }
 
-function commitState(root, current, next, { purgeCopies = false } = {}) {
+function commitState(root, current, next, { purgeCopies = false, faultInjector } = {}) {
   const payload = { baseRevision: current.revision, revision: next.revision, state: next };
   const event = { ...payload, checksum: checksumWalPayload(payload) };
-  appendMemoryWal(root, `${JSON.stringify(event)}\n`);
-  writeAtomicMemoryFile(root, MEMORY_FILES.backup, serializeState(purgeCopies ? next : current));
-  writeAtomicMemoryFile(root, MEMORY_FILES.store, serializeState(next));
-  writeAtomicMemoryFile(root, MEMORY_FILES.overview, buildMemoryOverview(next));
-  writeAtomicMemoryFile(root, MEMORY_FILES.wal, '');
+  appendMemoryWal(root, `${JSON.stringify(event)}\n`, { faultInjector });
+  writeAtomicMemoryFile(root, MEMORY_FILES.backup, serializeState(purgeCopies ? next : current), {
+    faultInjector, artifact: 'backup',
+  });
+  writeAtomicMemoryFile(root, MEMORY_FILES.store, serializeState(next), { faultInjector, artifact: 'store' });
+  writeAtomicMemoryFile(root, MEMORY_FILES.overview, buildMemoryOverview(next), {
+    faultInjector, artifact: 'overview',
+  });
+  writeAtomicMemoryFile(root, MEMORY_FILES.wal, '', { faultInjector, artifact: 'wal-checkpoint' });
   if (purgeCopies) purgeMemoryQuarantine(root);
 }
 
@@ -69,6 +73,7 @@ export async function mutateMemoryState(mutator, {
   root,
   dryRun = false,
   purgeCopies = false,
+  faultInjector,
 } = {}) {
   if (typeof mutator !== 'function') throw new TypeError('Memory mutator must be a function.');
   if (dryRun) {
@@ -91,7 +96,7 @@ export async function mutateMemoryState(mutator, {
     draft.revision = current.state.revision + 1;
     validateMemoryState(draft);
     serializeState(draft);
-    commitState(safeRoot, current.state, draft, { purgeCopies });
+    commitState(safeRoot, current.state, draft, { purgeCopies, faultInjector });
     return { root: safeRoot, state: draft, health: current.health, errors: current.errors, value, changed: true, simulated: false };
   });
 }

@@ -40,6 +40,8 @@ export function formatToolSummary(toolCalls) {
     else if (name === 'findFiles' && args.pattern) { label = 'find'; arg = args.pattern; tone = 'gold'; }
     else if (name === 'grepSearch' && args.query) { label = 'grep'; arg = args.query; tone = 'gold'; }
     else if (name === 'runCommand' && args.command) { label = 'exec'; arg = args.command.substring(0, 120); tone = 'red'; }
+    else if (name === 'proposeMemory') { label = 'memory'; arg = 'candidate'; tone = 'warn'; }
+    else if (name === 'recallMemory') { label = 'recall'; arg = 'global memory'; tone = 'info'; }
     else if (name === 'searchWeb' && args.query) { label = 'web'; arg = stripTerminalControls(args.query); tone = 'gold'; }
     else if (name === 'browsePage' && args.url) {
       label = 'browse';

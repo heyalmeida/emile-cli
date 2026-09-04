@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { MAX_ARTIFACT_BYTES, MEMORY_FILES } from './constants.js';
 import { createEmptyMemoryState, validateMemoryState } from './schema.js';
-import { ensureMemoryDirectory, inspectMemoryEntry, resolveMemoryPath } from './path.js';
+import { ensureMemoryDirectory, readRegularMemoryFile, resolveMemoryPath } from './path.js';
 
 export function checksumWalPayload(payload) {
   return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
@@ -21,8 +21,7 @@ function readState(root, name, dryRun, errors) {
   const filePath = resolveMemoryPath(root, name);
   if (!fs.existsSync(filePath)) return null;
   try {
-    inspectMemoryEntry(filePath, { allowMissing: false });
-    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const parsed = JSON.parse(readRegularMemoryFile(filePath));
     return validateMemoryState(parsed);
   } catch {
     errors.push(`${name}:invalid`);
@@ -35,8 +34,7 @@ function replayWal(root, initialState, dryRun, errors) {
   const walPath = resolveMemoryPath(root, MEMORY_FILES.wal);
   if (!fs.existsSync(walPath)) return { state: initialState, replayed: 0 };
   try {
-    inspectMemoryEntry(walPath, { allowMissing: false, maxBytes: MAX_ARTIFACT_BYTES });
-    const raw = fs.readFileSync(walPath, 'utf8');
+    const raw = readRegularMemoryFile(walPath, { maxBytes: MAX_ARTIFACT_BYTES });
     const complete = raw.endsWith('\n') ? raw : raw.slice(0, raw.lastIndexOf('\n') + 1);
     let state = initialState;
     let replayed = 0;

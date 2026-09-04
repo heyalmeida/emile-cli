@@ -17,7 +17,7 @@ function assertBounded(data) {
   }
 }
 
-export function writeAtomicMemoryFile(root, name, data) {
+export function writeAtomicMemoryFile(root, name, data, { faultInjector, artifact = name } = {}) {
   assertBounded(data);
   const target = resolveMemoryPath(root, name);
   inspectMemoryEntry(target, { allowMissing: true });
@@ -30,28 +30,38 @@ export function writeAtomicMemoryFile(root, name, data) {
     fs.fsyncSync(fd);
     fs.closeSync(fd);
     fd = undefined;
+    if (faultInjector) faultInjector(`${artifact}:temp-synced`);
     fs.renameSync(temporary, target);
+    if (faultInjector) faultInjector(`${artifact}:renamed`);
     ensurePrivateFile(target);
     syncDirectory(path.dirname(target));
+    if (faultInjector) faultInjector(`${artifact}:committed`);
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch { /* best-effort */ }
     if (fs.existsSync(temporary)) try { fs.unlinkSync(temporary); } catch { /* best-effort */ }
   }
 }
 
-export function appendMemoryWal(root, line) {
+export function appendMemoryWal(root, line, { faultInjector } = {}) {
   assertBounded(line);
   const walPath = resolveMemoryPath(root, MEMORY_FILES.wal);
   inspectMemoryEntry(walPath, { allowMissing: true });
+  const flags = fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT |
+    (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0);
   let fd;
   try {
-    fd = fs.openSync(walPath, 'a', 0o600);
+    fd = fs.openSync(walPath, flags, 0o600);
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size + Buffer.byteLength(line, 'utf8') > MAX_ARTIFACT_BYTES) {
+      throw new Error('Memory WAL is not a bounded regular file.');
+    }
     fs.writeFileSync(fd, line, 'utf8');
     fs.fsyncSync(fd);
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch { /* best-effort */ }
   }
   ensurePrivateFile(walPath);
+  if (faultInjector) faultInjector('wal:appended');
 }
 
 function purgeDirectory(directory, root) {

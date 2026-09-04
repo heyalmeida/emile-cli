@@ -8,6 +8,8 @@ import {
   acceptGlobalMemory,
   assessMemoryText,
   getGlobalMemoryStatus,
+  getGlobalMemoryContext,
+  flushGlobalMemory,
   listGlobalMemories,
   proposeGlobalMemory,
   rejectGlobalMemory,
@@ -131,4 +133,19 @@ test('pending candidate can be rejected and is removed from every live state', a
   const rejected = await rejectGlobalMemory(pending.value.id, options);
   assert.equal(rejected.value.status, 'rejected');
   assert.equal(listGlobalMemories('', options).records.length, 0);
+});
+
+test('dry-run and pause never defer a later usage-counter write', async t => {
+  const options = tempOptions(t);
+  await rememberGlobalMemory('I prefer concise responses.', { ...options, sessionId: 'one' });
+
+  await getGlobalMemoryContext('concise responses', { ...options, dryRun: true });
+  await flushGlobalMemory(options);
+  assert.equal(listGlobalMemories('', options).records[0].useCount, 0);
+
+  await getGlobalMemoryContext('concise responses', options);
+  setMemoryPaused(true);
+  setMemoryPaused(false);
+  await flushGlobalMemory(options);
+  assert.equal(listGlobalMemories('', options).records[0].useCount, 0);
 });
