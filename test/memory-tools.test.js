@@ -24,7 +24,7 @@ test('proposeMemory binds evidence to the current user and returns content-free 
   const extra = await proposeMemory({
     evidence: memory.currentUserText, key: 'style.answer', deleteAll: true,
   }, { memory });
-  assert.match(extra, /invalid arguments/);
+  assert.match(extra, /unknown parameter/);
 });
 
 test('recallMemory returns transient content and a persisted placeholder', async t => {

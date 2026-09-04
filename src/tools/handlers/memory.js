@@ -2,21 +2,32 @@ import { config } from '../../config.js';
 import { formatMemoryContext } from '../../memory/context.js';
 import { proposeGlobalMemory, recallGlobalMemories } from '../../memory/index.js';
 
-const PROPOSAL_KEYS = new Set(['evidence', 'key', 'type', 'activation', 'tags']);
+// Accept 'omitted' as a no-op parameter (some models try to use it)
+const PROPOSAL_KEYS = new Set(['evidence', 'key', 'type', 'activation', 'tags', 'omitted']);
 const PROPOSAL_TYPES = new Set(['user', 'workflow', 'feedback']);
 const ACTIVATIONS = new Set(['always', 'relevant']);
 
 function validProposal(args) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) return false;
-  if (Object.keys(args).some(key => !PROPOSAL_KEYS.has(key))) return false;
-  if (typeof args.evidence !== 'string' || !args.evidence || args.evidence.length > 4096) return false;
-  if (typeof args.key !== 'string' || args.key.length < 3 || args.key.length > 96) return false;
-  if (args.type !== undefined && !PROPOSAL_TYPES.has(args.type)) return false;
-  if (args.activation !== undefined && !ACTIVATIONS.has(args.activation)) return false;
-  return args.tags === undefined || (
-    Array.isArray(args.tags) && args.tags.length <= 8 &&
-    args.tags.every(tag => typeof tag === 'string' && tag.length > 0 && tag.length <= 32)
-  );
+  const invalidKeys = Object.keys(args).filter(key => !PROPOSAL_KEYS.has(key));
+  if (invalidKeys.length > 0) return { valid: false, reason: `unknown parameter(s): ${invalidKeys.join(', ')}` };
+  if (typeof args.evidence !== 'string' || !args.evidence) return { valid: false, reason: 'evidence is required and must be a non-empty string' };
+  if (args.evidence.length > 4096) return { valid: false, reason: 'evidence exceeds 4096 character limit' };
+  if (typeof args.key !== 'string' || args.key.length < 3) return { valid: false, reason: 'key is required and must be at least 3 characters' };
+  if (args.key.length > 96) return { valid: false, reason: 'key exceeds 96 character limit' };
+  if (args.type !== undefined && !PROPOSAL_TYPES.has(args.type)) return { valid: false, reason: `type must be one of: ${[...PROPOSAL_TYPES].join(', ')}` };
+  if (args.activation !== undefined && !ACTIVATIONS.has(args.activation)) return { valid: false, reason: `activation must be one of: ${[...ACTIVATIONS].join(', ')}` };
+  if (args.tags !== undefined) {
+    if (!Array.isArray(args.tags)) return { valid: false, reason: 'tags must be an array' };
+    if (args.tags.length > 8) return { valid: false, reason: 'tags exceeds 8 item limit' };
+    const invalidTags = args.tags.filter(tag => typeof tag !== 'string' || tag.length === 0 || tag.length > 32);
+    if (invalidTags.length > 0) return { valid: false, reason: 'each tag must be a string with 1-32 characters' };
+  }
+  return { valid: true };
+}
+
+function validationError(reason) {
+  return `Memory proposal rejected: ${reason}. Required: evidence (exact quote from user message) and key (e.g., user.delivery-style).`;
 }
 
 function options(memory = {}) {
@@ -29,7 +40,8 @@ function options(memory = {}) {
 }
 
 export async function proposeMemory(args = {}, context = {}) {
-  if (!validProposal(args)) return 'Memory proposal rejected (invalid arguments).';
+  const validation = validProposal(args);
+  if (!validation.valid) return validationError(validation.reason);
   try {
     const result = await proposeGlobalMemory(args, options(context.memory));
     const value = result.value || { status: 'rejected', code: 'unavailable' };
