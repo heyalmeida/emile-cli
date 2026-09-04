@@ -60,7 +60,8 @@ export async function main() {
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
-  const { initializeGlobalMemory, flushGlobalMemory } = await import('./memory/index.js');
+  const { initializeGlobalMemory, flushGlobalMemory, acceptGlobalMemory, acceptAllGlobalMemories, rejectGlobalMemory, listPendingMemories, isMemorySkipConfirm } = await import('./memory/index.js');
+  const { runMemoryConfirmModal } = await import('./ui/index.js');
 
   // Set runtime configurations
   config.dryRun = !!options.dryRun;
@@ -386,6 +387,29 @@ export async function main() {
       }
     };
 
+    const maybeRunMemoryConfirmModal = async () => {
+      if (isMemorySkipConfirm()) return;
+      const pending = listPendingMemories({ root: memoryRoot, dryRun: config.dryRun }).records;
+      if (pending.length === 0) return;
+      try {
+        await runMemoryConfirmModal(pending, {
+          onAccept: async (record) => {
+            try { await acceptGlobalMemory(record.id, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+          },
+          onReject: async (record) => {
+            try { await rejectGlobalMemory(record.id, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+          },
+          onAcceptAll: async (records) => {
+            const ids = records.map(record => record.id);
+            try { await acceptAllGlobalMemories({ root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+            const { setMemorySkipConfirm } = await import('./memory/index.js');
+            setMemorySkipConfirm(true);
+            return ids;
+          },
+        });
+      } catch { /* best-effort */ }
+    };
+
     const commandContext = {
       config,
       options,
@@ -439,6 +463,7 @@ export async function main() {
             sessionSummary = next.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
           }
           await finalizeSessionTurn();
+          await maybeRunMemoryConfirmModal();
         } catch (err) {
           console.error(C.red(`\n  Error: ${err.message}\n`));
         }
@@ -467,6 +492,7 @@ export async function main() {
             sessionSummary = clean.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
           }
           await finalizeSessionTurn();
+          await maybeRunMemoryConfirmModal();
           await drainQueue();
         } catch (err) {
           console.error(C.red(`\n  Error: ${err.message}\n`));

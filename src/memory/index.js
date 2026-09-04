@@ -13,8 +13,10 @@ import {
 } from './operations.js';
 import { retrieveMemories } from './retrieval.js';
 import { initializeMemory, mutateMemoryState, readMemoryState } from './store.js';
+import { acceptAllPending } from './accept-all.js';
 
 let paused = false;
+let skipConfirm = false;
 const pendingTouches = new Map();
 
 function touchKey(options) { return options.root || 'default'; }
@@ -37,6 +39,18 @@ export function setMemoryPaused(value) {
 }
 
 export function isMemoryPaused() { return paused; }
+
+export function setMemorySkipConfirm(value) {
+  skipConfirm = value === true;
+  return skipConfirm;
+}
+
+export function isMemorySkipConfirm() { return skipConfirm; }
+
+export function listPendingMemories(options = {}) {
+  const snapshot = readMemoryState(options);
+  return { ...snapshot, records: snapshot.state.records.filter(record => record.state === 'pending') };
+}
 
 export async function initializeGlobalMemory(options = {}) {
   return initializeMemory(options);
@@ -117,6 +131,7 @@ export async function setGlobalMemoryMode(mode, options = {}) {
   return result;
 }
 export async function acceptGlobalMemory(id, options = {}) { return acceptMemory(id, options); }
+export async function acceptAllGlobalMemories(options = {}) { return acceptAllPending(options); }
 export async function rejectGlobalMemory(id, options = {}) { return rejectMemory(id, options); }
 export async function forgetGlobalMemories(ids, options = {}) { return forgetMemories(ids, options); }
 export async function clearGlobalMemories(options = {}) { pendingTouches.clear(); return clearMemories(options); }

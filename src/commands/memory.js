@@ -14,6 +14,7 @@ import {
   rememberGlobalMemory,
   setGlobalMemoryMode,
   setMemoryPaused,
+  setMemorySkipConfirm,
 } from '../memory/index.js';
 import { resolveSafePath } from '../tools/security.js';
 import { printMemoryDoctor, printMemoryNotice, printMemoryRecords, printMemoryStatus } from '../ui/index.js';
@@ -119,6 +120,14 @@ export async function handleMemory(ctx, args = []) {
     if (operation === 'pause' || operation === 'resume') {
       setMemoryPaused(operation === 'pause');
       return printMemoryNotice(`Memory session ${isMemoryPaused() ? 'paused' : 'resumed'}.`, 'success');
+    }
+    if (operation === 'confirm-on') {
+      setMemorySkipConfirm(false);
+      return printMemoryNotice('Memory pending-confirm modal enabled.', 'success');
+    }
+    if (operation === 'confirm-off') {
+      setMemorySkipConfirm(true);
+      return printMemoryNotice('Memory pending-confirm modal disabled for this process.', 'success');
     }
     if (operation === 'accept' || operation === 'reject') return handleMemoryMutation(ctx, operation, args[1]);
     if (operation === 'doctor') return printMemoryDoctor({ ...diagnoseGlobalMemory(options(ctx)), paused: isMemoryPaused() });
