@@ -30,22 +30,22 @@
 
 ## Phase 2 — Privacy, formation and conflicts
 
-- [ ] T2.1 — Implement secret/high-risk identifier denial, sensitive-topic classification and content-free diagnostics using synthetic fixtures *(verifies AC-04, AC-09)*
-- [ ] T2.2 — Implement exact current-user evidence binding and reject assistant/reasoning/tool/file/web/MCP-derived proposals *(verifies AC-04)*
-- [ ] T2.3 — Implement normalized keys, deduplication and record-type/activation validation *(verifies AC-03, AC-05)*
-- [ ] T2.4 — Implement `ask` candidate state, two-distinct-session `auto` corroboration and explicit conflict state *(verifies AC-05)*
-- [ ] T2.5 — Implement explicit remember, accept and reject mutations with dry-run behavior *(verifies AC-03, AC-11)*
-- [ ] T2.6 — Add formation/privacy/property tests for invalid transitions, duplicate evidence, session spoofing, Unicode, caps and injection attempts *(verifies AC-03, AC-04, AC-05, AC-09)*
+- [x] T2.1 — Implement secret/high-risk identifier denial, sensitive-topic classification and content-free diagnostics using synthetic fixtures *(verifies AC-04, AC-09)*
+- [x] T2.2 — Implement exact current-user evidence binding and reject assistant/reasoning/tool/file/web/MCP-derived proposals *(verifies AC-04)*
+- [x] T2.3 — Implement normalized keys, deduplication and record-type/activation validation *(verifies AC-03, AC-05)*
+- [x] T2.4 — Implement `ask` candidate state, two-distinct-session `auto` corroboration and explicit conflict state *(verifies AC-05)*
+- [x] T2.5 — Implement explicit remember, accept and reject mutations with dry-run behavior *(verifies AC-03, AC-11)*
+- [x] T2.6 — Add formation/privacy/property tests for invalid transitions, duplicate evidence, session spoofing, Unicode, caps and injection attempts *(verifies AC-03, AC-04, AC-05, AC-09)*
 
 > Commit this coherent formation/privacy unit on `development`, staging only its explicit files.
 
 ## Phase 3 — Retrieval and context integration
 
-- [ ] T3.1 — Implement Portuguese/English query normalization, lexical/tag/type/recency/use scoring and deterministic tie-breaking *(verifies AC-07)*
-- [ ] T3.2 — Implement diversity selection and hard always/relevant/token budgets *(verifies AC-07)*
-- [ ] T3.3 — Implement the delimited untrusted memory projection with the required instruction precedence *(verifies AC-06, AC-07)*
+- [x] T3.1 — Implement Portuguese/English query normalization, lexical/tag/type/recency/use scoring and deterministic tie-breaking *(verifies AC-07)*
+- [x] T3.2 — Implement diversity selection and hard always/relevant/token budgets *(verifies AC-07)*
+- [x] T3.3 — Implement the delimited untrusted memory projection with the required instruction precedence *(verifies AC-06, AC-07)*
 - [ ] T3.4 — Integrate one retrieval per user turn without mutating persisted history or the frozen system-prompt prefix *(verifies AC-06, AC-07, AC-15)*
-- [ ] T3.5 — Implement best-effort usage accounting that cannot delay/fail a turn *(verifies AC-12)*
+- [x] T3.5 — Implement best-effort usage accounting that cannot delay/fail a turn *(verifies AC-12)*
 - [ ] T3.6 — Add deterministic ranking, diversity, prompt-prefix snapshot and graceful-degradation tests *(verifies AC-06, AC-07, AC-12)*
 
 > Commit this coherent retrieval/context unit on `development`, staging only its explicit files.
