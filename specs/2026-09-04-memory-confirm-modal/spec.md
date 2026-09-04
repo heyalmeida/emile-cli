@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-09-04-memory-confirm-modal` |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 | **Type** | **Delta to** [`2026-09-03-global-agent-memory`](../2026-09-03-global-agent-memory/spec.md) (UX layer only — no data-layer change) |
 | **Phase/Context** | Phase 3 — Agent Robustness (post-delivery) |
 | **Related documents** | [Base spec](../2026-09-03-global-agent-memory/spec.md), [ADR-0004](../../docs/adr/0004-global-agent-memory.md), [ADR-0005](../../docs/adr/0005-dynamic-memory-mode.md), **ADR-0006** (this spec introduces it) |

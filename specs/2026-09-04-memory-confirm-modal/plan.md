@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | [`2026-09-04-memory-confirm-modal`](./spec.md) |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 
 ## 1. Technical approach
 
