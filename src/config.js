@@ -112,7 +112,7 @@ export const config = {
   // persisted `maxLoopIterations` config value.
   maxLoopIterations: readPositiveInt(
     savedConfig.maxLoopIterations ?? process.env.EMILE_MAX_LOOP_ITERATIONS,
-    40,
+    90,
   ),
 };
 
