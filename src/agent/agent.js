@@ -235,6 +235,12 @@ async function runAgentInner({
     messages[0].content = systemPrompt;
   }
 
+  // Extract recent user messages for memory evidence validation
+  const recentUserMessages = messages
+    .filter(m => m.role === 'user' && typeof m.content === 'string')
+    .map(m => m.content)
+    .slice(-5); // Last 5 user messages for evidence validation
+
   let memoryUserMessage = null;
   let memoryBlock = '';
   if (initialPrompt) {
@@ -681,7 +687,7 @@ async function runAgentInner({
         let toolResult;
         try {
           toolResult = await executeToolWithSignal(toolCall, toolAbort.signal, {
-            memory: { root: memoryRoot, currentUserText: initialPrompt, sessionId: memorySessionId },
+            memory: { root: memoryRoot, currentUserText: [initialPrompt, ...recentUserMessages], sessionId: memorySessionId },
           });
         } finally {
           clearActiveTool();

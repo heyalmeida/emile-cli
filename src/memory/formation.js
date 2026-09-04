@@ -38,8 +38,10 @@ function evidenceIsQuoted(currentUserText, evidence) {
 }
 
 function assessProposalSource(evidence, currentUserText) {
-  const current = String(currentUserText || '');
-  if (!evidence || !current.includes(evidence)) return 'invalid-source';
+  // Accept a single string or an array of recent messages
+  const texts = Array.isArray(currentUserText) ? currentUserText : [currentUserText || ''];
+  const current = texts.find(t => t.includes(evidence)) || texts[0] || '';
+  if (!evidence || !texts.some(t => t.includes(evidence))) return 'invalid-source';
   if (evidenceIsQuoted(current, evidence)) return 'quoted-source';
   const start = current.indexOf(evidence);
   const priorClause = current.slice(Math.max(
