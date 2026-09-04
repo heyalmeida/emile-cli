@@ -62,6 +62,6 @@ Emile will implement memory as a native, provider-agnostic client subsystem with
 
 ## Follow-up
 
-- Implement only through the approved spec and plan.
+- The V1 implementation and its verification evidence are tracked in the approved spec and plan.
 - Evaluate lexical retrieval quality and store size after delivery before proposing embeddings or consolidation.
 - Any encryption, sync, automatic import or database backend requires a separate spec and ADR.

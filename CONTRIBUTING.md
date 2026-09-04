@@ -71,7 +71,7 @@ npm install
 node bin/emile.js --verbose   # run from source with debug output
 ```
 
-**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or user-global `~/.emile/config.json`. Workspace runtime data stays in the gitignored `.emile/` directory.
+**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or user-global `~/.emile/config.json`. Confirmed user memory lives separately in `~/.emile/memory/v1/`; workspace runtime data stays in the gitignored `.emile/` directory.
 
 ---
 
@@ -91,7 +91,7 @@ npm audit                      # when there is a new dependency
 ```
 
 - **Tools/execution (high risk):** mandatory negative scenarios — command outside the whitelist, `../` path, dry-run writes nothing, failure becomes an error to the model.
-- **Global agent memory (planned, high risk):** follow ADR-0004 and its approved spec; cover dedicated-root confinement, corrupt/torn state, concurrent locks, source/privacy validation, instruction precedence and complete application-level deletion.
+- **Global agent memory (high risk):** follow ADR-0004 and its implemented spec; cover dedicated-root confinement, corrupt/torn state, concurrent locks, source/privacy validation, transient context/history redaction, instruction precedence and complete application-level deletion.
 - **UI:** verify 60/80/120 columns, no ANSI leakage, [design system](./docs/visual-identity.md#6-visual-review-checklist) checklist.
 - **Without recorded evidence, the change is not tested** — describe in the PR the commands run, results and limitations.
 

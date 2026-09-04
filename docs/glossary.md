@@ -12,14 +12,15 @@
 | **Safe mode** | Gate requiring user confirmation before running shell commands outside the whitelist. On by default; `--no-safe` disables it. |
 | **Dry-run** | Simulation mode: write and exec tools report what they would do without doing it. |
 | **Command whitelist** | List of commands considered safe (read-only) that skip confirmation: `git status/diff/log/show`, `npm test`, `ls`, `dir`, `pwd`. |
-| **`resolveSafePath`** | Function confining every file operation to the workspace, blocking path traversal. |
+| **`resolveSafePath`** | Capability-root path resolver that defaults to workspace confinement. Only internal memory code supplies the fixed global-memory root; model-facing file tools cannot broaden it. |
 | **Undo stack** | Stack of file modifications made by the agent, powering `/undo`. |
 | **Plans mode** | Mode (`-p`) where the agent drafts an implementation plan and waits for approval before writing any file. |
 | **Skill** | Knowledge module in YAML frontmatter + markdown (`.agent/skills/`) injected into the system prompt when the user's prompt matches its keywords. |
 | **Project rules** | Optional always-on preferences authored by the workspace maintainer in `.emilerules`, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks; inspected read-only via `/rules`. |
-| **Global agent memory** | Planned provider-independent state under `~/.emile/memory/v1/` for confirmed user preferences, workflow and recurring corrections across workspaces; current user intent and project rules outrank it. |
-| **Memory candidate** | Planned, non-active memory proposal that passed source/privacy validation but still needs explicit acceptance or corroboration in a distinct session. |
-| **Memory retrieval** | Planned deterministic selection of a bounded, diverse set of active global memories for one user turn without changing the frozen system-prompt prefix. |
+| **Global agent memory** | Provider-independent state under `~/.emile/memory/v1/` for confirmed user preferences, workflow and recurring corrections across workspaces; it is native client state, not MCP or model weights, and current user intent/project rules outrank it. |
+| **Memory candidate** | Non-active inferred memory that passed exact-source/privacy validation but still needs explicit acceptance in `ask` mode or equivalent evidence from a distinct session in `auto` mode. |
+| **Memory retrieval** | Deterministic lexical/diversity selection of at most 10 always-on and 6 relevant active memories within a 1,400-token estimate, projected transiently onto one current user turn. |
+| **Memory mode** | Global formation/retrieval state: `off`, conservative default `ask`, or two-session-corroborated `auto`. Session-local `/memory pause` is separate and performs no retrieval or persistence. |
 | **Keyword matching** | The conditional skill-activation mechanism (`src/skills.js`) so context isn't bloated on every message. |
 | **MCP** | Model Context Protocol — protocol exposing external tools to the agent. STDIO, SSE and streamable HTTP transports are configured in `mcp.json`; tools are namespaced `mcp__<server>__<tool>`. |
 | **MCP consent** | One-time per-workspace approval required before a new configured MCP server is connected; only the server name is persisted in `.emile/mcp-consent.json`. |

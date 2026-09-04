@@ -37,6 +37,7 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 | [Context Compression](./context-compression.md) | active | `feat/context-compression` | `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` |
 | [Model System](./model-system.md) | active | `feat/model-system` | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-08-30-readable-token-units` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-web-search-tool-reliability` |
 | [Project Rules (`.emilerules`)](./project-rules.md) | active | `feat/project-rules` | `specs/2026-08-25-rules-system` |
+| [Global Agent Memory](./global-agent-memory.md) | active | `development` | `specs/2026-09-03-global-agent-memory` |
 | [Session Resilience](./session-resilience.md) | active | `feat/session-system` | `specs/2026-08-30-session-resilience` |
 | [Multi-level Undo](./multilevel-undo.md) | active | `feat/cli-commands` | `specs/2026-08-30-multilevel-undo` |
 | [Error UX](./error-ux.md) | active | `feat/ux-ui` | `specs/2026-08-30-error-ux` + `specs/2026-08-31-web-search-tool-reliability` |

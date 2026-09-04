@@ -46,3 +46,12 @@ test('memory tool honors global dry-run without creating state', async t => {
     assert.equal(fs.existsSync(memory.root), false);
   } finally { config.dryRun = previous; }
 });
+
+test('rejected secret returns only a content-free reason code', async t => {
+  const memory = fixture(t);
+  const secret = 'I prefer password is synthetic-secret-123';
+  memory.currentUserText = secret;
+  const result = await proposeMemory({ evidence: secret, key: 'user.credential' }, { memory });
+  assert.match(result, /credential/);
+  assert.doesNotMatch(result, /synthetic-secret-123/);
+});

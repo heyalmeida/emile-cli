@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | `2026-09-03-global-agent-memory` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 
 ---
 
@@ -34,10 +34,10 @@ Records use stable random IDs and a normalized semantic key. The expected schema
 
 - `schemaVersion`, `id`, `revision`, `type`, `state`, `key`, `text`, `tags` and `activation`;
 - `confidence`, `sourceKind` and a non-reversible `sourceSessionRef`;
-- `createdAt`, `updatedAt`, `lastUsedAt`, `useCount` and `evidenceSessionCount`;
+- `createdAt`, `updatedAt`, `lastUsedAt`, `useCount` and bounded `evidenceSessionRefs`;
 - `sensitivity`, plus conflict references that contain IDs rather than copied text.
 
-Raw evidence exists only during validation. `proposeMemory` must provide an exact span from the current user message; the handler checks source offsets/string identity, length, sensitivity, allowed type and stable-preference shape before dropping the evidence. Task-specific, quoted third-party, imperative/security-bearing or unsupported content is rejected. Emile computes the normalized key and confidence rather than trusting model-supplied values. The agent cannot submit a candidate after tool/file/web/MCP text and cannot call mutation primitives directly.
+Raw evidence exists only during validation. `proposeMemory` must provide an exact span from the current user message; the handler checks exact string identity, length, sensitivity, allowed metadata and stable-preference shape before dropping the evidence. Task-scoped, quoted third-party, unstable imperative, security-bearing or unsupported content is rejected. Emile normalizes keys/tags and computes confidence rather than trusting model-supplied values. The agent cannot submit a candidate from tool/file/web/MCP text and cannot call mutation primitives directly.
 
 State transitions are explicit:
 
@@ -64,7 +64,7 @@ Select `always` entries first, then relevant entries, while enforcing both count
 
 Slash handlers call the memory API, never storage internals. `/memory` shows status, counts, mode, pause state and health without dumping content; list/show/search are explicit. `/remember`, accept/reject/forget/clear and export validate ambiguity and use UI-layer confirmation. Pause is held in REPL/session runtime only and is reset on process restart.
 
-`MEMORY.md` is not edited as authoritative input. `/memory doctor` validates paths, artifacts, permissions, schema, WAL, lock state, caps and derived-view drift; repair requires explicit confirmation and never guesses lost record content.
+`MEMORY.md` is not edited as authoritative input. `/memory doctor` runs bounded store recovery/schema validation and reports artifact types plus content-free errors; it never guesses lost record content.
 
 ### 1.5 Integration order
 
@@ -79,7 +79,7 @@ Slash handlers call the memory API, never storage internals. `/memory` shows sta
 - **Relevant ADRs:** [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) is preserved: Node.js ≥18, pure ESM, no build/native dependency. [ADR-0004](../../docs/adr/0004-global-agent-memory.md) records the new subsystem, durability and path boundary.
 - **Architecture document:** implementation adds a `memory/` domain, one dynamic agent-loop input and lifecycle flushing. The module table, runtime directories, diagrams and loop invariants must be updated in the implementation commit.
 - **Mandatory path rule:** every write still passes through `resolveSafePath`. General tools use its default workspace root; the non-exported memory wrapper supplies only the fixed global-memory capability root and adds symlink/special-file checks. This does not expose arbitrary home-directory access to tools.
-- **Design system:** memory commands use only `src/ui/` and the exported `C` palette. Before UI implementation, document the list/detail/status/confirmation treatment in [visual identity](../../docs/visual-identity.md); verify widths below 80 columns and prompt ownership.
+- **Design system:** memory commands use only `src/ui/` and the exported `C` palette. The list/detail/status/confirmation treatment is documented in [visual identity](../../docs/visual-identity.md) and verified at 60/79/80/120 columns.
 - **Provider and MCP boundaries:** no provider-specific branches in memory and no MCP dependency. Memory tool definitions are ordinary private built-ins; retrieved content is the same for compatible providers.
 - **Prompt caching:** the stable memory policy may live in the frozen base prompt, but selected records never do. Dynamic records attach to the per-turn user projection.
 
@@ -91,7 +91,7 @@ Slash handlers call the memory API, never storage internals. `/memory` shows sta
 | File writes and path confinement | Production root derives from the real user home plus fixed components. Resolve the real root/nearest existing ancestor, reject escape and special files, use `0700`/`0600`, same-directory temporary files and a memory-only resolver unavailable to general tools. |
 | LLM inputs and prompt injection | `proposeMemory` accepts only an exact span of the current user message plus allowlisted metadata. Model proposals remain candidates. Memory context is delimited untrusted data below current instructions/project rules. |
 | Secrets and personal data | Reject credential patterns, private-key blocks and financial/government identifiers. Sensitive topics are excluded from automatic formation and require warned explicit input. Logs and errors contain only safe codes/IDs. |
-| Concurrency and partial writes | Exclusive `wx` lock with PID/nonce/token, ownership-checked release, bounded retry/jitter, conservative stale recovery, WAL checksum and revision compare-and-swap behavior. |
+| Concurrency and partial writes | Exclusive `wx` lock with PID/nonce/token, ownership-checked release, bounded linear backoff, conservative stale recovery, WAL checksum and revision refresh inside the lock. |
 | Corrupt/manual state | Schema/size validation before use, symlink/special-file refusal, backup/WAL recovery, quarantine, generated-view rebuild and empty read-only degradation. Never parse Markdown as instructions. |
 | Deletion and export | Forget/clear scan and rewrite every attributable artifact under a lock and remove all quarantined memory artifacts. Export is opt-in, sanitized, workspace-confined through `resolveSafePath`, `0600` and separate from session export. Warn that storage-media secure erase is not guaranteed. |
 | Resource exhaustion | Record, queue, file, line, query, result and context caps; bounded retries/timeouts; no unbounded recursive traversal or background model call. |
@@ -112,11 +112,11 @@ The sensitivity classifier is a deny gate, not a promise of perfect PII detectio
 | Formation | `src/memory/formation.js` | Evidence validation, normalized keys, deduplication, corroboration and conflicts. |
 | Retrieval | `src/memory/retrieval.js` | Query normalization, lexical score, temporal/type weights and diversity selection. |
 | Context | `src/memory/context.js` | Bounded token projection and untrusted-context delimiter. |
-| Commands | `src/commands/index.js`, `src/commands/handlers.js` | Register and dispatch the memory command family. Split handlers if current module size/responsibility warrants it. |
+| Commands | `src/commands/index.js`, `src/commands/memory.js` | Register and dispatch the memory command family without coupling generic handlers to storage. |
 | Tool schemas/handlers | `src/tools/definitions.js`, `src/tools/handlers/`, `src/tools/index.js` | Private `proposeMemory` and read-only `recallMemory` with strict source/state gates. |
 | Agent loop | `src/agent/agent.js` | Retrieve once per turn, preserve frozen prompt, bind valid current-user evidence and reuse projection. |
 | Lifecycle | `src/lifecycle/` | Best-effort bounded memory flush after tools/session and before terminal restoration. |
-| Configuration/runtime | `src/config.js`, `src/cli.js` | Load global mode, session-local pause and dry-run wiring with lazy imports. |
+| Configuration/runtime | `src/cli.js` | Lazily initialize the global store and wire session-local pause/dry-run without changing provider configuration. |
 | UI | `src/ui/`, `src/ui/index.js` | Sanitized bounded list/detail/status, confirmation and diagnostics rendering. |
 
 Keep each new source file near the repository's 150-line maintainability target. Split storage recovery or command UI further if a file would combine responsibilities.
@@ -146,8 +146,8 @@ Keep each new source file near the repository's 150-line maintainability target.
 | Create | `test/memory-*.test.js` | Unit, integration, fault-injection, privacy and concurrency coverage. |
 | Modify | `src/agent/agent.js` | Per-turn retrieval/projection and candidate binding. |
 | Modify | `src/tools/definitions.js`, `src/tools/handlers/`, `src/tools/index.js` | Private memory tool surface. |
-| Modify | `src/commands/index.js`, `src/commands/handlers.js` | Slash-command registration/dispatch. |
-| Modify | `src/config.js`, `src/cli.js`, `src/lifecycle/` | Global mode, lazy startup, pause/dry-run and flush integration. |
+| Modify/Create | `src/commands/index.js`, `src/commands/memory.js` | Slash-command registration/dispatch and isolated memory handlers. |
+| Modify | `src/cli.js`, `src/lifecycle/` | Lazy startup, pause/dry-run and bounded flush integration; provider config remains unchanged. |
 | Modify/Create | `src/ui/`, `src/ui/index.js` | Memory presentation and confirmations only in the UI layer. |
 | Modify | `README.md`, `docs/product.md`, `docs/architecture.md`, `docs/visual-identity.md`, `docs/code-quality-and-security.md`, `docs/glossary.md`, `docs/roadmap.md` | Delivered behavior, threat controls, terms and command reference. |
 | Create | `features/global-agent-memory.md` | Delivered feature record from `features/_template.md`; not created during design only. |

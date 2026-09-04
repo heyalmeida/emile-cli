@@ -33,6 +33,7 @@ This is a personal project that grew into something useful enough to share. It's
 - **Plans mode** — agent drafts an implementation plan and waits for your approval before touching files
 - **Skills system** — 40+ YAML-based skill modules (architecture, TDD, React patterns, security, etc.) that auto-inject into the system prompt when relevant
 - **User-authored project rules** — optional `.emilerules` preferences, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks
+- **User-global agent memory** — confirmed preferences, workflow conventions and recurring corrections follow you across workspaces and providers, with conservative learning and explicit inspection/deletion controls
 - **Session persistence** — conversations are saved per workspace; resume, switch, export to Markdown, or rewind to edit your last message
 - **Opt-in web search** — OpenRouter's provider-operated web search can be enabled per run or with `/websearch`; search charges may apply even on free model routes
 - **Context tracking and adaptive compression** — real token usage in the footer; history compresses at 80% of the active model's catalog window
@@ -84,6 +85,7 @@ emile "Add input validation to src/api.js"
 emile -m openai/gpt-4o -e high "Refactor the auth module"
 emile -p "Build a REST API for a todo app"   # plans mode
 emile -H                          # resume a previous session
+```
 
 ---
 
@@ -123,6 +125,9 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/cost` | Show cumulative token usage and estimated cost |
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
+| `/memory [status\|list\|show\|mode\|pause\|resume\|accept\|reject\|doctor\|export\|clear]` | Inspect and control user-global memory; mode defaults to `ask` |
+| `/remember <preference or workflow>` | Store an explicit validated global memory; sensitive topics require confirmation |
+| `/forget <id or query>` | Forget one exact record or preview and confirm every ambiguous match |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
 | `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `~/.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
@@ -142,13 +147,11 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 
 **While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
-**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
-
 ---
 
 ## Built-in tools
 
-The agent has direct access to these file-system and shell tools. All write operations are gated by safe mode (use `--no-safe` to bypass at your own risk).
+The agent has direct access to these file-system, shell and memory tools. Workspace writes and shell execution retain their existing path, dry-run and safe-mode gates.
 
 | Tool | What it does |
 |------|-------------|
@@ -159,6 +162,8 @@ The agent has direct access to these file-system and shell tools. All write oper
 | `findFiles` | Find files by glob pattern |
 | `grepSearch` | Search file contents with regex |
 | `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning |
+| `proposeMemory` | Private candidate-only tool bound to an exact span of the current user message; it cannot activate, overwrite or delete memory |
+| `recallMemory` | Private read-only search over active global memory; results remain bounded lower-priority context |
 
 External tools from MCP servers are exposed alongside these with an `mcp__<server>__<tool>` naming convention.
 
@@ -246,6 +251,12 @@ User-wide settings and credentials are persisted in `~/.emile/config.json` (auto
 
 To apply your own always-on preferences to a workspace, create `.emilerules` at its root. Emile does not generate default rules: the file belongs to you and its contents are sent to the active model on every session. Do not place secrets in it. If `.emilerules` is absent, Emile can reuse user-maintained `AGENTS.md`, `.clinerules`, or `.cursorrules` files, in that order. Use `/rules` to see which source is active.
 
+### User-global memory
+
+Emile keeps one provider-independent memory under `~/.emile/memory/v1/`; it is never copied into individual projects and does not depend on MCP. First use creates a schema-versioned store in `ask` mode with restrictive directory/file permissions where the platform supports them. The canonical state is JSON plus a short write-ahead log; `MEMORY.md` is a generated bounded overview, not an instruction file.
+
+Use `/remember` for an explicit preference, `/memory list` to inspect it, and `/forget` or confirmed `/memory clear` to remove Emile-managed copies. `/memory mode auto` only promotes inferred candidates after equivalent evidence from two distinct sessions; `/memory pause` disables reads and writes for the current process. Credentials and high-risk identifiers are rejected, sensitive topics require explicit confirmation, and `--dry-run` never mutates memory. Current user instructions and project rules always outrank memory.
+
 ### Supported providers
 
 | Provider | Base URL | Notes |
@@ -279,6 +290,7 @@ emile-cli/
 │   ├── commands.js         # Connect/model wizards
 │   ├── agent/              # Agent loop, session stats, history compression
 │   ├── api/                # OpenAI-compatible client + retry
+│   ├── memory/             # Global formation, retrieval and crash-safe storage
 │   ├── tools/              # Tool schemas, security gates, per-tool handlers
 │   └── ui/                 # Terminal rendering (theme, boxes, prompt, thinking…)
 ├── .agent/skills/          # Skill modules (YAML frontmatter + markdown)

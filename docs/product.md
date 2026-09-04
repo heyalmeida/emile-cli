@@ -1,7 +1,7 @@
 # Emile — Product Requirements Document (PRD)
 
 > **Status:** 🟢 Current · **Source of truth for emile-cli's scope and requirements.**
-> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, MCP, optional OpenRouter web search, prompt caching, reasoning control, plans mode and a skills system.
+> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, user-global memory, MCP, optional OpenRouter web search, prompt caching, reasoning control, plans mode and a skills system.
 
 ---
 
@@ -17,6 +17,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | Devs unhappy with vendor lock-in | Claude Code/Codex tie you to one provider | Any OpenAI-compatible API (Requesty, OpenRouter, OpenCode) |
 | Cost-conscious devs | Agents burn tokens with no feedback | `/cost`, real-time context tracking, prompt caching, configurable reasoning effort |
 | Automation-cautious devs | Agents that run commands without asking | Safe mode, dry-run, command whitelist, `/undo` |
+| Devs working across projects | Repeating the same preferences and corrections in every workspace | Confirmed user-global memory with inspection, pause and deletion controls |
 
 ---
 
@@ -66,7 +67,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-18** | Dynamic terminal title driven by real runtime states, with sanitized/allowlisted activity labels and no prompt, command or query leakage | ✅ |
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
 | **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
-| **RF-21** | Native user-global agent memory with conservative formation, bounded retrieval, conflict handling, crash-safe local storage and explicit privacy/deletion controls | 📝 Approved design ([spec](../specs/2026-09-03-global-agent-memory/spec.md)) |
+| **RF-21** | Native user-global agent memory with conservative formation, bounded retrieval, conflict handling, crash-safe local storage and explicit privacy/deletion controls | ✅ Delivered ([spec](../specs/2026-09-03-global-agent-memory/spec.md)) |
 
 ---
 

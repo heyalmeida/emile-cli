@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-09-03-global-agent-memory` |
-| **Status** | `implementing` |
+| **Status** | `implemented` |
 | **Phase/Context** | Phase 3 — Agent Robustness |
 | **Related documents** | [Research](research.md), [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [ADR-0004](../../docs/adr/0004-global-agent-memory.md), [Security](../../docs/code-quality-and-security.md) |
 

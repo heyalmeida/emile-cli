@@ -60,6 +60,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Turn keys** | `listenTurnKeys` | Exclusive key listener active while the idle prompt is suspended and the agent works. It renders the same full frame, temporarily routes stdout above it, and leaves the real cursor at the queue draft caret. Esc/Ctrl+C cancel only the turn; Tab/↑/↓ keep slash autocomplete usable; Enter queues bounded/sanitized input. Cleanup erases the frame, restores the previous stdout writer/raw state and returns ownership to the idle prompt |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
+| **Global memory panels** | `printMemoryStatus` / `printMemoryRecords` / `printMemoryDoctor` | Open-box status/list/doctor surfaces. Status shows only mode, session pause, counts, health and revision; content appears only after an explicit list/show/forget preview. Every dynamic field is control-stripped and lists are capped at 50 displayed records |
 | **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
 | **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md` |
@@ -73,6 +74,8 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | `exec` | `red` | Potential side effects |
 | `grep` / `find` | `gold` | Search |
 | `list` | `fg` | Listing, low impact |
+| `memory` proposal | `warn` | Candidate may mutate global state after validation |
+| `recall` memory | `info` | Read-only lower-priority lookup |
 | Plan tools / MCP / unknown | `accent` | Workflow operations |
 
 **Spacing constants:** `GAP.none` (same group), `GAP.section` (one blank line — between groups), `GAP.command` (between user commands) are exported from `src/ui/index.js`; new components must use them instead of scattered `\n\n`.
@@ -89,6 +92,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 - High-risk shell confirmations retain the same clack prompt surface but use a dedicated warning message for network-to-shell pipelines, including the sanitized command preview and the reason for the extra friction.
 - MCP tool summaries use the compact `[mcp:server] tool` identity so third-party execution is visually distinct from built-in tools without exposing tool arguments.
 - First MCP connections use the existing fail-closed `confirm` surface and show only server name, transport, sanitized endpoint and configured tool names; reconnect and transport failures use the amber warning surface without credentials.
+- Memory panels use `min(columns - 4, 76)` with a 20-column defensive floor, so 60/79/80/120-column terminals stay bounded. Exact-ID forget is immediate; query forget, sensitive remember, export and clear use the existing fail-closed confirmation surface. Tool summaries never render proposed evidence, recall queries or recalled content.
 
 ---
 
@@ -99,6 +103,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
 | Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
 | Web search | `/websearch` toggles only for OpenRouter and displays the cost warning when enabled |
+| Global memory | `/memory` inspects state; ambiguous forget, sensitive remember, export and clear use `confirm` defaulting to no; `/memory pause` and `/memory resume` are session-local |
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
 | Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |

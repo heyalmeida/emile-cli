@@ -72,8 +72,10 @@ export async function main() {
   const maxLoopIterations = Number(options.maxLoopIterations);
   if (Number.isFinite(maxLoopIterations) && maxLoopIterations > 0) config.maxLoopIterations = maxLoopIterations;
 
+  let memoryRoot = undefined;
   try {
     const memory = await initializeGlobalMemory({ dryRun: config.dryRun });
+    memoryRoot = memory.root;
     if (verbose) {
       const replay = memory.replayed ? `, replayed ${memory.replayed}` : '';
       console.log(C.muted(`  [memory] ${memory.state.mode}, ${memory.health}${replay}`));
@@ -162,7 +164,7 @@ export async function main() {
     verbose,
     shutdownMcp,
     flushSync,
-    flushMemory: () => flushGlobalMemory({ dryRun: config.dryRun }),
+    flushMemory: () => flushGlobalMemory({ root: memoryRoot, dryRun: config.dryRun }),
     markAborted: (id, reason) => markAborted(id),
   });
 
@@ -277,6 +279,7 @@ export async function main() {
         saveSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
       },
       memorySessionId: loadedSessionId,
+      memoryRoot,
     });
     sessionId = loadedSessionId;
     await finalizeSessionTurn();
@@ -329,6 +332,7 @@ export async function main() {
       initialPrompt: promptInput,
       checkpointSession,
       memorySessionId: sessionId,
+      memoryRoot,
     });
 
     if (!sessionSummary) {
@@ -375,6 +379,7 @@ export async function main() {
           control,
           checkpointSession,
           memorySessionId: sessionId,
+          memoryRoot,
         });
       } finally {
         keys.stop();
@@ -412,6 +417,7 @@ export async function main() {
         promptApi?.setInput(nextPrefill);
       },
       resumeSession: resumeLoadedSession,
+      memoryRoot,
     };
 
     let prefill = '';

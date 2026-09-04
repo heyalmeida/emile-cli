@@ -87,3 +87,14 @@ test('embedded agent calls without a memory session do not advertise memory tool
   assert.equal(names.includes('proposeMemory'), false);
   assert.equal(names.includes('recallMemory'), false);
 });
+
+test('memory loading failure never blocks a normal agent response', async t => {
+  const memoryRoot = root(t);
+  const messages = await muted(() => runAgent({
+    model: 'test/model', plansMode: false, skills: [], cache: false, effort: 'low',
+    messages: [], initialPrompt: 'Continue without memory', memorySessionId: 'session-failure', memoryRoot,
+    loadMemoryContext: async () => { throw new Error('synthetic unavailable store'); },
+    createCompletion: async () => streamOf({ content: 'Continued.' }),
+  }));
+  assert.equal(messages.at(-1).content, 'Continued.');
+});

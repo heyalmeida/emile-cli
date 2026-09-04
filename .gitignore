@@ -138,4 +138,5 @@ dist
 # Project Files
 .agent/
 .emile/
+.clinerules
 grok-build/
