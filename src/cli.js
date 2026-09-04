@@ -60,7 +60,7 @@ export async function main() {
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
-  const { initializeGlobalMemory, flushGlobalMemory, acceptGlobalMemory, acceptAllGlobalMemories, rejectGlobalMemory, listPendingMemories, isMemorySkipConfirm } = await import('./memory/index.js');
+  const { initializeGlobalMemory, flushGlobalMemory, acceptPendingGlobalMemories, rejectPendingGlobalMemories, listPendingMemories, isMemorySkipConfirm, setMemorySkipConfirm } = await import('./memory/index.js');
   const { runMemoryConfirmModal } = await import('./ui/index.js');
 
   // Set runtime configurations
@@ -392,21 +392,15 @@ export async function main() {
       const pending = listPendingMemories({ root: memoryRoot, dryRun: config.dryRun }).records;
       if (pending.length === 0) return;
       try {
-        await runMemoryConfirmModal(pending, {
-          onAccept: async (record) => {
-            try { await acceptGlobalMemory(record.id, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+        const result = await runMemoryConfirmModal(pending, {
+          onAccept: async (ids) => {
+            try { await acceptPendingGlobalMemories(ids, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
           },
-          onReject: async (record) => {
-            try { await rejectGlobalMemory(record.id, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
-          },
-          onAcceptAll: async (records) => {
-            const ids = records.map(record => record.id);
-            try { await acceptAllGlobalMemories({ root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
-            const { setMemorySkipConfirm } = await import('./memory/index.js');
-            setMemorySkipConfirm(true);
-            return ids;
+          onReject: async (ids) => {
+            try { await rejectPendingGlobalMemories(ids, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
           },
         });
+        if (result.action === 'accept-all') setMemorySkipConfirm(true);
       } catch { /* best-effort */ }
     };
 

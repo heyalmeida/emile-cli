@@ -13,7 +13,7 @@ import {
 } from './operations.js';
 import { retrieveMemories } from './retrieval.js';
 import { initializeMemory, mutateMemoryState, readMemoryState } from './store.js';
-import { acceptAllPending } from './accept-all.js';
+import { acceptAllPending, acceptPendingByIds, rejectPendingByIds } from './accept-all.js';
 
 let paused = false;
 let skipConfirm = false;
@@ -132,6 +132,8 @@ export async function setGlobalMemoryMode(mode, options = {}) {
 }
 export async function acceptGlobalMemory(id, options = {}) { return acceptMemory(id, options); }
 export async function acceptAllGlobalMemories(options = {}) { return acceptAllPending(options); }
+export async function acceptPendingGlobalMemories(ids, options = {}) { return acceptPendingByIds(ids, options); }
+export async function rejectPendingGlobalMemories(ids, options = {}) { return rejectPendingByIds(ids, options); }
 export async function rejectGlobalMemory(id, options = {}) { return rejectMemory(id, options); }
 export async function forgetGlobalMemories(ids, options = {}) { return forgetMemories(ids, options); }
 export async function clearGlobalMemories(options = {}) { pendingTouches.clear(); return clearMemories(options); }

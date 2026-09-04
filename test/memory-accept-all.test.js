@@ -155,3 +155,66 @@ test('reject + acceptAll is equivalent to manual accept of remaining', async t =
   assert.equal(remaining.length, 3);
   assert.ok(!remaining.find(r => r.id === all[0].id));
 });
+
+import { acceptPendingGlobalMemories, rejectPendingGlobalMemories } from '../src/memory/index.js';
+
+test('acceptPendingGlobalMemories accepts a specific list of pending ids in one mutation', async t => {
+  const options = tempOptions(t);
+  await seedPending(options, t, 4);
+  const all = listPendingMemories(options).records;
+  const target = [all[0].id, all[2].id];
+  const result = await acceptPendingGlobalMemories(target, options);
+  assert.equal(result.value.status, 'active');
+  assert.equal(result.value.count, 2);
+  const status = getGlobalMemoryStatus(options);
+  assert.equal(status.active, 2);
+  assert.equal(status.pending, 2);
+});
+
+test('acceptPendingGlobalMemories ignores already-active ids and returns not-found when none match', async t => {
+  const options = tempOptions(t);
+  await seedPending(options, t, 2);
+  const all = listPendingMemories(options).records;
+  // First accept all to flip to active
+  await acceptAllGlobalMemories(options);
+  // Now try to accept them again
+  const result = await acceptPendingGlobalMemories([all[0].id, all[1].id], options);
+  assert.equal(result.value.status, 'not-found');
+  assert.equal(result.value.count, 0);
+});
+
+test('rejectPendingGlobalMemories rejects a specific list in one mutation', async t => {
+  const options = tempOptions(t);
+  await seedPending(options, t, 3);
+  const all = listPendingMemories(options).records;
+  const target = [all[0].id, all[1].id];
+  const result = await rejectPendingGlobalMemories(target, options);
+  assert.equal(result.value.status, 'rejected');
+  assert.equal(result.value.count, 2);
+  const status = getGlobalMemoryStatus(options);
+  assert.equal(status.active, 0);
+  assert.equal(status.pending, 1);
+  // The one not in the reject list is still there
+  const remaining = listGlobalMemories('', options).records;
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].id, all[2].id);
+});
+
+test('acceptPendingGlobalMemories is a no-op for empty id list', async t => {
+  const options = tempOptions(t);
+  const result = await acceptPendingGlobalMemories([], options);
+  assert.equal(result.value.status, 'none');
+  assert.equal(result.value.count, 0);
+  assert.equal(result.changed, false);
+});
+
+test('acceptPendingGlobalMemories bumps revision by exactly 1 regardless of id count', async t => {
+  const options = tempOptions(t);
+  await seedPending(options, t, 5);
+  const all = listPendingMemories(options).records;
+  const before = JSON.parse(fs.readFileSync(path.join(options.root, 'store.json'), 'utf8'));
+  const result = await acceptPendingGlobalMemories([all[0].id, all[1].id, all[2].id, all[3].id, all[4].id], options);
+  assert.equal(result.value.count, 5);
+  const after = JSON.parse(fs.readFileSync(path.join(options.root, 'store.json'), 'utf8'));
+  assert.equal(after.revision, before.revision + 1);
+});
