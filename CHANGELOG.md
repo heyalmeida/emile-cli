@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Dynamic memory mode and the `profile` type** (`specs/2026-09-04-dynamic-memory-mode`, ADR-0005): a sixth memory type `profile` covers personal context the user volunteers — name, personality, motivations, life situation, recurring personal rules. The model may now call `proposeMemory` proactively (without asking permission first) for that kind of fact, using `type: "profile"` or a `profile.*` / `personal.*` key. The `STABLE_EVIDENCE` source regex is bypassed only for the `profile` type; quoted-source, task-specific, credential/identifier/sensitive-topic/security-bypass denials, exact-source binding, two-session `auto` corroboration, conflict state, transient retrieval projection and full application-level deletion all remain authoritative. Retrieval weight for `profile` is 1.18 (between `user` 1.2 and `workflow` 1.15); MMR diversity, the 10 + 6 / 1 400-token budget and the existing `/memory`, `/remember`, `/forget` commands are unchanged.
+
 ### Changed
 - **Global provider configuration:** provider credentials, model, effort, web-search toggle and loop cap now persist in `~/.emile/config.json` with mode `0600`, while sessions, undo, web-provider settings and MCP consent remain scoped to each workspace's `.emile/` directory.
 - **Current SDD workflow templates:** new specs, tasks and documentation closeouts now explicitly stay on `development`, matching the mandatory single-branch workflow.

@@ -57,3 +57,4 @@ The user remains in control: first use defaults to conservative `ask` mode; infe
 | Date | Change | Reference |
 |------|---------|------------|
 | 2026-09-04 | Feature created and integrated across storage, agent, commands, tools, UI and lifecycle | `specs/2026-09-03-global-agent-memory`, ADR-0004, CHANGELOG |
+| 2026-09-04 | Added `type: "profile"` and proactive formation (ADR-0005): personal context the user volunteers (name, personality, motivations, life context) can be memorized through `proposeMemory` or `/remember`; the privacy gate, exact-source binding, `ask`/`auto` state machine and full deletion remain authoritative. | `specs/2026-09-04-dynamic-memory-mode`, ADR-0005 |
