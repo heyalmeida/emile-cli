@@ -37,18 +37,28 @@ export function isSafeCommand(command) {
 // outside must not allow reads/writes outside the sandbox).
 // New files (not yet on disk) are validated through their nearest existing
 // ancestor so `writeFile` keeps working for fresh paths. IMPROVEMENTS.md §1.2.
-export function resolveSafePath(userPath) {
-  const resolved = path.resolve(config.workspaceDir, userPath);
+export function resolveSafePath(userPath, {
+  root = config.workspaceDir,
+  label = 'workspace',
+  preserveFinalEntry = false,
+} = {}) {
+  const capabilityRoot = path.resolve(root);
+  const resolved = path.resolve(capabilityRoot, userPath);
   let workspaceReal;
   try {
-    workspaceReal = fs.realpathSync(config.workspaceDir);
+    workspaceReal = fs.realpathSync(capabilityRoot);
   } catch {
-    workspaceReal = config.workspaceDir;
+    workspaceReal = capabilityRoot;
   }
 
   let real;
   try {
-    real = fs.realpathSync(resolved);
+    const finalStat = fs.lstatSync(resolved);
+    if (preserveFinalEntry && finalStat.isSymbolicLink()) {
+      real = path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved));
+    } else {
+      real = fs.realpathSync(resolved);
+    }
   } catch {
     // Path does not exist yet (write path): validate via the deepest existing ancestor.
     let dir = path.dirname(resolved);
@@ -69,7 +79,7 @@ export function resolveSafePath(userPath) {
   const isOutside = relative.startsWith('..') || path.isAbsolute(relative);
 
   if (isOutside && real !== workspaceReal) {
-    throw new Error(`Access denied: path "${userPath}" resolves outside of workspace "${config.workspaceDir}"`);
+    throw new Error(`Access denied: path "${userPath}" resolves outside of ${label} "${capabilityRoot}"`);
   }
   return resolved;
 }

@@ -24,7 +24,7 @@ Emile will implement memory as a native, provider-agnostic client subsystem with
 3. **Conservative activation.** First use defaults to `ask`. Explicit `/remember` can create an active entry; inferred entries are pending and automatic activation requires corroboration in two distinct sessions. Conflicts require the user.
 4. **Structured canonical state.** A schema-versioned JSON snapshot and short write-ahead log are canonical. A bounded `MEMORY.md` file is a generated human-readable view only. No native database or vector dependency is introduced in V1.
 5. **Crash-safe bounded writes.** Mutations use a token-owned exclusive lock, durable intent record, atomic snapshot replacement, last-known-good recovery and bounded artifact sizes. Invalid files are quarantined; memory failure cannot prevent CLI startup.
-6. **Dedicated least-authority path capability.** A memory-only resolver is anchored to the real `~/.emile/memory/v1/` root, rejects symlinks and non-regular files and is not exported to general tools. Workspace file tools continue to require `resolveSafePath`. The mandatory code-organization rule must be clarified before implementation to name both approved confinement boundaries.
+6. **Dedicated least-authority path capability.** A memory-only wrapper supplies the real `~/.emile/memory/v1/` capability root to `resolveSafePath`, rejects symlinks and non-regular files and is not exported to general tools. Workspace file tools keep the default workspace root.
 7. **Data minimization and real application-level deletion.** No raw conversations, tool results, file/web/MCP content, reasoning, credentials or verbatim evidence are retained. Forgetting purges every Emile-managed canonical, recovery, derived and quarantined copy containing the selected memory.
 8. **Deterministic bounded retrieval.** Lexical scoring, metadata weights and diversity choose active memories without an extra model call. Dynamic memory context is attached to the current user turn within a 1,400-token estimate and never mutates the frozen system-prompt prefix.
 9. **Instruction hierarchy.** Current user intent and project rules outrank global memory. Memory is untrusted context and cannot authorize commands, disable gates, choose credentials or change its own privileges.
@@ -46,7 +46,7 @@ Emile will implement memory as a native, provider-agnostic client subsystem with
 - Atomic durability and cross-process locking add substantial implementation and fault-injection work.
 - Local plaintext protected by filesystem permissions is not encryption at rest.
 - A user-global scope amplifies false or stale memories, requiring conservative defaults and visible management.
-- The new path capability requires an explicit clarification to the repository's mandatory file-write rule before runtime code is permitted.
+- The shared confinement primitive becomes security-critical for both workspace and memory roots and requires regression tests for each boundary.
 
 ## Alternatives considered
 

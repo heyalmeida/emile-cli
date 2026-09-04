@@ -18,12 +18,12 @@
 
 ## Phase 1 — Confinement, schema and durable storage
 
-- [ ] T1.1 — Clarify Rule 4.5 so workspace writes use `resolveSafePath` and internal memory writes use a non-exported, root-confined memory resolver *(unblocks AC-01, AC-08)*
-- [ ] T1.2 — Implement versioned schemas, record/state caps and legal transition validation *(verifies AC-02, AC-03, AC-05)*
-- [ ] T1.3 — Implement production/test memory-root resolution, containment, symlink/special-file rejection and permission enforcement *(verifies AC-01, AC-02, AC-08)*
-- [ ] T1.4 — Implement the token-owned writer lock with bounded retry, conservative stale recovery and ownership-checked release *(verifies AC-08)*
-- [ ] T1.5 — Implement snapshot + WAL transactions, checksums/revisions, atomic replacement, backup and generated `MEMORY.md` *(verifies AC-03, AC-08)*
-- [ ] T1.6 — Implement startup validation, replay, quarantine, read-only degradation and typed health results *(verifies AC-08, AC-12)*
+- [x] T1.1 — Extend `resolveSafePath` with an internal explicit capability root so general tools remain workspace-confined and the non-exported memory resolver is confined to the global store *(unblocks AC-01, AC-08)*
+- [x] T1.2 — Implement versioned schemas, record/state caps and legal transition validation *(verifies AC-02, AC-03, AC-05)*
+- [x] T1.3 — Implement production/test memory-root resolution, containment, symlink/special-file rejection and permission enforcement *(verifies AC-01, AC-02, AC-08)*
+- [x] T1.4 — Implement the token-owned writer lock with bounded retry, conservative stale recovery and ownership-checked release *(verifies AC-08)*
+- [x] T1.5 — Implement snapshot + WAL transactions, checksums/revisions, atomic replacement, backup and generated `MEMORY.md` *(verifies AC-03, AC-08)*
+- [x] T1.6 — Implement startup validation, replay, quarantine, read-only degradation and typed health results *(verifies AC-08, AC-12)*
 - [ ] T1.7 — Add fault-injection and concurrent-process tests for every interruption point and path/file-type boundary *(verifies AC-08, AC-12)*
 
 > Commit this coherent storage/security unit on `development`, staging only its explicit files.

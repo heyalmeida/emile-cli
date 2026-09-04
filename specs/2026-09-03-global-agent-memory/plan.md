@@ -68,7 +68,7 @@ Slash handlers call the memory API, never storage internals. `/memory` shows sta
 
 ### 1.5 Integration order
 
-1. Clarify the mandatory path rule and land schema/path/privacy/storage primitives with fault tests.
+1. Preserve the mandatory path rule by extending `resolveSafePath` with an internal explicit capability root, then land schema/path/privacy/storage primitives with fault tests.
 2. Land candidate formation and deterministic retrieval/context projection.
 3. Land commands, private tools and TUI surfaces.
 4. Integrate shutdown, dry-run and agent loop; run regression/fault/manual gates.
@@ -78,7 +78,7 @@ Slash handlers call the memory API, never storage internals. `/memory` shows sta
 
 - **Relevant ADRs:** [ADR-0001](../../docs/adr/0001-tech-stack-choice.md) is preserved: Node.js ≥18, pure ESM, no build/native dependency. [ADR-0004](../../docs/adr/0004-global-agent-memory.md) records the new subsystem, durability and path boundary.
 - **Architecture document:** implementation adds a `memory/` domain, one dynamic agent-loop input and lifecycle flushing. The module table, runtime directories, diagrams and loop invariants must be updated in the implementation commit.
-- **Mandatory path rule:** before runtime code, Rule 4.5 in `.clinerules`/`AGENTS.md` must distinguish workspace writes through `resolveSafePath` from internal global-state writes through a dedicated root-confined resolver. This adds a narrower capability; it does not expose arbitrary home-directory access to tools.
+- **Mandatory path rule:** every write still passes through `resolveSafePath`. General tools use its default workspace root; the non-exported memory wrapper supplies only the fixed global-memory capability root and adds symlink/special-file checks. This does not expose arbitrary home-directory access to tools.
 - **Design system:** memory commands use only `src/ui/` and the exported `C` palette. Before UI implementation, document the list/detail/status/confirmation treatment in [visual identity](../../docs/visual-identity.md); verify widths below 80 columns and prompt ownership.
 - **Provider and MCP boundaries:** no provider-specific branches in memory and no MCP dependency. Memory tool definitions are ordinary private built-ins; retrieved content is the same for compatible providers.
 - **Prompt caching:** the stable memory policy may live in the frozen base prompt, but selected records never do. Dynamic records attach to the per-turn user projection.
@@ -141,7 +141,7 @@ Keep each new source file near the repository's 150-line maintainability target.
 
 | Action | Path (expected) | Notes |
 |--------|-----------------|-------|
-| Modify first | `.clinerules` (`AGENTS.md` symlink) | Name the dedicated global-state confinement rule before implementing writes. |
+| Modify | `src/tools/security.js` | Let internal callers supply an explicit capability root while preserving the workspace default for every general tool. |
 | Create | `src/memory/*.js` | Modular implementation described in § 4. |
 | Create | `test/memory-*.test.js` | Unit, integration, fault-injection, privacy and concurrency coverage. |
 | Modify | `src/agent/agent.js` | Per-turn retrieval/projection and candidate binding. |
