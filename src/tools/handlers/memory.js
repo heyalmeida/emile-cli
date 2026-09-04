@@ -4,7 +4,7 @@ import { proposeGlobalMemory, recallGlobalMemories } from '../../memory/index.js
 
 // Accept 'omitted' as a no-op parameter (some models try to use it)
 const PROPOSAL_KEYS = new Set(['evidence', 'key', 'type', 'activation', 'tags', 'omitted']);
-const PROPOSAL_TYPES = new Set(['user', 'workflow', 'feedback']);
+const PROPOSAL_TYPES = new Set(['user', 'workflow', 'feedback', 'profile']);
 const ACTIVATIONS = new Set(['always', 'relevant']);
 
 function validProposal(args) {

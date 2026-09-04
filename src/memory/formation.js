@@ -37,7 +37,18 @@ function evidenceIsQuoted(currentUserText, evidence) {
   return QUOTED_SOURCE.test(before.slice(-120));
 }
 
-function assessProposalSource(evidence, currentUserText) {
+// Per ADR-0005, the `profile` type (or any key prefixed `profile.` / `personal.`)
+// intentionally bypasses the `STABLE_EVIDENCE` regex so the model can memorize
+// personal context that does not match a work-preference pattern. The privacy
+// gate (`assessMemoryText`, run by the caller) is still dominant and rejects
+// secrets, identifiers, security-bypass and sensitive-topic text.
+function isProfileProposal(proposal) {
+  if (proposal?.type === 'profile') return true;
+  const key = String(proposal?.key || '').toLowerCase();
+  return key.startsWith('profile.') || key.startsWith('personal.');
+}
+
+function assessProposalSource(evidence, currentUserText, proposal = {}) {
   // Accept a single string or an array of recent messages
   const texts = Array.isArray(currentUserText) ? currentUserText : [currentUserText || ''];
   const current = texts.find(t => t.includes(evidence)) || texts[0] || '';
@@ -51,6 +62,7 @@ function assessProposalSource(evidence, currentUserText) {
     current.lastIndexOf('\n', start - 1),
   ) + 1, start);
   if (TASK_SCOPE.test(`${priorClause} ${evidence}`)) return 'task-specific';
+  if (isProfileProposal(proposal)) return null;
   if (!STABLE_EVIDENCE.some(pattern => pattern.test(evidence))) return 'unstable-evidence';
   return null;
 }
@@ -79,8 +91,9 @@ export function addExplicitMemory(draft, input, { sessionId, allowSensitive = fa
   const key = normalizeMemoryKey('', assessed.text);
   const duplicate = draft.records.find(record => record.state === 'active' && memorySimilarity(record.text, assessed.text) >= 0.8);
   if (duplicate) return { status: 'duplicate', id: duplicate.id };
+  const type = key.startsWith('profile.') || key.startsWith('personal.') ? 'profile' : 'user';
   const record = createRecord({
-    text: assessed.text, key, type: 'user', activation: 'relevant', sourceKind: 'explicit',
+    text: assessed.text, key, type, activation: 'relevant', sourceKind: 'explicit',
     sessionRef: sessionReference(sessionId), state: 'active', sensitivity: assessed.level,
   }, draft.revision + 1);
   draft.records.push(record);
@@ -89,13 +102,14 @@ export function addExplicitMemory(draft, input, { sessionId, allowSensitive = fa
 
 export function proposeMemoryCandidate(draft, proposal, { currentUserText, sessionId } = {}) {
   const evidence = typeof proposal?.evidence === 'string' ? proposal.evidence : '';
-  const sourceFailure = assessProposalSource(evidence, currentUserText);
+  const sourceFailure = assessProposalSource(evidence, currentUserText, proposal);
   if (!sessionId || sourceFailure) return { status: 'rejected', code: sourceFailure || 'invalid-source' };
   const assessed = assessMemoryText(evidence);
   if (assessed.level !== 'normal') return { status: 'rejected', code: assessed.code };
-  const type = MEMORY_TYPES.slice(0, 3).includes(proposal.type) ? proposal.type : 'user';
-  const activation = MEMORY_ACTIVATIONS.includes(proposal.activation) ? proposal.activation : 'relevant';
   const key = normalizeMemoryKey(proposal.key, assessed.text);
+  const inferredType = key.startsWith('profile.') || key.startsWith('personal.') ? 'profile' : null;
+  const type = MEMORY_TYPES.includes(proposal.type) ? proposal.type : (inferredType || 'user');
+  const activation = MEMORY_ACTIVATIONS.includes(proposal.activation) ? proposal.activation : 'relevant';
   const sessionRef = sessionReference(sessionId);
   const sameKey = draft.records.filter(record => record.key === key);
   const active = sameKey.find(record => record.state === 'active');

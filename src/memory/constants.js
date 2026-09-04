@@ -2,7 +2,7 @@ export const MEMORY_SCHEMA_VERSION = 1;
 export const DEFAULT_MEMORY_MODE = 'ask';
 
 export const MEMORY_MODES = Object.freeze(['off', 'ask', 'auto']);
-export const MEMORY_TYPES = Object.freeze(['user', 'workflow', 'feedback', 'fact', 'reference']);
+export const MEMORY_TYPES = Object.freeze(['user', 'workflow', 'feedback', 'fact', 'reference', 'profile']);
 export const MEMORY_STATES = Object.freeze(['active', 'pending', 'conflict']);
 export const MEMORY_ACTIVATIONS = Object.freeze(['always', 'relevant']);
 export const MEMORY_SENSITIVITY = Object.freeze(['normal', 'sensitive']);

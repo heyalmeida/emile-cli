@@ -5,7 +5,7 @@ import {
 } from './constants.js';
 import { estimateMemoryTokens, memorySimilarity, tokenizeMemory } from './tokens.js';
 
-const TYPE_WEIGHT = { user: 1.2, workflow: 1.15, feedback: 1.1, fact: 1, reference: 0.9 };
+const TYPE_WEIGHT = { user: 1.2, workflow: 1.15, feedback: 1.1, fact: 1, reference: 0.9, profile: 1.18 };
 
 function overlapScore(queryTokens, record) {
   const terms = new Set(tokenizeMemory(`${record.key} ${record.tags.join(' ')} ${record.text}`));
