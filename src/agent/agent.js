@@ -235,11 +235,28 @@ async function runAgentInner({
     messages[0].content = systemPrompt;
   }
 
-  // Extract recent user messages for memory evidence validation
-  const recentUserMessages = messages
+  // Extract recent user messages for memory evidence validation.
+  //
+  // The model may legitimately cite a span from a few turns back when the
+  // user asks it to memorize something that was mentioned earlier in the
+  // conversation (e.g. "extract info from the text I pasted at the start").
+  // A 5-message window was too narrow: the cited span could fall outside it
+  // and every proposeMemory would be rejected with invalid-source. We keep
+  // a bounded window by total character count (~16k chars, enough for ~20
+  // turns of typical user input) so the window is wide enough to cover
+  // long multi-turn grounding requests but still bounded.
+  const MEMORY_EVIDENCE_WINDOW_CHARS = 16_000;
+  const allUserTexts = messages
     .filter(m => m.role === 'user' && typeof m.content === 'string')
-    .map(m => m.content)
-    .slice(-5); // Last 5 user messages for evidence validation
+    .map(m => m.content);
+  const recentUserMessages = [];
+  let recentChars = 0;
+  for (let index = allUserTexts.length - 1; index >= 0; index -= 1) {
+    const text = allUserTexts[index];
+    if (recentChars + text.length > MEMORY_EVIDENCE_WINDOW_CHARS && recentUserMessages.length > 0) break;
+    recentUserMessages.unshift(text);
+    recentChars += text.length;
+  }
 
   let memoryUserMessage = null;
   let memoryBlock = '';
