@@ -191,6 +191,23 @@ test('dry-run and pause never defer a later usage-counter write', async t => {
   assert.equal(listGlobalMemories('', options).records[0].useCount, 0);
 });
 
+// --- dedupe: trailing punctuation must not defeat Jaccard similarity ---
+
+test('dedupe treats "phrase." and "phrase" as identical (trailing punctuation normalization)', async t => {
+  const options = tempOptions(t);
+  // First explicit remember with a trailing period
+  const first = await rememberGlobalMemory('Pedro is based in Brazil and communicates primarily in Portuguese.', {
+    ...options, sessionId: 'one',
+  });
+  assert.equal(first.value.status, 'active');
+  // Second one without the period must dedupe, not create a duplicate
+  const second = await rememberGlobalMemory('Pedro is based in Brazil and communicates primarily in Portuguese', {
+    ...options, sessionId: 'two',
+  });
+  assert.equal(second.value.status, 'duplicate');
+  assert.equal(getGlobalMemoryStatus(options).active, 1);
+});
+
 // --- ADR-0005: profile type bypasses STABLE_EVIDENCE, privacy gate still dominant ---
 
 test('profile proposal accepts non-stable personal evidence as pending in ask mode', async t => {

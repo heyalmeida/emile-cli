@@ -21,6 +21,10 @@ export function normalizeForMemory(value) {
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
     .replace(/[^\p{L}\p{N}._:-]+/gu, ' ')
     .replace(/\s+/g, ' ')
+    // Strip sentence-final punctuation so "phrase." and "phrase" tokenize
+    // identically for dedupe. Internal tokens keep their punctuation; only
+    // a token that is *purely* punctuation gets dropped by the >1 filter.
+    .replace(/[.!?]+\s*$/u, '')
     .trim();
 }
 
