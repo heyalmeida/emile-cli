@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-09-04-dynamic-memory-mode` |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 | **Type** | **Delta to** [`2026-09-03-global-agent-memory`](./../2026-09-03-global-agent-memory/spec.md) (additive, non-breaking) |
 | **Phase/Context** | Phase 3 — Agent Robustness (post-delivery) |
 | **Related documents** | [Base spec](../2026-09-03-global-agent-memory/spec.md), [PRD](../../docs/product.md), [Architecture](../../docs/architecture.md), [Glossary](../../docs/glossary.md), [Code quality & security](../../docs/code-quality-and-security.md), [ADR-0004](../../docs/adr/0004-global-agent-memory.md), **ADR-0005** (this spec introduces it) |

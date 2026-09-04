@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **Spec** | [`2026-09-04-dynamic-memory-mode`](./spec.md) |
-| **Status** | `draft` |
+| **Status** | `implemented` |
 | **Type** | Delta to base memory plan |
 
 ---
