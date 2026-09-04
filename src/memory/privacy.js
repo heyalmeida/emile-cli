@@ -6,7 +6,7 @@ const CREDENTIAL_PATTERNS = [
   /\b(?:sk|rk|pk|gh[pousr]|glpat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/,
   /\bBearer\s+[A-Za-z0-9._~+/-]{12,}={0,2}\b/i,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
-  /\b(?:api[_ -]?key|access[_ -]?token|password|secret)\s*[:=]\s*\S{8,}/i,
+  /\b(?:api[_ -]?key|access[_ -]?token|password|secret)\s*(?::|=|\bis\b|\bé\b)\s*\S{8,}/iu,
 ];
 
 const IDENTIFIER_PATTERNS = [

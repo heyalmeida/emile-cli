@@ -3,6 +3,16 @@ import { MAX_TAGS, MEMORY_ACTIVATIONS, MEMORY_TYPES } from './constants.js';
 import { assessMemoryText } from './privacy.js';
 import { memorySimilarity, tokenizeMemory } from './tokens.js';
 
+const STABLE_EVIDENCE = [
+  /\b(?:i|we)\s+(?:prefer|like|always|usually|never|require)\b/i,
+  /\b(?:my|our)\s+(?:preference|workflow|style|convention)\b/i,
+  /\b(?:eu|nós|nos)\s+(?:prefiro|preferimos|gosto|gostamos|sempre|normalmente|nunca|exijo|exigimos)\b/i,
+  /\b(?:minha|nossa)\s+(?:preferência|preferencia|forma|convenção|convencao)\b/i,
+  /\b(?:always|never|sempre|nunca|from now on|daqui em diante)\b/i,
+];
+const TASK_SCOPE = /\b(?:this|that)\s+(?:task|project|repository|repo|file|function|bug|request)\b|\b(?:for now|today|right now)\b|\b(?:esta|essa|nesta|nessa|este|esse|neste|nesse)\s+(?:tarefa|projeto|repositório|repositorio|arquivo|função|funcao|bug|pedido)\b|\b(?:por agora|hoje|agora)\b/i;
+const QUOTED_SOURCE = /\b(?:file|readme|documentation|docs?|tool|website|page|article|assistant|model|agent|arquivo|documentação|documentacao|ferramenta|site|página|pagina|artigo|assistente|modelo|agente)\b[^\n]{0,40}\b(?:says?|said|states?|contains?|diz|disse|afirma|contém|contem)\b/i;
+
 function id(prefix) { return `${prefix}_${crypto.randomBytes(8).toString('hex')}`; }
 export function sessionReference(sessionId) {
   return `sess_${crypto.createHash('sha256').update(String(sessionId || '')).digest('hex').slice(0, 16)}`;
@@ -14,6 +24,33 @@ export function normalizeMemoryKey(value, fallbackText = '') {
   if (/^[a-z0-9][a-z0-9._:-]{2,95}$/.test(supplied)) return supplied;
   const tokens = [...new Set(tokenizeMemory(fallbackText))].slice(0, 6).join('.').replace(/[^a-z0-9.]+/g, '');
   return `user.${tokens || crypto.createHash('sha256').update(fallbackText).digest('hex').slice(0, 12)}`.slice(0, 96);
+}
+
+function evidenceIsQuoted(currentUserText, evidence) {
+  const start = currentUserText.indexOf(evidence);
+  const before = currentUserText.slice(0, start);
+  const after = currentUserText.slice(start + evidence.length);
+  const opening = before.trimEnd().at(-1);
+  const closing = after.trimStart()[0];
+  if ((opening === '"' && closing === '"') || (opening === "'" && closing === "'")) return true;
+  if ((before.match(/```/g) || []).length % 2 === 1) return true;
+  return QUOTED_SOURCE.test(before.slice(-120));
+}
+
+function assessProposalSource(evidence, currentUserText) {
+  const current = String(currentUserText || '');
+  if (!evidence || !current.includes(evidence)) return 'invalid-source';
+  if (evidenceIsQuoted(current, evidence)) return 'quoted-source';
+  const start = current.indexOf(evidence);
+  const priorClause = current.slice(Math.max(
+    current.lastIndexOf('.', start - 1),
+    current.lastIndexOf('!', start - 1),
+    current.lastIndexOf('?', start - 1),
+    current.lastIndexOf('\n', start - 1),
+  ) + 1, start);
+  if (TASK_SCOPE.test(`${priorClause} ${evidence}`)) return 'task-specific';
+  if (!STABLE_EVIDENCE.some(pattern => pattern.test(evidence))) return 'unstable-evidence';
+  return null;
 }
 
 function normalizeTags(tags) {
@@ -50,7 +87,8 @@ export function addExplicitMemory(draft, input, { sessionId, allowSensitive = fa
 
 export function proposeMemoryCandidate(draft, proposal, { currentUserText, sessionId } = {}) {
   const evidence = typeof proposal?.evidence === 'string' ? proposal.evidence : '';
-  if (!sessionId || !evidence || !String(currentUserText || '').includes(evidence)) return { status: 'rejected', code: 'invalid-source' };
+  const sourceFailure = assessProposalSource(evidence, currentUserText);
+  if (!sessionId || sourceFailure) return { status: 'rejected', code: sourceFailure || 'invalid-source' };
   const assessed = assessMemoryText(evidence);
   if (assessed.level !== 'normal') return { status: 'rejected', code: assessed.code };
   const type = MEMORY_TYPES.slice(0, 3).includes(proposal.type) ? proposal.type : 'user';
