@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` + `specs/2026-09-01-turn-interrupt-queue` + `specs/2026-09-03-live-response-streaming` |
+| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` + `specs/2026-09-01-turn-interrupt-queue` + `specs/2026-09-03-live-response-streaming` + `specs/2026-09-03-stale-stream-prefix-dedup` |
 | **PRD RFs served** | RF-01, RF-03, RF-08, RF-10, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop |
 
@@ -35,6 +35,7 @@ free-model fallback and iteration limits protect the turn.
 | **Configuration** | Provider/model/effort in the per-user configuration directory and environment variables; credentials are protected separately |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop; the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
 | **Streaming feedback** | Text deltas render progressively in the response box; usage-only chunks keep the spinner alive; cancel/error/empty paths finalize without duplicate output |
+| **Stream normalization** | Cumulative and stale shorter-prefix snapshots are deduplicated before reasoning/content rendering and history persistence |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
 ## Where It Lives in the Code
@@ -60,3 +61,4 @@ OpenRouter-specific and may incur provider charges, including on free routes.
 | 2026-09-01 | Added graceful turn interrupt/queue and serialized stdin ownership across the persistent prompt, active-turn input and `/switch`; restored Tab completion and post-picker typing | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
 | 2026-09-02 | Replaced the compact active row with the shared full prompt frame; preserved drafts and the real caret across spinner/reasoning/output writes | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
 | 2026-09-03 | Added progressive assistant text rendering and continuous waiting feedback while preserving the final history response and empty/error/cancel semantics | `specs/2026-09-03-live-response-streaming` / CHANGELOG |
+| 2026-09-03 | Deduplicated replayed shorter-prefix snapshots that caused repeated reasoning and response text | `specs/2026-09-03-stale-stream-prefix-dedup` / CHANGELOG |
