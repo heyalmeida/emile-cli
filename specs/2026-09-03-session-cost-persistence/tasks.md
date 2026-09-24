@@ -13,11 +13,11 @@
 
 ## Phase 1 — Implementation
 
-- [ ] T1.1 — Add fixed-schema snapshot/reset/restore helpers to session stats.
-- [ ] T1.2 — Persist and return bounded stats metadata in history records.
-- [ ] T1.3 — Restore/reset stats on startup, session switch and new session.
-- [ ] T1.4 — Pass current stats snapshots through checkpoint/final/rewind saves.
-- [ ] T1.5 — Add session stats persistence and transition tests.
+- [x] T1.1 — Add fixed-schema snapshot/reset/restore helpers to session stats.
+- [x] T1.2 — Persist and return bounded stats metadata in history records.
+- [x] T1.3 — Restore/reset stats on startup, session switch and new session.
+- [x] T1.4 — Pass current stats snapshots through checkpoint/final/rewind saves.
+- [x] T1.5 — Add session stats persistence and transition tests.
 
 ## Phase 2 — Testing and Verification
 
