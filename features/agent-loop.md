@@ -32,7 +32,7 @@ free-model fallback and iteration limits protect the turn.
 | **CLI flags** | `-p, --plans`, `-e, --effort`, `--no-cache`, `--web-search` |
 | **Slash commands** | `/thinking`, `/cost` |
 | **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
-| **Configuration** | Provider/model/effort in `.emile/config.json` and environment variables |
+| **Configuration** | Provider/model/effort in the per-user configuration directory and environment variables; credentials are protected separately |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop; the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
 | **Streaming feedback** | Text deltas render progressively in the response box; usage-only chunks keep the spinner alive; cancel/error/empty paths finalize without duplicate output |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |

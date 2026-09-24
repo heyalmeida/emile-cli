@@ -71,7 +71,7 @@ npm install
 node bin/emile.js --verbose   # run from source with debug output
 ```
 
-**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or `.emile/config.json` (never commit that file).
+**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard or provider-specific env vars (`EMILE_PROVIDER`, `*_API_KEY`). The wizard stores settings in the OS user configuration directory and protects provider credentials separately; the workspace `.emile/` directory is runtime state and remains gitignored.
 
 ---
 

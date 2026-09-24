@@ -49,7 +49,7 @@ flowchart TD
 | `rules.js` | Optional user-authored rules discovery (`.emilerules`→`AGENTS.md`→`.clinerules`→`.cursorrules`), mtime-cached, 12k cap | Read-only; external symlinks rejected; no generated defaults or execution |
 | `lifecycle/` | Shutdown coordinator: ordered SIGINT/SIGTERM/SIGHUP/`beforeExit` handler with 5 phases (stop-input → drain-tools → flush-session → close-mcp → restore-terminal), global 3 s cap and `--verbose` phase timing | No tool execution or `process.exit` from within a phase; `shuttingDown` flag prevents re-entrancy |
 | `recovery.js` | Boot-time session scan: classifies every `pending` checkpoint as `recoverable`, `abandoned` or `corrupt`; moves corrupt sessions to `.emile/sessions/<id>/corrupt/` | Read-only; never throws; `RecoveryReport` returned regardless of scan outcome; REPL shown after scan |
-| `config.js` | Config load/save, env vars, workspace resolution, session-scoped web-search/cwd state and per-provider `resolveApiKey()` | Precedence: `.emile/config.json` > provider-specific env var only (no cross-provider fallback); API key file written with `mode: 0600` |
+| `config.js` | Global user settings load/save, protected provider credentials, env vars, workspace resolution, session-scoped web-search/cwd state and per-provider `resolveApiKey()` | User settings live in the OS user config directory; workspace `.emile/` remains runtime state. Settings JSON never contains `apiKey`; Windows credentials use DPAPI CurrentUser, other platforms use AES-256-GCM fallback; provider-specific env fallback only, never cross-provider |
 | `commands.js` | Connection and model wizards; assembles provider options and delegates model search to `ui/model-picker.js` | Model ids/catalog metadata remain data; terminal interaction stays in `ui/` |
 | `commands/` | Interactive slash-command registry and handlers | Exact command names only; handlers receive explicit REPL context and preserve existing security/UI gates |
 | `history.js` | Session persistence per workspace (save/restore/list/delete), complete/tool-pending metadata, bounded persisted snapshots, session cwd and non-mutating projections | Sessions in `.emile/` (gitignored); `reasoning_content` is omitted, cwd is normalized inside the workspace, and oldest tool results may become `[truncated]` on disk while active memory remains unchanged |
@@ -59,7 +59,8 @@ flowchart TD
 | Directory | Role |
 |-----------|-------|
 | `.agent/` | Generic agent kit (agents/skills/workflows) — **not product documentation** (see the hierarchy in `.clinerules`) |
-| `.emile/` | User config + sessions (gitignored) |
+| `.emile/` | Workspace runtime state: sessions, undo, MCP consent and other local state (gitignored) |
+| OS user config directory | Provider/model settings plus protected credential store; never API keys in settings JSON |
 | `mcp.json` | MCP server configuration, including `transport`, `url` and optional interpolated HTTP headers |
 
 ---

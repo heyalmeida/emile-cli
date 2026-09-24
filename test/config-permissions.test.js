@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { pathToFileURL } from 'url';
 
 const PROJECT = process.cwd();
 
@@ -19,10 +20,14 @@ function runSubprocess(testScript) {
     JSON.stringify({ provider: 'unknown', apiKey: 'unused' }));
 
   const scriptPath = path.join(tmp, 'test.mjs');
-  fs.writeFileSync(scriptPath, testScript({ project: PROJECT }));
+  const projectUrl = pathToFileURL(PROJECT).href;
+  fs.writeFileSync(scriptPath, testScript({ project: projectUrl }));
 
   try {
-    const r = execSync(`node ${scriptPath}`, { cwd: tmp });
+    const r = execFileSync(process.execPath, [scriptPath], {
+      cwd: tmp,
+      env: { ...process.env, EMILE_CONFIG_DIR: path.join(tmp, 'user-config') },
+    });
     return { ok: true, out: r.toString().trim() };
   } catch (err) {
     return { ok: false, out: err.stdout?.toString().trim() ?? '', err: err.message };
@@ -73,30 +78,28 @@ test('resolveApiKey: returns empty string when no matching env', () => {
 
 // ── Config file mode 0600 ─────────────────────────────────────────────────
 
-test('saveUserConfig writes config.json with mode 0600', () => {
+test('saveUserConfig writes user config with mode 0600', { skip: process.platform === 'win32' }, () => {
   const { out } = runSubprocess(({ project }) => [
     `import fs from 'node:fs';`,
-    `const {config, saveUserConfig} = await import('${project}/src/config.js');`,
-    `config.workspaceDir = process.cwd();`,
+    `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const files = fs.readdirSync('.emile');`,
-    `const mode = fs.statSync('.emile/' + files[0]).mode & 0o777;`,
+    `const mode = fs.statSync('user-config/config.json').mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
-  assert.equal(mode, 0o600, `config file mode should be 0600, got ${mode?.toString(8)}`);
+  assert.equal(mode, 0o600, `user config mode should be 0600, got ${mode?.toString(8)}`);
 });
 
-test('saveUserConfig chmods existing 0644 config to 0600', () => {
+test('saveUserConfig chmods existing user config to 0600', { skip: process.platform === 'win32' }, () => {
   const { out } = runSubprocess(({ project }) => [
     `import fs from 'node:fs';`,
-    `fs.writeFileSync('.emile/config.json', '{}', { mode: 0o644 });`,
-    `const {config, saveUserConfig} = await import('${project}/src/config.js');`,
-    `config.workspaceDir = process.cwd();`,
+    `fs.mkdirSync('user-config', { recursive: true });`,
+    `fs.writeFileSync('user-config/config.json', '{}', { mode: 0o644 });`,
+    `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const mode = fs.statSync('.emile/config.json').mode & 0o777;`,
+    `const mode = fs.statSync('user-config/config.json').mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
-  assert.equal(mode, 0o600, `config should be 0600 after chmod, got ${mode?.toString(8)}`);
+  assert.equal(mode, 0o600, `user config should be 0600 after chmod, got ${mode?.toString(8)}`);
 });

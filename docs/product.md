@@ -37,6 +37,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 - **US-13:** As a dev using a large-context model, I want history compression to respect that model's real window, so useful context is not summarized prematurely.
 - **US-14:** As a dev researching a current implementation or design, I want to opt into provider web search when supported, so the agent can use fresh external information while I remain aware of search costs.
 - **US-15:** As a dev waiting for a model response, I want progressive text and a persistent waiting indicator, so the terminal always shows that the agent is still working.
+- **US-16:** As a dev who launches Emile from different workspaces, I want provider settings to persist per OS user and credentials to stay out of ordinary JSON, so setup is not repeated and secrets are not casually exposed.
 
 ---
 
@@ -67,6 +68,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
 | **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
 | **RF-21** | Progressive assistant response streaming with continuous waiting feedback until visible reasoning, text or tool output, without duplicate final rendering | ✅ |
+| **RF-22** | Per-user provider settings persist across workspaces; provider credentials are stored separately from settings JSON using OS protection where available, with safe legacy migration and provider-specific resolution | ✅ |
 
 ---
 

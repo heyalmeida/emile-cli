@@ -127,7 +127,7 @@ CHANGELOG entry. Every wave ends with documentation sync (Rule 2 of
 | Startup recovery | G1 | new `src/recovery.js`; edits in `src/history.js` | Resuming a session with a `pending` checkpoint either re-queues the tool (if recoverable) or surfaces the abandoned tool to the user with a labeled metric in verbose mode. |
 | Persistent undo | G7 | edits in `src/tools/file-state.js`; new `.emile/undo/` schema | `/undo` after `emile` restart restores the file exactly; cap of50 entries is enforced; cap-overflow is logged. |
 | Cross-provider key isolation | (`IMPROVEMENTS.md` §1.4) | `src/config.js` | Saving a `requesty` provider does not silently pick up an `OPENROUTER_API_KEY`; mismatched keys are surfaced in the connect wizard. |
-| `0600` on config file | (`IMPROVEMENTS.md` §2.1) | `src/config.js` | `saveUserConfig` writes with `mode: 0o600`; existing `.emile/config.json` is `chmod 0600`'d on next save. |
+| Protected user configuration | (`IMPROVEMENTS.md` §2.1) | `src/config.js` | User settings live in the OS user config directory, settings JSON never contains `apiKey`, Windows credentials use DPAPI CurrentUser, and non-Windows uses authenticated AES-GCM. |
 | `engines` field | G12 | `package.json` | `npm install` warns on Node < 18; README still requires Node >= 18. |
 
 **Branch:** `feat/session-resilience`

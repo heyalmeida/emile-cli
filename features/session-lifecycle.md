@@ -47,7 +47,7 @@ flowchart LR
 | **CLI flags** | `--verbose` (phase timing) |
 | **Slash commands** | `/undo`, `/undo N`, `/delete`, `/sessions` |
 | **Tools** | Existing built-in tools; no new tool surface |
-| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); `.emile/config.json` mode `0600`; session cwd persisted per session |
+| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); per-user settings are stored outside the workspace with protected provider credentials; session cwd persisted per session |
 | **Applicable security gates** | `resolveSafePath` (undo files confined to `.emile/undo/`); existing safe mode, dry-run, whitelist unchanged; `resolveApiKey` enforces provider-specific env vars only |
 
 ## Where It Lives in the Code
@@ -66,7 +66,7 @@ flowchart LR
 - 3 test-isolation failures remain in the automated suite (ESM module cache between test files) — not production bugs (T2.13 in tasks.md).
 - Persisted undo is capped at 50 entries and 2 MB per entry; entries that exceed the size cap are recorded as `oversized: true`.
 - Symlinks inside `.emile/undo/` pointing outside are refused by `persistence.js` via `realpath` check.
-- `chmod 0600` is a no-op on Windows; the write still succeeds with a `--verbose` warning.
+- `chmod 0600` is a no-op on Windows; provider credentials are protected with DPAPI CurrentUser and the settings JSON contains no API key.
 - A `pending` checkpoint left by a process crash between tool completion and checkpoint write is not recoverable by this module; it relies on the existing `specs/2026-08-30-session-resilience` resume path.
 
 ## Change History

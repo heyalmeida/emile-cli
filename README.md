@@ -125,7 +125,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `.emile/config.json` |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in the per-user configuration |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -238,10 +238,16 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 | `EMILE_DEFAULT_MODEL` | Default model ID | `anthropic/claude-3.5-sonnet` |
 | `EMILE_DEFAULT_EFFORT` | Default reasoning effort | `low` |
 | `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `40` |
+| `EMILE_CONFIG_DIR` | Override the per-user configuration directory (isolated runs/tests) | OS user config directory |
 
-### Config file
+### User configuration and credentials
 
-Settings are persisted in `.emile/config.json` (auto-created on first run via the connect wizard). This takes precedence over environment variables. The `.emile/` and `.agent/` directories are gitignored by default.
+Provider/model settings are persisted in an OS user configuration directory and loaded on every startup, so the connect wizard is not required again when Emile is launched from another workspace. Provider API keys are never written to the settings JSON:
+
+- **Windows:** credentials are encrypted with DPAPI for the current Windows user.
+- **macOS/Linux:** credentials are encrypted with AES-256-GCM in a separate credentials file; the fallback key file is owner-only where the platform supports POSIX modes. This protects the JSON/settings surface but is not equivalent to an OS keychain because the same OS user can access both files.
+
+The workspace `.emile/` directory remains for sessions, undo history, MCP consent and other local runtime state. The exact user-config path can be overridden with `EMILE_CONFIG_DIR` for isolated environments and tests. Environment variables remain supported as a non-persistent fallback.
 
 ### Project rules
 
@@ -283,7 +289,7 @@ emile-cli/
 │   ├── tools/              # Tool schemas, security gates, per-tool handlers
 │   └── ui/                 # Terminal rendering (theme, boxes, prompt, thinking…)
 ├── .agent/skills/          # Skill modules (YAML frontmatter + markdown)
-├── .emile/                 # Runtime config + session storage (gitignored)
+├── .emile/                 # Workspace runtime state: sessions, undo, MCP consent (gitignored)
 ├── mcp.json                # MCP server configuration
 └── package.json
 ```

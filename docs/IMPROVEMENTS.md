@@ -84,31 +84,11 @@ function getRetryDelayMs(err, attempt) {
 
 ### 1.4 API key fallback mixes up providers
 
-> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `config.resolveApiKey(provider)` returns the key for the active provider only; cross-provider env var fallback is removed; the connect wizard surfaces the missing key explicitly.
+> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle` and `specs/2026-09-03-secure-global-config`: `config.resolveApiKey(provider)` returns only the selected provider's protected credential or matching environment variable; cross-provider fallback is impossible.
 
 **File:** `src/config.js`
 
-The current chain:
-
-```js
-apiKey: savedConfig.apiKey || process.env.REQUESTY_API_KEY
-  || process.env.OPENROUTER_API_KEY || process.env.OPENCODE_API_KEY || ''
-```
-
-uses whichever key is available, regardless of the active provider. If
-`provider = 'requesty'` but only `OPENROUTER_API_KEY` exists, it is silently
-used as the Requesty key — resulting in a hard-to-diagnose 401.
-
-**Suggestion:** resolve the env var by provider:
-
-| Provider | Env var |
-|----------|---------|
-| `requesty` | `REQUESTY_API_KEY` |
-| `openrouter` | `OPENROUTER_API_KEY` |
-| `opencode` | `OPENCODE_API_KEY` |
-| `opencode-go` | `OPENCODE_API_KEY` |
-
-If none matches, start empty and let the connection wizard handle it.
+The historical implementation mixed the saved key and every provider environment variable. The current implementation resolves one protected entry per provider and only consults that provider's environment variable when no protected entry exists. If neither matches, it starts empty and lets the connection wizard handle it.
 
 ---
 
@@ -136,23 +116,11 @@ if (undoStack.length > MAX_UNDO_ENTRIES) undoStack.shift();
 
 ### 2.1 API key stored in plain text
 
-> **✅ RESOLVED** — `specs/2026-09-02-session-lifecycle`: `saveUserConfig` writes `.emile/config.json` with `mode: 0600`; an existing file is `chmod`'d on the next save; if the filesystem rejects the permission (e.g. FAT), a `--verbose` warning is logged and the write continues.
+> **✅ RESOLVED** — `specs/2026-09-03-secure-global-config`: provider settings are stored in the OS user configuration directory, settings JSON never contains `apiKey`, Windows credentials use DPAPI CurrentUser, and non-Windows uses an AES-256-GCM fallback. Legacy plaintext credentials are migrated only after protected storage succeeds.
 
-**File:** `src/config.js` → `saveUserConfig`
+**File:** `src/config.js` → `saveUserConfig` and protected credential store
 
-The key sits in `.emile/config.json`, readable by any process/user on the
-machine, and an accidental commit would leak credentials.
-
-**Minimum actions:**
-
-1. Create the file with `0600` permissions:
-   ```js
-   fs.writeFileSync(userConfigPath, data, { mode: 0o600 });
-   ```
-2. Ensure `.emile/` is in `.gitignore`.
-3. Warn the user in the connection wizard about the env-var alternative.
-
-**Ideal:** support only env vars / OS keychain for the key.
+The previous implementation placed the key in `.emile/config.json`. The current implementation keeps the key out of ordinary settings JSON and protects it separately. Workspace `.emile/` remains runtime state only.
 
 ---
 
