@@ -176,6 +176,16 @@ function getStoredCredential(provider) {
   }
 }
 
+export function saveProtectedCredential(name, value) {
+  if (!name || typeof name !== 'string') throw new Error('A protected credential name is required.');
+  storeCredential(`protected:${name}`, value);
+}
+
+export function resolveProtectedCredential(name) {
+  if (!name || typeof name !== 'string') return '';
+  return getStoredCredential(`protected:${name}`);
+}
+
 function writeUserConfig(data) {
   try {
     writePrivateJson(userConfigPath, data);

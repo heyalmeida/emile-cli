@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-09-03 |
-| **Source spec** | `specs/2026-09-03-secure-global-config` |
+| **Source spec** | `specs/2026-09-03-secure-global-config` + `specs/2026-09-03-secure-enhanced-web-config` |
 | **PRD RFs served** | RF-02, RF-22 |
 | **Owner/Area** | Configuration / Security |
 
@@ -20,7 +20,7 @@ On Windows, credentials use DPAPI scoped to the current user. On other platforms
 2. A legacy `.emile/config.json` credential is migrated only after protected storage succeeds, then removed from the legacy JSON.
 3. `/connect` saves provider settings separately from the protected credential and reports only a generic success message.
 4. `resolveApiKey()` reads only the selected provider's protected entry or matching environment variable.
-5. Workspace `.emile/` continues to hold sessions, undo state and MCP consent.
+5. Workspace `.emile/` continues to hold sessions, undo state, MCP consent and enhanced web-search flags; enhanced web credentials are protected in the per-user credential store.
 
 ## Technical Details
 
@@ -37,15 +37,17 @@ On Windows, credentials use DPAPI scoped to the current user. On other platforms
 | Layer | Main paths |
 |--------|------------|
 | Configuration and credential boundary | `src/config.js` |
+| Enhanced web settings | `src/web/config.js` |
 | Connect/model wizards | `src/commands.js` |
 | Isolated coverage | `test/secure-config.test.js`, `test/config-permissions.test.js` |
 
 ## Known Limitations
 
-The non-Windows fallback is accessible to the same OS user who can read both the encrypted credential file and its key file; it is not equivalent to a hardware-backed or OS-keychain credential. Enhanced-web credentials use their existing separate configuration module and are not changed by this feature.
+The non-Windows fallback is accessible to the same OS user who can read both the encrypted credential file and its key file; it is not equivalent to a hardware-backed or OS-keychain credential. Enhanced-web provider state remains workspace-specific, while Tavily and Firecrawl credentials use the same protected per-user store.
 
 ## Change History
 
 | Date | Change | Reference |
 |------|---------|------------|
 | 2026-09-03 | Added global settings persistence, protected provider credentials and safe legacy migration | `specs/2026-09-03-secure-global-config` / CHANGELOG |
+| 2026-09-03 | Moved Tavily/Firecrawl credentials to protected storage while preserving enhanced mode and flags | `specs/2026-09-03-secure-enhanced-web-config` / CHANGELOG |

@@ -50,7 +50,7 @@ keep external costs visible and fail closed around credentials and unsafe URLs.
 |-------|--------|
 | **Risk classification** | **High.** LLM-generated tool arguments select external URLs; remote content is reintroduced into the LLM context; two billable API credentials are handled; and image URLs can cause the inference provider to perform a second fetch. |
 | **Assets/secrets** | Tavily and Firecrawl API keys, the primary model-provider key, saved configuration, session history and exported sessions. |
-| **Command execution / file writes** | No shell command or workspace content write is added. Configuration writes use the existing `.emile/config.json` boundary; web handlers never call `runCommand` or accept executable content. |
+| **Command execution / file writes** | No shell command or workspace content write is added. Enhanced settings use the workspace `.emile/web.json` for non-secret flags, while Tavily/Firecrawl credentials are delegated to the protected per-user credential store; web handlers never call `runCommand` or accept executable content. |
 | **Untrusted inputs** | User prompts, LLM tool-call arguments, requested URLs, DNS results, remote redirects/metadata, Tavily results, Firecrawl Markdown, screenshot URLs and provider error bodies. |
 | **Negative criteria** | Reject non-HTTP(S) URLs, embedded credentials, localhost, loopback/private/link-local/multicast/reserved IP targets, invalid DNS, excessive queries/results/output, inline secret arguments and use while disabled or uncredentialed. Never log authorization headers or raw provider error bodies. |
 
@@ -87,7 +87,7 @@ Additional boundaries:
 - **AC-05:** Given a public page URL, when Firecrawl succeeds, then bounded rendered Markdown is returned; when visual mode is requested with a vision-capable model, one validated screenshot is attached to the next model call.
 - **AC-06:** Given a private, local, credential-bearing, malformed or non-HTTP(S) target (including a hostname resolving to a private address), when either web handler is invoked, then it fails closed before making a billable provider request.
 - **AC-07:** Given provider timeout, invalid JSON, empty output, quota/auth failure or an oversized response, when the handler runs, then the agent receives a bounded secret-free result and its loop remains usable.
-- **AC-08:** Given `/tavily` or `/firecrawl` configuration and state commands, when credentials and states change, then masked input is used, inline keys are rejected, state persists under `.emile/`, and no key appears in terminal output or session/export content.
+- **AC-08:** Given `/tavily` or `/firecrawl` configuration and state commands, when credentials and states change, then masked input is used, inline keys are rejected, non-secret state persists under `.emile/web.json`, credentials persist in protected per-user storage, and no key appears in terminal output or session/export content.
 - **AC-09:** Given a model without confirmed image input, when Firecrawl returns a screenshot, then the screenshot is not attached and the agent receives a clear text-only compatibility notice.
 - **AC-10:** Given an enhanced result containing prompt-injection text, when it is added to model context, then stable system instructions label external web material as untrusted and forbid instruction precedence.
 

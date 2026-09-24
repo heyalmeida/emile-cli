@@ -247,7 +247,7 @@ Provider/model settings are persisted in an OS user configuration directory and 
 - **Windows:** credentials are encrypted with DPAPI for the current Windows user.
 - **macOS/Linux:** credentials are encrypted with AES-256-GCM in a separate credentials file; the fallback key file is owner-only where the platform supports POSIX modes. This protects the JSON/settings surface but is not equivalent to an OS keychain because the same OS user can access both files.
 
-The workspace `.emile/` directory remains for sessions, undo history, MCP consent and other local runtime state. The exact user-config path can be overridden with `EMILE_CONFIG_DIR` for isolated environments and tests. Environment variables remain supported as a non-persistent fallback.
+The workspace `.emile/` directory remains for sessions, undo history, MCP consent, enhanced web-search flags and other local runtime state. Tavily and Firecrawl credentials configured through `/tavily` and `/firecrawl` are also stored in protected credential storage, not in `.emile/web.json`. The exact user-config path can be overridden with `EMILE_CONFIG_DIR` for isolated environments and tests. Environment variables remain supported as a non-persistent fallback.
 
 ### Project rules
 

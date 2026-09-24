@@ -67,6 +67,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-18** | Dynamic terminal title driven by real runtime states, with sanitized/allowlisted activity labels and no prompt, command or query leakage | ✅ |
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
 | **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
+| **RF-23** | Enhanced Tavily/Firecrawl web search uses protected per-user credentials, preserves independent provider flags and keeps credentials out of `.emile/web.json` | ✅ |
 | **RF-21** | Progressive assistant response streaming with continuous waiting feedback until visible reasoning, text or tool output, without duplicate final rendering | ✅ |
 | **RF-22** | Per-user provider settings persist across workspaces; provider credentials are stored separately from settings JSON using OS protection where available, with safe legacy migration and provider-specific resolution | ✅ |
 

@@ -280,6 +280,8 @@ async function handleEnhancedProvider(ctx, provider, args = []) {
       [`${provider}Enabled`]: true,
     });
     (ctx.printWebProviderConfigured || printWebProviderConfigured)(provider);
+  } catch {
+    warnWebCommand(ctx, `Could not protect and save the ${provider} credential. Check the user configuration directory and try again.`);
   } finally {
     setTerminalActivity('waiting');
   }
