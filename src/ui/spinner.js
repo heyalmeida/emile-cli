@@ -82,6 +82,10 @@ export function createSpinner() {
 
     update(label) {
       currentLabel = label;
+      // Render immediately instead of waiting for the next animation tick.
+      // This is important when the provider changes state while a long tool
+      // or reasoning operation is still in progress.
+      if (interval) render();
       return this;
     },
 

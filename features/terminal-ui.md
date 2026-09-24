@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-aligned-multiline-tool-output` + `specs/2026-09-01-turn-interrupt-queue` |
+| **Source spec** | `specs/2026-08-25-tui-overhaul` (Pass 1) + `specs/2026-08-25-tui-premium` (Pass 2) + `specs/2026-08-25-tui-open-boxes` (Pass 3) + `specs/2026-08-25-prompt-multiline-fix` (Pass 4) + `specs/2026-08-25-dynamic-terminal-title` + `specs/2026-08-30-reasoning-details-display` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-aligned-multiline-tool-output` + `specs/2026-09-01-turn-interrupt-queue` + `specs/2026-09-03-live-response-streaming` |
 | **PRD RFs served** | RF-14, RF-16, RF-18 |
 | **Owner/Area** | UI (`src/ui/`) |
 
@@ -35,6 +35,7 @@ flowchart TD
 | **Slash commands** | `/thinking` (expand/collapse reasoning — expanded by default, opt-out collapse) |
 | **Configuration** | `config.expandThinking` (`true` = expanded for both live and completed reasoning; default expanded) |
 | **Reasoning request** | OpenRouter receives `reasoning: { effort }`; visible text supports `reasoning_details` while encrypted blocks remain hidden and cumulative snapshots are rendered only once |
+| **Progressive response** | `src/ui/response.js` opens the normal response box on the first content delta, redraws sanitized/Markdown text as bounded frames, and closes once; the spinner stays active for usage-only chunks |
 | **Input/redraw integrity** | The shared full prompt clips each row and preserves cursor/reset state in idle and active turns; `Shift+Enter` inserts a newline, Tab completes commands, and raw-mode ownership transfers exclusively to nested pickers or the active-turn owner, which routes stdout above the draft and keeps the real caret inside it |
 | **Semantic tool colors** | read=info · write/edit=warn · exec=red · grep/find=gold · list=fg · plan tools=accent |
 | **Multiline tool rows** | Continuation lines are sanitized, width-bounded and indented beneath the argument column instead of restarting at column zero |
@@ -77,3 +78,4 @@ flowchart TD
 | 2026-08-31 | Multiline tool arguments keep continuation lines aligned beneath the argument column with existing styling, bounds and sanitization | `specs/2026-08-31-aligned-multiline-tool-output` / CHANGELOG |
 | 2026-09-01 | Persistent prompt lifecycle: Tab completion, exact wrapped cursor/reset state, exclusive nested-picker stdin and reliable resume after `/switch` | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
 | 2026-09-02 | Active-turn visual parity: shared full prompt, distinct `●` autocomplete selection, prompt-aware stdout arbitration and real caret preserved at the draft | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
+| 2026-09-03 | Progressive assistant response streaming, continuous waiting feedback for metadata-only chunks, and single-shot response finalization | `specs/2026-09-03-live-response-streaming` / CHANGELOG |

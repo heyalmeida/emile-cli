@@ -53,10 +53,11 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
 | **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
 | **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
+| **Progressive response block** | `startResponseStream` / `appendResponseStream` / `endResponseStream` | The normal open response box opens on the first visible content delta; each delta is sanitized, Markdown-rendered and redrawn as one bounded frame, then the box is closed once when the stream ends. The final renderer is skipped to avoid duplicate output |
 | **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic tone of the operation and each physical line remains bounded/sanitized |
-| **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
+| **Tools header** | `printAssistantResponse` / `startResponseStream` | Single dim `↳ N tools` line above the response box — the only status line of a turn; the progressive path consumes the same counter before opening the box |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
-| **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |
+| **Spinner** | `src/spinner.js` | Braille, dependency-free; updates immediately on state change, remains active for usage-only chunks, and stops silently when the first visible stream signal or a terminal error/cancel is reached |
 | **Turn keys** | `listenTurnKeys` | Exclusive key listener active while the idle prompt is suspended and the agent works. It renders the same full frame, temporarily routes stdout above it, and leaves the real cursor at the queue draft caret. Esc/Ctrl+C cancel only the turn; Tab/↑/↓ keep slash autocomplete usable; Enter queues bounded/sanitized input. Cleanup erases the frame, restores the previous stdout writer/raw state and returns ownership to the idle prompt |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
@@ -118,6 +119,8 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 **Resolved in pass 2 (premium):** tool-call box borders (now grid-aligned lines), `✓ N tools completed` footer (now a dim `↳ N tools` header), thinking too visible (now ghost on collapse; expanded by default with opt-out), tool label columns unaligned, full-width response box (now 88-col measure), missing command divider for user messages.
 
 **Resolved in pass 3 (open boxes):** chronically misaligned right box borders (side rails removed entirely — no right-padding math), white top border on the response box (ANSI parts now composed separately).
+
+**Resolved in live response streaming:** assistant text now appears in the response block as content deltas arrive, the waiting spinner survives metadata-only chunks, and response/cancel/error finalization remains single-shot.
 
 **Still open:**
 

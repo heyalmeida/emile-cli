@@ -26,6 +26,7 @@ This is a personal project that grew into something useful enough to share. It's
 ## Features
 
 - **Live reasoning streams** — watch the model think in real time before it writes code, with expand/collapse toggle
+- **Progressive response streaming** — assistant text appears inside the response box as provider deltas arrive; the waiting indicator remains visible through metadata-only chunks instead of leaving a silent gap
 - **Built-in file tools** — read, write, edit (diff-based), search, and run shell commands, all with safe-mode gating
 - **MCP integration** — connect external tool servers via Model Context Protocol (STDIO transport)
 - **Prompt caching** — Requesty provider supports cache headers to reduce cost on repeated context
