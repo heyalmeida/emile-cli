@@ -65,6 +65,21 @@ test('new-session handler mutates only the explicit session state', async () => 
   assert.equal(state.summary, '');
 });
 
+test('new-session handler resets active usage statistics', async () => {
+  const state = { messages: [{ role: 'user', content: 'old' }], sessionId: 'old', summary: 'old' };
+  let reset = false;
+  const handled = await dispatchCommand('/new', {
+    setMessages: (messages) => { state.messages = messages; },
+    setSessionId: (sessionId) => { state.sessionId = sessionId; },
+    setSessionSummary: (summary) => { state.summary = summary; },
+    resetSessionStats: () => { reset = true; },
+  });
+
+  assert.equal(handled, true);
+  assert.equal(reset, true);
+  assert.deepEqual(state.messages, []);
+});
+
 test('thinking handler toggles the shared visibility state', async () => {
   const config = { expandThinking: true };
   const handled = await dispatchCommand('/thinking', { config });

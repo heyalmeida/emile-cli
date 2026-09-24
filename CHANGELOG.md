@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Single-development-branch workflow:** SDD implementation, documentation and closeout commits now stay directly on `development`. Routine work must not switch branches, create worktrees, pull, merge, rebase, reset, clean or stash; those operations require an explicit user request.
 
 ### Fixed
+- **Per-session cost persistence** (`specs/2026-09-03-session-cost-persistence`): token/cost counters now persist with each session record, restore on resume/switch and reset for `/new`; old records without stats remain loadable.
 - **Stale stream prefix snapshots** (`specs/2026-09-03-stale-stream-prefix-dedup`): replayed shorter snapshots that are prefixes of accumulated reasoning/content are now ignored, preventing repeated paragraphs in live output and persisted history.
 - **CI lint for the empty-stream regression**: the test now reuses its existing empty async iterable helper instead of declaring an async generator with no `yield`, satisfying ESLint's `require-yield` rule without changing the scenario.
 - **Multiline prompt paste no longer submits the first line** (`specs/2026-09-02-prompt-paste`): the idle and active prompt owners now use terminal bracketed-paste markers and explicitly treat `Enter` between `paste-start`/`paste-end` as a literal newline. Pasted text remains one editable, CRLF-normalized draft and a separate `Enter` sends it. Cleanup restores the terminal mode after either prompt releases raw stdin.

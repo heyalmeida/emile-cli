@@ -121,7 +121,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/new` `/clear` | Start a fresh session |
 | `/rewind` | Remove your last message (and the agent's reply) and re-edit it |
 | `/undo [N]` | Revert the last file modification, or the last N changes after confirmation |
-| `/cost` | Show cumulative token usage and estimated cost |
+| `/cost` | Show cumulative token usage and estimated cost for the active saved session |
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |

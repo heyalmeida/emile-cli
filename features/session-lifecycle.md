@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-09-02 |
-| **Source spec** | `specs/2026-09-02-session-lifecycle` |
+| **Source spec** | `specs/2026-09-02-session-lifecycle` + `specs/2026-09-03-session-cost-persistence` |
 | **PRD RFs served** | RF-05 (safe mode), RF-06 (undo), RF-07 (session persistence) |
 | **Owner/Area** | Agent Loop / Session persistence / Tools / Config |
 
@@ -47,7 +47,7 @@ flowchart LR
 | **CLI flags** | `--verbose` (phase timing) |
 | **Slash commands** | `/undo`, `/undo N`, `/delete`, `/sessions` |
 | **Tools** | Existing built-in tools; no new tool surface |
-| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); per-user settings are stored outside the workspace with protected provider credentials; session cwd persisted per session |
+| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); per-user settings are stored outside the workspace with protected provider credentials; per-session usage stats persist with history; session cwd persisted per session |
 | **Applicable security gates** | `resolveSafePath` (undo files confined to `.emile/undo/`); existing safe mode, dry-run, whitelist unchanged; `resolveApiKey` enforces provider-specific env vars only |
 
 ## Where It Lives in the Code
@@ -58,6 +58,7 @@ flowchart LR
 | Boot recovery | `src/recovery.js` (`runStartupRecovery` → `RecoveryReport`) |
 | Undo persistence | `src/tools/file-state/undo-stack.js`, `src/tools/file-state/persistence.js`, `src/tools/file-state/path.js` |
 | API key isolation | `src/config.js` (`resolveApiKey`, `saveUserConfig`) |
+| Usage persistence | `src/agent/session-stats.js`, `src/history.js`, `src/cli.js`, `src/commands/handlers.js` |
 | Wiring | `src/cli.js`, `src/agent/agent.js`, `src/history.js` |
 
 ## Known Limitations
@@ -78,3 +79,4 @@ flowchart LR
 | 2026-09-02 | Undo stack persisted under `.emile/undo/<sessionId>/` and rehydrated on boot; cap at 50 enforced | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | Per-provider `resolveApiKey` (no cross-provider fallback); config file mode `0600` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | `package.json` engines field `node >=18` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
+| 2026-09-03 | Persisted per-session token/cost counters and restored them on resume/session switch; `/new` resets usage | `specs/2026-09-03-session-cost-persistence` / CHANGELOG |

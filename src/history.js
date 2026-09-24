@@ -5,6 +5,24 @@ import { warn } from './ui/log.js';
 import { normalizeWorkspaceCwd } from './tools/security.js';
 
 const historyDir = path.join(config.workspaceDir, '.emile', 'history');
+const SESSION_STATS_FIELDS = [
+  'promptTokens',
+  'completionTokens',
+  'totalCost',
+  'cachedPromptTokens',
+  'lastPromptTokens',
+  'lastCompletionTokens',
+];
+
+function normalizeSessionStats(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const normalized = { version: 1 };
+  for (const field of SESSION_STATS_FIELDS) {
+    const number = Number(value[field]);
+    normalized[field] = Number.isFinite(number) && number >= 0 ? number : 0;
+  }
+  return normalized;
+}
 
 // Ensure history directory exists
 function ensureHistoryDir(directory = historyDir) {
@@ -73,15 +91,19 @@ export function saveSession(sessionId, summary, messages, metadata = {}) {
     data.pendingToolCalls = metadata.pendingToolCalls;
   }
 
-  // If file already exists, preserve original createdAt
+  // If file already exists, preserve original creation time and the last
+  // known usage snapshot when the caller does not provide one.
+  let existingData = null;
   if (fs.existsSync(filePath)) {
     try {
-      const existing = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      data.createdAt = existing.createdAt;
+      existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      data.createdAt = existingData.createdAt;
     } catch (e) {
       // Ignore reading error
     }
   }
+  const stats = normalizeSessionStats(metadata.stats) || normalizeSessionStats(existingData?.stats);
+  if (stats) data.stats = stats;
 
   try {
     const persisted = trimPersistedMessages(messages || []);
@@ -110,6 +132,7 @@ export function getSessionRecord(sessionId) {
       ...data,
       status: data.status === 'tool_pending' ? 'tool_pending' : 'complete',
       pendingToolCalls: Array.isArray(data.pendingToolCalls) ? data.pendingToolCalls : [],
+      stats: normalizeSessionStats(data.stats),
       sessionCwd: normalizeWorkspaceCwd(data.sessionCwd) || config.workspaceDir,
     };
   } catch (err) {

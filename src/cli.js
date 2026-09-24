@@ -52,7 +52,7 @@ export async function main() {
 
   // Dynamically import heavy dependencies to optimize startup time (e.g. for --help)
   const { initializeMcp, shutdownMcp } = await import('./mcp.js');
-  const { runAgent, resumePendingTools, sessionStats, initSessionStats, createTurnControl } = await import('./agent/index.js');
+  const { runAgent, resumePendingTools, sessionStats, initSessionStats, getSessionStatsSnapshot, resetSessionStats, restoreSessionStats, createTurnControl } = await import('./agent/index.js');
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
   const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions, flushSync, markAborted } = await import('./history.js');
   const { installShutdownHandlers } = await import('./lifecycle/index.js');
@@ -158,6 +158,7 @@ export async function main() {
   let sessionId = `session_${Date.now()}`;
   let sessionSummary = '';
   let isResumed = false;
+  let restoredSessionStats = null;
   let completedTurnCount = 0;
 
   // ── Handle history resume ──────────────────────────────────────
@@ -188,6 +189,7 @@ export async function main() {
         const refreshedSessions = listSessions();
         const matched = refreshedSessions.find(s => s.id === selectedId);
         sessionSummary = matched ? matched.summary : '';
+        restoredSessionStats = record?.stats || null;
         isResumed = true;
       } else {
         console.log(C.red('\n  Error loading session. Starting new.\n'));
@@ -215,12 +217,21 @@ export async function main() {
     }
   }
 
-  // ── Initialize token/context estimate + model context limit ────
+  // ── Initialize active-session usage and context estimate ─────────
+  if (restoredSessionStats) restoreSessionStats(restoredSessionStats);
+  else resetSessionStats();
   initSessionStats(config.defaultModel, config.plansMode, activeSkills, messages);
   completedTurnCount = countCompletedTurns(messages);
 
+  const persistSession = (targetSessionId, summary, messages, metadata = {}) => {
+    saveSession(targetSessionId, summary, messages, {
+      ...metadata,
+      stats: getSessionStatsSnapshot(),
+    });
+  };
+
   const checkpointSession = async (checkpointMessages, metadata) => {
-    saveSession(sessionId, sessionSummary, checkpointMessages, metadata);
+    persistSession(sessionId, sessionSummary, checkpointMessages, metadata);
   };
 
   const finalizeSessionTurn = async () => {
@@ -231,7 +242,7 @@ export async function main() {
       currentSummary: sessionSummary,
       turnCount: completedTurnCount,
     });
-    saveSession(sessionId, sessionSummary, messages, { status: 'complete' });
+    persistSession(sessionId, sessionSummary, messages, { status: 'complete' });
   };
 
   const resumeLoadedSession = async (loadedSessionId, loadedMessages) => {
@@ -242,13 +253,13 @@ export async function main() {
       messages: loadedMessages,
       pendingToolCalls: record.pendingToolCalls,
       checkpointSession: async (checkpointMessages, metadata) => {
-        saveSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
+        persistSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
       },
     });
 
     if (recovery.invalid) {
       console.log(C.warn('\n  Incomplete session checkpoint was invalid; no tools were executed.\n'));
-      saveSession(loadedSessionId, sessionSummary, loadedMessages, { status: 'complete' });
+      persistSession(loadedSessionId, sessionSummary, loadedMessages, { status: 'complete' });
       return;
     }
     if (!recovery.resumed) return;
@@ -262,7 +273,7 @@ export async function main() {
       messages: loadedMessages,
       initialPrompt: '',
       checkpointSession: async (checkpointMessages, metadata) => {
-        saveSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
+        persistSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
       },
     });
     sessionId = loadedSessionId;
@@ -380,8 +391,10 @@ export async function main() {
       loadSession,
       deleteSession,
       cleanSessions,
-      saveSession,
+      saveSession: persistSession,
       initSessionStats,
+      resetSessionStats,
+      restoreSessionStats,
       shutdownMcp,
       cancel,
       exit: (code) => process.exit(code),
