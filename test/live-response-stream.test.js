@@ -5,17 +5,33 @@ import assert from 'node:assert/strict';
 
 import { runAgent } from '../src/agent/agent.js';
 
-function captureStdout() {
+function captureStdout({ tty = false } = {}) {
   const writes = [];
   const original = process.stdout.write.bind(process.stdout);
+  const originalIsTTY = process.stdout.isTTY;
+  const originalRows = process.stdout.rows;
   process.stdout.write = (chunk) => {
     writes.push(String(chunk));
     return true;
   };
+  if (tty) {
+    // The in-place redraw path only runs on a TTY; tests that verify
+    // progressive partial-line visibility fake one.
+    process.stdout.isTTY = true;
+    process.stdout.rows = 24;
+  }
   return {
     writes,
     text: () => writes.join(''),
-    restore() { process.stdout.write = original; },
+    restore() {
+      process.stdout.write = original;
+      if (tty) {
+        if (originalIsTTY === undefined) delete process.stdout.isTTY;
+        else process.stdout.isTTY = originalIsTTY;
+        if (originalRows === undefined) delete process.stdout.rows;
+        else process.stdout.rows = originalRows;
+      }
+    },
   };
 }
 
@@ -54,7 +70,9 @@ async function runWithStream(createCompletion) {
 test('renders a content delta before the stream releases', async () => {
   let release;
   const gate = new Promise(resolve => { release = resolve; });
-  const output = captureStdout();
+  // Fake a TTY: the in-place redraw path is what makes a partial line visible
+  // before its row is final (non-TTY/sealed output is line-buffered).
+  const output = captureStdout({ tty: true });
   const run = runAgent({
     model: 'test/live-stream',
     plansMode: false,

@@ -52,6 +52,22 @@ let _responseStreamActive = false;
 let _responseStreamContent = '';
 let _responseStreamLines = 0;
 let _responseStreamBoxWidth = 0;
+// Sealed mode: cursor-up can no longer recall the whole frame (stdout is not
+// a TTY, or the frame outgrew the viewport), so redraws are replaced by
+// append-only emission of newly completed lines.
+let _responseStreamSealed = false;
+
+// Rows reserved around the redrawable frame: box top (border + inner padding)
+// plus the closing blank line, bottom border and one row of headroom.
+const STREAM_FRAME_MARGIN = 4;
+
+function frameFitsViewport(lineCount) {
+  if (process.stdout.isTTY !== true) return false;
+  // A TTY normally exposes rows. When it does not, retain the established
+  // redraw behavior rather than sealing on an unknown viewport.
+  const rows = process.stdout.rows || 0;
+  return rows <= 0 || lineCount <= rows - STREAM_FRAME_MARGIN;
+}
 
 /**
  * Starts the same response box used by the final renderer, but keeps it open
@@ -66,6 +82,7 @@ export function startResponseStream() {
   _responseStreamContent = '';
   _responseStreamLines = 0;
   _responseStreamBoxWidth = boxW;
+  _responseStreamSealed = false;
 
   printToolCountHeader();
   process.stdout.write(GAP.section);
@@ -83,6 +100,35 @@ export function appendResponseStream(delta) {
   const oldLineCount = _responseStreamLines;
   let output = '';
 
+  // A frame taller than the viewport (or a non-TTY stdout) cannot be erased
+  // with cursor-up: lines that scrolled away re-print on every delta, which
+  // multiplies the response in the terminal and in piped captures. Seal the
+  // frame once and only append lines that finished growing.
+  if (!_responseStreamSealed && !frameFitsViewport(lines.length)) {
+    _responseStreamSealed = true;
+    if (oldLineCount > 0) {
+      // The last drawn row was rendered from incomplete content and can no
+      // longer be redrawn; blank it and let the sealed branch re-emit the
+      // row once its text is final.
+      output += '\x1B[1A\r\x1B[K';
+      _responseStreamLines = oldLineCount - 1;
+    }
+  }
+
+  if (_responseStreamSealed) {
+    // The last rendered line is still growing (later deltas reflow it), so it
+    // is held back until endResponseStream flushes it in final form.
+    const settledLineCount = Math.max(lines.length - 1, 0);
+    if (settledLineCount > _responseStreamLines) {
+      for (const line of lines.slice(_responseStreamLines, settledLineCount)) {
+        output += `\r\x1B[K${BOX_INDENT}${line}\n`;
+      }
+      _responseStreamLines = settledLineCount;
+    }
+    if (output) process.stdout.write(output);
+    return;
+  }
+
   if (oldLineCount > 0) output += `\x1B[${oldLineCount}A`;
   for (const line of lines) output += `\r\x1B[K${BOX_INDENT}${line}\n`;
 
@@ -98,12 +144,22 @@ export function appendResponseStream(delta) {
 export function endResponseStream() {
   if (!_responseStreamActive) return;
   _responseStreamActive = false;
+  if (_responseStreamSealed) {
+    // Flush the held-back tail: the final rendering of the last lines.
+    const { wrapW } = getResponseGeometry();
+    const lines = formatResponseBody(_responseStreamContent, wrapW);
+    let output = '';
+    for (const line of lines.slice(_responseStreamLines)) output += `\r\x1B[K${BOX_INDENT}${line}\n`;
+    _responseStreamLines = Math.max(_responseStreamLines, lines.length);
+    if (output) process.stdout.write(output);
+  }
   if (_responseStreamLines > 0) {
     process.stdout.write(`\n${boxBottomOpen(_responseStreamBoxWidth)}\n`);
   }
   _responseStreamContent = '';
   _responseStreamLines = 0;
   _responseStreamBoxWidth = 0;
+  _responseStreamSealed = false;
 }
 
 /**

@@ -34,7 +34,7 @@ free-model fallback and iteration limits protect the turn.
 | **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
 | **Configuration** | Provider/model/effort in the per-user configuration directory and environment variables; credentials are protected separately |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop; the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
-| **Streaming feedback** | Text deltas render progressively in the response box; usage-only chunks keep the spinner alive; cancel/error/empty paths finalize without duplicate output |
+| **Streaming feedback** | Text deltas render progressively in the response box; usage-only chunks keep the spinner alive; cancel/error/empty paths finalize without duplicate output. If the frame cannot be redrawn in the current viewport or stdout is non-TTY, it seals and appends each remaining line once |
 | **Stream normalization** | Cumulative and stale shorter-prefix snapshots are deduplicated before reasoning/content rendering and history persistence |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
@@ -62,3 +62,4 @@ OpenRouter-specific and may incur provider charges, including on free routes.
 | 2026-09-02 | Replaced the compact active row with the shared full prompt frame; preserved drafts and the real caret across spinner/reasoning/output writes | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
 | 2026-09-03 | Added progressive assistant text rendering and continuous waiting feedback while preserving the final history response and empty/error/cancel semantics | `specs/2026-09-03-live-response-streaming` / CHANGELOG |
 | 2026-09-03 | Deduplicated replayed shorter-prefix snapshots that caused repeated reasoning and response text | `specs/2026-09-03-stale-stream-prefix-dedup` / CHANGELOG |
+| 2026-09-24 | Sealed response and expanded thinking frames when cursor-up cannot redraw a non-TTY or viewport-overflow stream, preventing multiplied long output | `specs/2026-09-24-stream-viewport-seal` / CHANGELOG |

@@ -52,6 +52,21 @@ let _thinkingLinesPrinted = 0;
 let _thinkingHeaderPrinted = false;
 let _thinkingHeaderLineCount = 0;
 let _startedAsExpanded = false;
+// Sealed mode (expanded only): the block outgrew the viewport or stdout is
+// not a TTY, so cursor-up redraws are impossible and only newly completed
+// lines are appended.
+let _thinkingStreamSealed = false;
+
+// Rows reserved around the redrawable block: header + closing footer + headroom.
+const THINKING_FRAME_MARGIN = 3;
+
+function thinkingFrameFits(lineCount) {
+  if (process.stdout.isTTY !== true) return false;
+  // A TTY normally exposes rows. When it does not, retain the established
+  // redraw behavior rather than sealing on an unknown viewport.
+  const rows = process.stdout.rows || 0;
+  return rows <= 0 || lineCount <= rows - THINKING_FRAME_MARGIN;
+}
 
 export function startThinkingStream() {
   if (_thinkingStreamActive) return;
@@ -61,6 +76,7 @@ export function startThinkingStream() {
   _thinkingHeaderPrinted = false;
   _thinkingHeaderLineCount = 0;
   _startedAsExpanded = config.expandThinking === true;
+  _thinkingStreamSealed = false;
 
   // Expanded (opt-in via /thinking or Ctrl+P): thinking streams visibly as
   // the model reasons. Collapsed (default): a single ghost line that
@@ -97,6 +113,34 @@ export function appendThinkingStream(delta) {
   const oldTotal = _thinkingHeaderLineCount + _thinkingLinesPrinted;
   const newTotal = _thinkingHeaderLineCount + newLines.length;
   let output = '';
+
+  // A block taller than the viewport (or a non-TTY stdout) cannot be erased
+  // with cursor-up: redraws would re-print the whole accumulated reasoning on
+  // every delta. Seal the block once and only append completed lines.
+  if (!_thinkingStreamSealed && !thinkingFrameFits(newTotal)) {
+    _thinkingStreamSealed = true;
+    if (_thinkingLinesPrinted > 0) {
+      // The last drawn row came from incomplete content and can no longer be
+      // redrawn; blank it so the sealed branch re-emits it once final.
+      output += '\x1B[1A\r\x1B[K';
+      _thinkingLinesPrinted -= 1;
+    }
+  }
+
+  if (_thinkingStreamSealed) {
+    // The last rendered line is still growing; hold it back until the stream
+    // ends and its shape is final.
+    const settledLineCount = Math.max(newLines.length - 1, 0);
+    if (settledLineCount > _thinkingLinesPrinted) {
+      for (const line of newLines.slice(_thinkingLinesPrinted, settledLineCount)) {
+        output += '\r\x1B[K' + '  ' + C.muted(line) + '\n';
+      }
+      _thinkingLinesPrinted = settledLineCount;
+    }
+    debugWrite('thinking.append.sealed', output);
+    if (output) process.stdout.write(output);
+    return;
+  }
 
   // Move cursor up to the start of the thinking block (header + old muted lines)
   if (oldTotal > 0) {
@@ -141,6 +185,22 @@ export function endThinkingStream() {
     if (wordCount > 0) {
       { const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`; debugWrite('thinking.end.collapsed', _o); process.stdout.write(_o); }
     }
+  } else if (_thinkingStreamSealed) {
+    // Sealed: cursor-up cannot reach the header anymore. Flush the held-back
+    // tail and close with a footer line below the block instead.
+    const cols = process.stdout.columns || 80;
+    const innerW = Math.max(cols - 4, 40);
+    const newLines = [];
+    for (const rawLine of _thinkingBuffer.split('\n')) {
+      if (rawLine.trim().length === 0) { newLines.push(''); continue; }
+      for (const w of wrapText(rawLine, innerW)) newLines.push(w);
+    }
+    let output = '';
+    for (const line of newLines.slice(_thinkingLinesPrinted)) {
+      output += '\r\x1B[K' + '  ' + C.muted(line) + '\n';
+    }
+    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    debugWrite('thinking.end.sealed', output); process.stdout.write(output);
   } else {
     // Expanded: keep the streamed text in place and update only the known
     // header row with the final duration. Move back to the end of the block
@@ -159,6 +219,7 @@ export function endThinkingStream() {
   _thinkingHeaderPrinted = false;
   _thinkingHeaderLineCount = 0;
   _startedAsExpanded = false;
+  _thinkingStreamSealed = false;
 }
 
 /**

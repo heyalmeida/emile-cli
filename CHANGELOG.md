@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Single-development-branch workflow:** SDD implementation, documentation and closeout commits now stay directly on `development`. Routine work must not switch branches, create worktrees, pull, merge, rebase, reset, clean or stash; those operations require an explicit user request.
 
 ### Fixed
+- **Sealed live-stream rendering** (`specs/2026-09-24-stream-viewport-seal`): response and expanded thinking streams now switch from cursor-up redraws to append-only output when stdout is non-TTY or the frame exceeds the terminal viewport, preventing long responses from being multiplied in the terminal and captured logs; the final growing line is flushed once at stream end.
 - **Per-session cost persistence** (`specs/2026-09-03-session-cost-persistence`): token/cost counters now persist with each session record, restore on resume/switch and reset for `/new`; old records without stats remain loadable.
 - **Stale stream prefix snapshots** (`specs/2026-09-03-stale-stream-prefix-dedup`): replayed shorter snapshots that are prefixes of accumulated reasoning/content are now ignored, preventing repeated paragraphs in live output and persisted history.
 - **CI lint for the empty-stream regression**: the test now reuses its existing empty async iterable helper instead of declaring an async generator with no `yield`, satisfying ESLint's `require-yield` rule without changing the scenario.
