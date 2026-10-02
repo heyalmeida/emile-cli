@@ -15,5 +15,39 @@
     "no-inner-declarations": "off",
     "no-empty": ["warn", {"allowEmptyCatch": true}],
     "no-unused-vars": ["warn", {"args": "none", "ignoreRestSiblings": true}]
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/lifecycle/**/*.js",
+        "src/memory/**/*.js",
+        "src/tools/file-state.js",
+        "src/tools/file-state/**/*.js",
+        "src/recovery.js"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 150, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "src/agent/agent.js",
+        "src/agent/compression.js",
+        "src/api/client.js",
+        "src/plans.js"
+      ],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [{
+            "group": ["picocolors", "picocolors/*"],
+            "message": "Use the canonical UI palette from src/ui/theme.js instead of importing picocolors directly."
+          }]
+        }],
+        "no-restricted-syntax": ["error", {
+          "selector": "VariableDeclarator[id.name=/^(ESC|amber|muted|green|red)$/]",
+          "message": "Do not define a local color helper here; consume the canonical UI palette from src/ui/theme.js."
+        }]
+      }
+    }
+  ]
 }

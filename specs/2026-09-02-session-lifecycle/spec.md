@@ -114,7 +114,7 @@ Each AC is independently verifiable. Evidence is recorded in `tasks.md`.
 - **AC-08:** Given the provider is `requesty` and only `OPENROUTER_API_KEY` is set, when `config.resolveApiKey('requesty')` is called, then it returns the empty string and the connect wizard reports the missing key.
 - **AC-09:** Given a freshly saved `.emile/config.json`, when the file mode is inspected, then it is `0600` on a POSIX host; on a filesystem that rejects the mode (e.g. FAT), a warning is logged in `--verbose` and the write still succeeds.
 - **AC-10:** Given `package.json` after this spec, when `npm install` is run on Node 16, then npm emits an `EBADENGINE` warning.
-- **AC-11:** Given every new module, when `wc -l` is run, then no file exceeds 150 lines and no file mixes two responsibilities (verified by an automated check in `test/structure.test.js`).
+- **AC-11:** Given every new module, when `npm run lint` runs, then no file under `src/lifecycle/`, `src/tools/file-state.js`, `src/tools/file-state/`, `src/memory/` or `src/recovery.js` exceeds 150 lines and no file mixes two responsibilities. **Re-verified by ESLint** (`max-lines`, `error`) since the original `test/structure.test.js` was retired; the lint gate covers every matching file instead of the fixed list the test enumerated, which silently skipped files it did not name.
 - **AC-12:** Given `--verbose` is set, when shutdown runs, then each phase logs its name and elapsed milliseconds; when a phase exceeds its slice, the offender is named.
 
 ## 7. Risks and Open Questions
