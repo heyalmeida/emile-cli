@@ -104,7 +104,7 @@ emile -H                          # resume a previous session
 | `--web-search` | Enable OpenRouter web search; additional provider charges may apply | `false` |
 | `--export-thinking` | Include model reasoning in `/export` output (explicit opt-in) | `false` |
 | `--max-session-size <bytes>` | Maximum size of each persisted session snapshot; old tool results are trimmed when needed | `10485760` |
-| `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `40` |
+| `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `90` |
 | `--verbose` | Show setup and MCP initialization logs | `false` |
 
 ---
@@ -129,7 +129,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/remember <preference or workflow>` | Store an explicit validated global memory; sensitive topics require confirmation |
 | `/forget <id or query>` | Forget one exact record or preview and confirm every ambiguous match |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in `~/.emile/config.json` |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `90` — `DEFAULT_MAX_LOOP_ITERATIONS` in `src/config.js`); persists in `~/.emile/config.json` |
 | `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
@@ -241,7 +241,7 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 | `OPENCODE_API_KEY` | API key for OpenCode | — |
 | `EMILE_DEFAULT_MODEL` | Default model ID | `anthropic/claude-3.5-sonnet` |
 | `EMILE_DEFAULT_EFFORT` | Default reasoning effort | `low` |
-| `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `40` |
+| `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `90` |
 
 ### Config file
 
