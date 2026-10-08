@@ -4,7 +4,7 @@ import { createChatCompletion, formatApiError, getProviderToolDefinitions } from
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
 import { promptPlanApproval } from '../plans.js';
-import { config } from '../config.js';
+import { config, readPositiveInt, DEFAULT_MAX_LOOP_ITERATIONS } from '../config.js';
 import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } from './session-stats.js';
 import { compressContextIfNeeded } from './compression.js';
 import {
@@ -310,7 +310,7 @@ async function runAgentInner({
   // IMPROVEMENTS.md §3.1: a model stuck in a tool-calling loop must not run
   // until the context window fills. Iterations counted per user request
   // (turn), not per API call chunk.
-  const MAX_LOOP_ITERATIONS = config.maxLoopIterations || 40;
+  const MAX_LOOP_ITERATIONS = readPositiveInt(config.maxLoopIterations, DEFAULT_MAX_LOOP_ITERATIONS);
   let iterationCount = 0;
 
   // Active model — may fall back to openrouter/free if paid model errors

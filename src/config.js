@@ -50,7 +50,10 @@ function readBoolean(value, fallback = false) {
   return fallback;
 }
 
-function readPositiveInt(value, fallback) {
+// Single source of truth for the agentic loop cap (spec 2026-10-08-maxloop-divergence).
+export const DEFAULT_MAX_LOOP_ITERATIONS = 90;
+
+export function readPositiveInt(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
@@ -112,7 +115,7 @@ export const config = {
   // persisted `maxLoopIterations` config value.
   maxLoopIterations: readPositiveInt(
     savedConfig.maxLoopIterations ?? process.env.EMILE_MAX_LOOP_ITERATIONS,
-    90,
+    DEFAULT_MAX_LOOP_ITERATIONS,
   ),
 };
 
