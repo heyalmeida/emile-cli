@@ -48,6 +48,7 @@ function pendingMemoryIds(ctx) {
 
 const ROOT_COMMANDS = [
   { root: '/connect',   description: 'Configure API provider and key' },
+  { root: '/provider',  description: 'Switch between configured providers' },
   { root: '/model',     description: 'Select the active AI model' },
   { root: '/switch',    description: 'Switch to a previous session' },
   { root: '/sessions',  description: 'List/switch sessions (or `clean <days>`)' },

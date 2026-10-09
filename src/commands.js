@@ -1,6 +1,14 @@
 import { select, password, text, confirm, isCancel, cancel } from '@clack/prompts';
 import { C, printRulesInfo, promptModelPicker } from './ui/index.js';
-import { saveUserConfig, config } from './config.js';
+import {
+  saveUserConfig,
+  config,
+  getProviderSlots,
+  removeProvider,
+  getActiveProviderDef,
+  isCustomProvider,
+  isValidProviderURL,
+} from './config.js';
 import { resetClient } from './api/index.js';
 import { loadRules, MAX_RULES_CHARS } from './rules.js';
 import { getModelInfo, getProviderModelOptions, isDynamicCatalogActive, isKnownModel } from './models.js';
@@ -93,6 +101,120 @@ const PROVIDERS = [
 //  /connect wizard
 // ──────────────────────────────────────────────────────────────
 
+/** Kebab-case slot id derived from a user-supplied provider name. */
+function toProviderSlug(name) {
+  return String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const RESERVED_GATEWAY_IDS = ['requesty', 'openrouter', 'opencode', 'opencode-go'];
+
+const CUSTOM_FORMAT_OPTIONS = [
+  { value: 'anthropic-messages', label: 'Anthropic messages (/v1/messages)' },
+  { value: 'chat-completions', label: 'Chat completions (/chat/completions)' },
+  { value: 'responses', label: 'Responses (/responses)' },
+];
+
+/**
+ * Custom-endpoint flow: name, URL, optional key, API format, model id.
+ * @returns {Promise<boolean>} True if saved, false if cancelled.
+ */
+async function runCustomEndpointSetup() {
+  let name = await text({
+    message: 'Name for this provider (e.g. LM Studio):',
+    validate(value) {
+      if (!value || value.trim().length === 0) return 'Name cannot be empty.';
+    },
+  });
+
+  if (isCancel(name)) {
+    cancel('Connection setup cancelled.');
+    return false;
+  }
+
+  let slug = toProviderSlug(name);
+  while (!slug || RESERVED_GATEWAY_IDS.includes(slug) || getProviderSlots().some(s => s.id === slug)) {
+    name = await text({
+      message: 'That name is taken or invalid — try another:',
+      validate(value) {
+        if (!value || value.trim().length === 0) return 'Name cannot be empty.';
+      },
+    });
+
+    if (isCancel(name)) {
+      cancel('Connection setup cancelled.');
+      return false;
+    }
+
+    slug = toProviderSlug(name);
+  }
+
+  const url = await text({
+    message: 'API base URL (https://… or http://localhost:…):',
+    validate(value) {
+      if (isValidProviderURL(String(value || '').trim())) return;
+      return 'Use https:// for remote endpoints; plain http:// only for localhost or 127.0.0.1.';
+    },
+  });
+
+  if (isCancel(url)) {
+    cancel('Connection setup cancelled.');
+    return false;
+  }
+
+  const key = await password({
+    message: 'API key (leave empty for a local server that needs none):',
+  });
+
+  if (isCancel(key)) {
+    cancel('Connection setup cancelled.');
+    return false;
+  }
+
+  const format = await select({
+    message: 'API format:',
+    options: CUSTOM_FORMAT_OPTIONS,
+  });
+
+  if (isCancel(format)) {
+    cancel('Connection setup cancelled.');
+    return false;
+  }
+
+  const model = await text({
+    message: 'Model id served by this endpoint (e.g. qwen2.5-coder):',
+    validate(value) {
+      if (!value || value.trim().length === 0) return 'Model id cannot be empty.';
+    },
+  });
+
+  if (isCancel(model)) {
+    cancel('Connection setup cancelled.');
+    return false;
+  }
+
+  saveUserConfig({
+    provider: slug,
+    apiKey: String(key).trim(),
+    baseURL: String(url).trim(),
+    format,
+    model: String(model).trim(),
+    label: String(name).trim(),
+  });
+
+  resetClient();
+
+  console.log(pc.green(`\n  Connected to ${String(name).trim()} (custom endpoint).`));
+  console.log(pc.gray(`  Format: ${format}`));
+  console.log(pc.gray(`  Endpoint: ${String(url).trim()}`));
+  console.log(pc.gray(`  Default model: ${String(model).trim()}`));
+  console.log(pc.gray(`  Settings saved to ~/.emile/config.json\n`));
+  return true;
+}
+
 /**
  * Runs the interactive configuration wizard to connect a provider.
  * @returns {Promise<boolean>} True if connection succeeded, false otherwise
@@ -102,7 +224,10 @@ export async function runConnectWizard() {
 
   const providerValue = await select({
     message: 'Select the API provider:',
-    options: PROVIDERS.map(p => ({ value: p.value, label: p.label })),
+    options: [
+      ...PROVIDERS.map(p => ({ value: p.value, label: p.label })),
+      { value: '__custom__', label: 'Custom endpoint (any API URL)' },
+    ],
   });
 
   if (isCancel(providerValue)) {
@@ -110,7 +235,41 @@ export async function runConnectWizard() {
     return false;
   }
 
+  if (providerValue === '__custom__') {
+    return runCustomEndpointSetup();
+  }
+
   const providerDef = PROVIDERS.find(p => p.value === providerValue);
+
+  // Credential manager: only offered when a slot already exists for this
+  // gateway. A provider with no slot falls through to the plain key prompt.
+  const slot = getProviderSlots().find(s => s.id === providerValue);
+  if (slot) {
+    const manage = await select({
+      message: 'Choose:',
+      options: [
+        { value: 'keep', label: `Keep stored key (last 4: ${slot.keyTail})` },
+        { value: 'update', label: 'Update stored key' },
+        { value: 'remove', label: 'Remove stored credentials' },
+      ],
+    });
+
+    if (isCancel(manage)) {
+      cancel('Connection setup cancelled.');
+      return false;
+    }
+
+    if (manage === 'keep') {
+      console.log(pc.gray(`\n  Already connected to ${providerDef.keyLabel}.\n`));
+      return true;
+    }
+
+    if (manage === 'remove') {
+      await removeProvider(providerValue);
+      console.log(pc.gray(`\n  Removed stored credentials for ${providerDef.keyLabel}.\n`));
+      return true;
+    }
+  }
 
   const apiKey = await password({
     message: `Enter API Key for ${providerDef.keyLabel}:`,
@@ -164,6 +323,48 @@ export async function runConnectWizard() {
 export async function runModelWizard() {
   console.log('\n' + pc.gray('  Model Selection'));
   console.log(pc.gray(`  Active provider: ${config.provider}`));
+
+  // Custom endpoints have no discoverable catalog — the model id is typed in.
+  if (isCustomProvider(config.provider)) {
+    const def = getActiveProviderDef();
+    const customOptions = def.lastModel
+      ? [
+          { value: '__current__', label: `Current: ${def.lastModel}` },
+          { value: 'custom', label: 'Other model... (enter identifier manually)' },
+        ]
+      : [{ value: 'custom', label: 'Enter model identifier manually' }];
+
+    const customChoice = await promptModelPicker(customOptions, {
+      message: 'Select the model you want to use:',
+    });
+
+    if (customChoice === null || isCancel(customChoice)) {
+      cancel('Model selection cancelled.');
+      return;
+    }
+
+    let customFinalModel = customChoice === '__current__' ? def.lastModel : customChoice;
+    if (customChoice === 'custom') {
+      const customModel = await text({
+        message: 'Enter model identifier (e.g. "openai/gpt-4o-mini"):',
+        validate(value) {
+          if (!value || value.trim().length === 0) return 'Model identifier cannot be empty.';
+        },
+      });
+
+      if (isCancel(customModel)) {
+        cancel('Model selection cancelled.');
+        return;
+      }
+      customFinalModel = customModel.trim();
+    }
+
+    saveUserConfig({ model: customFinalModel });
+
+    console.log(pc.green(`  Model changed to: ${customFinalModel}`));
+    console.log(pc.gray(`  Settings updated in ~/.emile/config.json\n`));
+    return;
+  }
 
   const providerDef = PROVIDERS.find(p => p.value === config.provider);
   let optionsList = providerDef

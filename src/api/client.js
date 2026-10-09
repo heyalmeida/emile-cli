@@ -1,11 +1,13 @@
 import OpenAI from 'openai';
-import { config } from '../config.js';
+import { config, getActiveProviderDef, isValidProviderURL } from '../config.js';
 import { getModelInfo } from '../models.js';
 import { C } from '../ui/theme.js';
 
 let openaiClient = null;
 let currentClientKey = null;
 let currentClientProvider = null;
+let currentClientBaseURL = null;
+let currentClientFormat = null;
 
 // Retry-able HTTP status codes and network error codes
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
@@ -28,13 +30,31 @@ function getErrorStatus(err) {
  * @returns {OpenAI}
  */
 export function getClient() {
-  if (openaiClient && (currentClientKey !== config.apiKey || currentClientProvider !== config.provider)) {
+  const activeDef = getActiveProviderDef();
+
+  if (openaiClient && (currentClientKey !== config.apiKey || currentClientProvider !== config.provider || currentClientBaseURL !== (activeDef && activeDef.baseURL) || currentClientFormat !== (activeDef && activeDef.format))) {
     openaiClient = null;
   }
 
   if (!openaiClient) {
     currentClientKey = config.apiKey;
     currentClientProvider = config.provider;
+    currentClientBaseURL = activeDef && activeDef.baseURL;
+    currentClientFormat = activeDef && activeDef.format;
+
+    if (activeDef && activeDef.isCustom) {
+      if (!isValidProviderURL(activeDef.baseURL)) {
+        throw new Error(`Provider "${activeDef.id}" has an invalid endpoint URL. Run /connect to fix it.`);
+      }
+      openaiClient = new OpenAI({
+        apiKey: activeDef.apiKey || 'not-needed',
+        baseURL: activeDef.baseURL,
+        defaultHeaders: {
+          'X-Title': 'Emile CLI',
+        },
+      });
+      return openaiClient;
+    }
 
     const options = { apiKey: config.apiKey };
 
@@ -265,6 +285,11 @@ export async function createChatCompletion({
   overrideModel,
   signal = null,
 }) {
+  const activeDef = getActiveProviderDef();
+  if (activeDef && activeDef.isCustom && activeDef.format !== 'chat-completions') {
+    throw new Error(`API format "${activeDef.format}" is not supported yet — this endpoint must use the Chat completions format for now. Change it with /connect.`);
+  }
+
   const client = getClient();
   const activeModel = overrideModel || model;
 

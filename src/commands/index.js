@@ -2,6 +2,7 @@
 // The REPL owns lifecycle/input handling; command behavior lives in handlers.js.
 import {
   handleConnect,
+  handleProvider,
   handleModel,
   handleSessions,
   handleNewSession,
@@ -22,6 +23,7 @@ import { handleForget, handleMemory, handleRemember } from './memory.js';
 
 const COMMANDS = new Map([
   ['/connect', handleConnect],
+  ['/provider', handleProvider],
   ['/model', handleModel],
   ['/switch', handleSessions],
   ['/sessions', handleSessions],

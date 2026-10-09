@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { confirm, isCancel } from '@clack/prompts';
 import { normalizeWorkspaceCwd } from '../tools/security.js';
-import { saveUserConfig } from '../config.js';
+import { saveUserConfig, getProviderSlots, setActiveProvider, resolveApiKey } from '../config.js';
+import { resetClient } from '../api/index.js';
 import { saveEnhancedWebConfig } from '../web/config.js';
 import { listSkills } from '../skills.js';
 import {
@@ -35,6 +36,89 @@ export async function handleConnect(ctx) {
     dryRun: ctx.config.dryRun,
     safeMode: ctx.config.safeMode,
   });
+  setTerminalActivity('waiting');
+}
+
+function providerSlotLabel(slot, activeId) {
+  const marker = slot.id === activeId ? '●' : '○';
+  // Only the last four characters of a stored key ever reach the terminal.
+  const keyMark = slot.hasKey
+    ? `key …${slot.keyTail}`
+    : (!slot.isCustom && resolveApiKey(slot.id) ? 'from env' : 'no key');
+  const name = slot.isCustom ? (slot.label || slot.id) : slot.id;
+  const parts = slot.isCustom ? [name, slot.format, keyMark] : [name, keyMark];
+  return `${marker} ${parts.join(' · ')}`;
+}
+
+export async function handleProvider(ctx) {
+  setTerminalActivity('switching provider');
+  const slots = getProviderSlots();
+  console.log();
+  console.log(C.muted('  Providers:'));
+  if (slots.length === 0) {
+    console.log(C.muted('  No providers configured yet — run /connect to add one.'));
+    console.log();
+    setTerminalActivity('waiting');
+    return;
+  }
+
+  const activeId = ctx.config.provider;
+  const options = slots.map(slot => ({
+    value: slot.id,
+    label: providerSlotLabel(slot, activeId),
+  }));
+  if (slots.length < 2) {
+    console.log(C.muted('  Use /connect to add more providers.'));
+  }
+
+  const selectImpl = ctx.selectProvider || (await import('@clack/prompts')).select;
+  const chosen = await selectImpl({ message: 'Switch to which provider?', options });
+  if (isCancel(chosen) || !chosen) {
+    console.log(C.muted('  Cancelled.'));
+    console.log();
+    setTerminalActivity('waiting');
+    return;
+  }
+
+  const def = slots.find(s => s.id === chosen);
+  if (!def) {
+    console.log(C.warn('  Unknown provider.'));
+    console.log();
+    setTerminalActivity('waiting');
+    return;
+  }
+  if (!def.isCustom && resolveApiKey(chosen) === '') {
+    console.log(C.warn('  No key configured — run /connect to set one.'));
+    console.log();
+    setTerminalActivity('waiting');
+    return;
+  }
+
+  if (setActiveProvider(chosen)) {
+    resetClient();
+    if (typeof ctx.initSessionStats === 'function') {
+      ctx.initSessionStats(
+        ctx.config.defaultModel,
+        ctx.config.plansMode,
+        ctx.activeSkills || [],
+        typeof ctx.getMessages === 'function' ? ctx.getMessages() : [],
+      );
+    }
+    configureTerminalTitle({ model: ctx.config.defaultModel });
+    printConfigBox({
+      provider: ctx.config.provider,
+      model: ctx.config.defaultModel,
+      cache: ctx.options ? ctx.options.cache : undefined,
+      effort: ctx.config.defaultEffort,
+      plans: ctx.config.plansMode,
+      dryRun: ctx.config.dryRun,
+      safeMode: ctx.config.safeMode,
+    });
+    console.log(C.success(`  Switched to ${chosen}.`));
+  } else {
+    console.log(C.warn('  Could not switch provider.'));
+  }
+  console.log();
   setTerminalActivity('waiting');
 }
 

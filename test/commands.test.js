@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { dispatchCommand, hasCommand, listCommands } from '../src/commands/index.js';
 
 const expectedCommands = [
-  '/connect', '/model', '/switch', '/sessions', '/new', '/clear',
+  '/connect', '/provider', '/model', '/switch', '/sessions', '/new', '/clear',
   '/rewind', '/thinking', '/maxloop', '/websearch', '/tavily', '/firecrawl',
   '/help', '/undo', '/cost', '/export', '/rules', '/skills', '/skill',
   '/memory', '/remember', '/forget',
