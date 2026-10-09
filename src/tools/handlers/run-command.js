@@ -1,4 +1,6 @@
 // handlers/run-command.js — runCommand tool handler.
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { confirm, isCancel } from '@clack/prompts';
@@ -27,6 +29,21 @@ function buildCwdProbe(marker) {
     return `\r\nset "EMILE_COMMAND_STATUS=%ERRORLEVEL%"\r\necho ${marker}%CD%\r\nexit /b %EMILE_COMMAND_STATUS%`;
   }
   return `\nEMILE_COMMAND_STATUS=$?\nprintf '\\n%s%s\\n' '${marker}' "$PWD"\nexit "$EMILE_COMMAND_STATUS"`;
+}
+
+// cmd.exe executed via exec() only ever runs the first line of a multi-line
+// /c argument — the appended cwd probe would be silently dropped. Running
+// the command from a temporary .cmd file gives real line-by-line batch
+// semantics: the user command may span lines and %ERRORLEVEL%/%CD% expand
+// per line, exactly like the POSIX probe.
+function writeCommandBatch(command, marker) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-cmd-'));
+  const batchPath = path.join(dir, 'command.cmd');
+  // @echo off keeps each batch line (including the probe with its marker
+  // path) from being echoed into the captured output.
+  const batch = `@echo off\r\n${command}\r\n${buildCwdProbe(marker)}`;
+  fs.writeFileSync(batchPath, batch.replace(/\n/g, '\r\n'), 'utf8');
+  return { batchPath, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
 function stripCwdProbe(output, marker) {
@@ -69,9 +86,13 @@ export async function runCommand({ command }) {
     const timeout = config.commandTimeout || 30000;
     const commandCwd = getSessionCwd();
     const marker = `__EMILE_CWD_${process.pid}_${Date.now()}__`;
-    const commandWithProbe = `${command}\n${buildCwdProbe(marker)}`;
+    const winBatch = process.platform === 'win32'
+      ? writeCommandBatch(command, marker)
+      : null;
+    const shellCommand = winBatch ? `"${winBatch.batchPath}"` : `${command}\n${buildCwdProbe(marker)}`;
 
-    exec(commandWithProbe, { cwd: commandCwd, timeout }, (error, stdout, stderr) => {
+    exec(shellCommand, { cwd: commandCwd, timeout }, (error, stdout, stderr) => {
+      if (winBatch) winBatch.cleanup();
       const probe = stripCwdProbe(stdout || '', marker);
       let output = probe.output;
       if (stderr) output += `[stderr]\n${stderr}`;

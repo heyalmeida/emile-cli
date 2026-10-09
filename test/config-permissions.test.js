@@ -4,8 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const PROJECT = process.cwd();
+// ESM dynamic imports need a file:// URL; a bare Windows path (C:\...) is
+// rejected with ERR_UNSUPPORTED_ESM_URL_SCHEME.
+const PROJECT_URL = pathToFileURL(PROJECT).href;
 
 /**
  * Runs a test script in a fresh Node.js subprocess. The script is written to a
@@ -23,7 +27,7 @@ async function runSubprocess(testScript) {
   const scriptPath = path.join(tmp, 'test.mjs');
   const stdoutPath = path.join(tmp, 'stdout.txt');
   const stderrPath = path.join(tmp, 'stderr.txt');
-  fs.writeFileSync(scriptPath, testScript({ project: PROJECT, fakeHome }));
+  fs.writeFileSync(scriptPath, testScript({ project: PROJECT_URL, fakeHome }));
 
   try {
     return await new Promise(resolve => {
@@ -31,7 +35,12 @@ async function runSubprocess(testScript) {
       const stderrFd = fs.openSync(stderrPath, 'w');
       const child = spawn(process.execPath, [scriptPath], {
         cwd: tmp,
-        env: { ...process.env, HOME: fakeHome },
+        env: {
+          ...process.env,
+          HOME: fakeHome,
+          // os.homedir() on Windows reads USERPROFILE, not HOME.
+          USERPROFILE: fakeHome,
+        },
         stdio: ['ignore', stdoutFd, stderrFd],
       });
       fs.closeSync(stdoutFd);
@@ -94,8 +103,9 @@ test('resolveApiKey: returns empty string when no matching env', async () => {
 });
 
 // ── Config file mode 0600 ─────────────────────────────────────────────────
+// POSIX-only: Windows has no chmod(2); libuv reports 0666 regardless.
 
-test('saveUserConfig writes config.json with mode 0600', async () => {
+test('saveUserConfig writes config.json with mode 0600', { skip: process.platform === 'win32' ? '0600 file mode is POSIX-only' : false }, async () => {
   const { out, err } = await runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
     `import os from 'node:os';`,
@@ -109,7 +119,7 @@ test('saveUserConfig writes config.json with mode 0600', async () => {
   assert.equal(mode, 0o600, err || `config file mode should be 0600, got ${mode?.toString(8)}`);
 });
 
-test('saveUserConfig chmods existing 0644 config to 0600', async () => {
+test('saveUserConfig chmods existing 0644 config to 0600', { skip: process.platform === 'win32' ? '0600 file mode is POSIX-only' : false }, async () => {
   const { out, err } = await runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
     `import os from 'node:os';`,

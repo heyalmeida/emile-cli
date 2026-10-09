@@ -18,6 +18,19 @@ function tempRoot(t) {
   return path.join(base, 'state', 'v1');
 }
 
+// Windows without Developer Mode denies symlink creation (EPERM); tests that
+// need one exercise real symlink security behavior, so skip instead of fail.
+const symlinkSkipReason = (() => {
+  try {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-symlink-probe-'));
+    fs.symlinkSync(path.join(base, 'target'), path.join(base, 'link'));
+    fs.rmSync(base, { recursive: true, force: true });
+    return false;
+  } catch (err) {
+    return err.code === 'EPERM' ? 'symlink creation not permitted in this environment' : false;
+  }
+})();
+
 function record(overrides = {}) {
   const now = new Date().toISOString();
   return {
@@ -99,7 +112,7 @@ test('corrupt snapshot falls back to backup and quarantines invalid data', async
   assert.ok(fs.readdirSync(path.join(root, MEMORY_FILES.quarantine)).some(name => name.startsWith('store.json.')));
 });
 
-test('symlinked artifact is never followed outside the memory root', async t => {
+test('symlinked artifact is never followed outside the memory root', { skip: symlinkSkipReason }, async t => {
   const root = tempRoot(t);
   await initializeMemory({ root });
   const outside = path.join(path.dirname(root), 'outside.json');
@@ -111,7 +124,7 @@ test('symlinked artifact is never followed outside the memory root', async t => 
   assert.equal(fs.readFileSync(outside, 'utf8'), '{"secret":"unchanged"}');
 });
 
-test('symlinked root component is rejected', t => {
+test('symlinked root component is rejected', { skip: symlinkSkipReason }, t => {
   const base = tempRoot(t);
   const actual = path.join(path.dirname(path.dirname(base)), 'actual');
   fs.mkdirSync(actual);

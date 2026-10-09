@@ -93,7 +93,12 @@ function withFakeTerminal(t, columns = 80) {
   // Only string writes come from the module; the node:test harness writes
   // its internal NDJSON protocol as Buffers — never feed those to the
   // emulator (they would land at the cursor, i.e. inside the input row).
-  process.stdout.write = (s) => { if (typeof s === 'string') fakeStdout.write(s); return true; };
+  // They must still reach the real stdout: dropping them corrupts the
+  // harness protocol and silently loses test results from the report.
+  process.stdout.write = (s) => {
+    if (typeof s === 'string') { fakeStdout.write(s); return true; }
+    return originalStdoutWrite(s);
+  };
   Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true });
   Object.defineProperty(process, 'stdin', { value: fakeStdin, configurable: true });
   t.after(() => {
@@ -159,7 +164,9 @@ test('arrow keys move the menu selection and Enter completes the command', async
   persistentPromptInput({ onSubmit: (line) => { submitted.push(line); return 'next'; } });
 
   typeKeys(fakeStdin, ['/', 'm']);
-  typeKeys(fakeStdin, [{ name: 'down' }]); // /model -> /maxloop
+  // '/m' matches /model, /memory, /maxloop (registry order); two downs land
+  // on /maxloop.
+  typeKeys(fakeStdin, [{ name: 'down' }, { name: 'down' }]); // /model -> /maxloop
   typeKeys(fakeStdin, [{ name: 'return' }]); // complete, not submit
 
   assert.deepEqual(submitted, [], 'first Enter only completes the command');
