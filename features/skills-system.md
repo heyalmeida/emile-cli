@@ -36,3 +36,4 @@ Matching is intentionally lexical and uses only skill name/description metadata;
 | Date | Change | Reference |
 |------|--------|-----------|
 | 2026-08-30 | Added task-relevance filtering with explicit selection bypass | Source spec / CHANGELOG |
+| 2026-10-09 | Fixed the discovery path (`loadAllSkills` scanned `.agent/.agents/.skills/skills`, never finding anything) to the documented `.agent/skills/`; vendored the `clean-code` starter skill and stopped gitignoring `.agent/`; regression suite `test/skills-load.test.js` | `specs/2026-10-08-skills-path-fix` / CHANGELOG |

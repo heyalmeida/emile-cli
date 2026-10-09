@@ -16,7 +16,7 @@
 ## Phase 1 — Implementation
 
 - [x] T1.1 — Create this spec pack (`spec.md`, `plan.md`, `tasks.md`) — *verifies process Rule 3*
-- [x] T1.2 — Fix `src/skills.js:51` scan root to `path.join(config.workspaceDir, '.agent', 'skills')`; grep for other references to the broken path (none) — *verifies AC-01*
+- [x] T1.2 — Fix `src/skills.js:51` scan root to `path.join(config.workspaceDir, '.agent', 'skills')`; grep for other references to the broken path (none). Precision note: the broken composition existed only as an uncommitted working-tree regression — HEAD (`ad7cc43`) already carried the correct path, so the working tree ended up matching HEAD and `src/skills.js` needed no commit — *verifies AC-01*
 - [x] T1.3 — Vendor `.agent/skills/clean-code/SKILL.md` (frontmatter: name, description, keywords; bounded English body, no tool instructions, no secrets) — *verifies AC-02*
 - [x] T1.4 — Remove the `.agent/` exclusion from `.gitignore` (keep `.agents/`, `.emile/`, `.clinerules`, `grok-build/`) — *verifies AC-03*
 - [x] T1.5 — Create `test/skills-load.test.js`: discovery+metadata; explicit `-s clean-code` bypasses relevance filtering; auto-detection retains `clean-code`; malformed SKILL.md skipped with `warn()`; 8k/24k caps truncate/bound — *verifies AC-04*
@@ -56,5 +56,6 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| (recorded at close) | `fix(skills): correct discovery path and vendor clean-code starter` | spec pack, `src/skills.js`, `.gitignore`, `.agent/skills/clean-code/SKILL.md`, `test/skills-load.test.js` |
-| | `docs(skills): sync changelog, deep-dive and skills feature registry for P0-2` | `CHANGELOG.md`, `docs/deep-dive.md`, `features/skills-system.md` |
+| ff92e04 | `test: make the suite runnable on Windows without symlink privilege` | `src/tools/handlers/run-command.js` + 7 test files (pre-brief suite fixes, separate unit) |
+| 7ccac7c | `fix(skills): correct discovery path and vendor clean-code starter` | `.gitignore`, `.agent/skills/clean-code/SKILL.md`, `test/skills-load.test.js`, spec pack |
+| (docs commit) | `docs(skills): sync changelog, deep-dive and skills feature registry for P0-2` | `CHANGELOG.md`, `docs/deep-dive.md`, `features/skills-system.md`, this file |
