@@ -56,7 +56,14 @@ test('formatted memory declares precedence and excludes empty context', () => {
 });
 
 test('management search can select pending records and IDs', () => {
-  const records = [record(1), record(2, { state: 'pending', key: 'workflow.tests' })];
+  // Explicit distinct updatedAt: the id-prefix query matches BOTH records
+  // (ids share their first 17 chars) and the sort tie-breaks on updatedAt
+  // descending — wall-clock fixture timestamps could straddle a millisecond
+  // boundary and flip the order (flaky 2026-10-09).
+  const records = [
+    record(1, { createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z' }),
+    record(2, { state: 'pending', key: 'workflow.tests', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }),
+  ];
   assert.equal(searchMemoryRecords({ records }, 'workflow.tests', { states: ['pending'] })[0].id, records[1].id);
   assert.equal(searchMemoryRecords({ records }, records[0].id.slice(0, 10))[0].id, records[0].id);
 });
