@@ -136,7 +136,7 @@ dist
 .pnp.*
 
 # Project Files
-.agent/
+.agents/
 .emile/
 .clinerules
 grok-build/
