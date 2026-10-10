@@ -112,4 +112,4 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ (recorded after commit) | `fix(ui): render the thinking stream append-only with a viewport-clamped erase` | `src/ui/thinking.js`, `src/ui/terminal-cursor.js`, `src/ui/prompt-input-persistent.js`, `test/thinking-stream-append.test.js`, `specs/2026-10-10-thinking-append-only/*`, `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/terminal-ui.md` |
+| `57058b4` | `fix(ui): render the thinking stream append-only with a viewport-clamped erase` | `src/ui/thinking.js`, `src/ui/terminal-cursor.js`, `src/ui/prompt-input-persistent.js`, `test/thinking-stream-append.test.js`, `specs/2026-10-10-thinking-append-only/*`, `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/terminal-ui.md` |
