@@ -19,6 +19,7 @@
 // @ts-check
 import { C } from '../ui/theme.js';
 import { setPromptShutdown, isShuttingDown, setActiveTool, clearActiveTool } from './stop-input.js';
+import { installCrashHandlers } from './crash.js';
 
 const PHASES = [
   import('./stop-input.js').then(m => m.phase()),
@@ -124,6 +125,10 @@ export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, flush
   process.on('SIGINT',  () => coordinator('SIGINT'));
   process.on('SIGTERM', () => coordinator('SIGTERM'));
   process.on('SIGHUP',  () => coordinator('SIGHUP'));
+
+  // Crashes take the same ordered path (P1-15): a thrown error that escapes the
+  // agent's own try/catch must not skip the session/memory/MCP teardown.
+  installCrashHandlers({ coordinator });
 
   // Exit handler: restore terminal on any exit path that bypassed the
   // coordinator (e.g. process.exit() called directly). Runs sync.

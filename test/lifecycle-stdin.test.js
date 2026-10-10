@@ -5,10 +5,26 @@
 //     stdin lease (keypress listener removed, raw mode restored, paste off);
 //   * exit never wipes the screen;
 //   * a second signal forces the exit with the same code and runs no phase twice.
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { installShutdownHandlers, setForceExit, clearActiveTool } from '../src/lifecycle/index.js';
+
+// The coordinator exits asynchronously: keep the exit spy for the whole file so a
+// late exit cannot kill the runner, and wait for it instead of sleeping.
+const exitSpyCodes = [];
+const _realExit = process.exit;
+process.exit = (code) => { exitSpyCodes.push(code); };
+after(() => { process.exit = _realExit; });
+
+async function waitFor(predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return predicate();
+}
 
 /** Captures stdout writes without disturbing the runner's own protocol. */
 function captureStdout() {
@@ -43,10 +59,9 @@ function trackListeners(t) {
 test('the coordinator tears the prompt down once, keeps the screen, and a second signal forces the exit', async (t) => {
   trackListeners(t);
   const out = captureStdout();
-  const exits = [];
-  const realExit = process.exit;
-  process.exit = (code) => { exits.push(code); };
-  t.after(() => { process.exit = realExit; out.restore(); });
+  const exits = exitSpyCodes;
+  exits.length = 0;
+t.after(() => { out.restore(); });
 
   // Fake stdin: the teardown is expected to restore raw mode on it.
   const stdin = { isTTY: true, isRaw: true, rawModeCalls: [], setRawMode(v) { this.rawModeCalls.push(v); }, resume() {}, pause() {} };
@@ -72,8 +87,7 @@ test('the coordinator tears the prompt down once, keeps the screen, and a second
 
   // ── first signal: phases run, then the coordinator exits 130 ──────────────
   process.emit('SIGINT');
-  await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setTimeout(r, 250)); // let the phase loop finish
+assert.ok(await waitFor(() => exits.length > 0), "the coordinator reached its exit");
 
   assert.equal(teardowns, 1, 'phase 1 ran the injected prompt teardown exactly once');
   assert.deepEqual(stdin.rawModeCalls, [false], 'the teardown restored raw mode on stdin');

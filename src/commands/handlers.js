@@ -170,7 +170,7 @@ export async function handleSessions(ctx, args = []) {
       if (typeof ctx.resumeSession === 'function') {
         await ctx.resumeSession(selectedId, loaded);
       }
-      console.clear();
+      console.clear(); // intentional mid-session redraw after /switch — NOT an exit path (P1-15)
       printConversationHistory(ctx.getMessages(), { summary: ctx.getSessionSummary() });
     }
   }
