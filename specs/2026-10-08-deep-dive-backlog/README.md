@@ -47,6 +47,7 @@ Items promoted from the comparison with xAI's production CLI ([deep-dive § 22](
 | 23 | [P2-18 viewport-budgeted prompt block](briefs/p2-18-prompt-viewport-layout.md) | none (closes the § 7.2 duplication family) |
 | 24 | [P2-19 cursor-up clamp in the remaining renderers](briefs/p2-19-cursor-up-clamp-remaining.md) | none (found by the P0-1 executor: turn-keys, model-picker, prompt-input) |
 | 25 | [P1-14 UI foundation from grok-build](briefs/p1-14-ui-foundation-from-grok-build.md) | none for stage A; stages B/C are independent. Subsumes P2-18 and P2-19 (both stay listed until stage A lands) |
+| 26 | [P1-15 crash path through the coordinator](briefs/p1-15-crash-path-coordinator.md) | none (found by this session while verifying P0-3; complements it) |
 
 Un-briefed wave-2 backlog (generate a brief when scheduling): P2-13 (mid-turn steering — brief exists as the un-briefed row in § 21.1 of the deep-dive), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks). P2-12 (atomic saveSession) was **folded into the P0-3 brief** as item 8 — same durability surface, same files.
 
@@ -65,4 +66,4 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-13 (mid-turn st
 | P1-13 turn-input cap | ✅ done — `3c68ca7` (spec: `specs/2026-10-10-turn-input-cap/`) |
 | P0-1 thinking append-only | ✅ done — `57058b4` (spec: `specs/2026-10-10-thinking-append-only/`; shared clamp extracted to `src/ui/terminal-cursor.js`) |
 | P1-6 provider system + custom endpoints | ✅ done — `7e7acd8` + `1632ddb` + `64df2df` (spec: `specs/2026-10-09-provider-system/`) |
-| all others | ⏳ pending (P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P2-7, P2-9 (half-landed: the marker-count suites from P0-1/P0-4 cover the counting method; the shared emulator + screen-state assertions are still open), P2-12…P2-19, P1-14) |
+| all others | ⏳ pending (P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P2-7, P2-9 (half-landed: the marker-count suites from P0-1/P0-4 cover the counting method; the shared emulator + screen-state assertions are still open), P2-12…P2-19, P1-14, P1-15) |
