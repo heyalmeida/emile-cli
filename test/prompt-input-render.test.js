@@ -79,7 +79,7 @@ function createEmulator(columns = 80) {
   };
 }
 
-function withFakeTerminal(t, columns = 80) {
+function withFakeTerminal(t, columns = 80, rows = 40) {
   const emu = createEmulator(columns);
   const writes = [];
   const fakeStdout = { columns, write: (s) => { writes.push(s); emu.apply(String(s)); } };
@@ -90,6 +90,8 @@ function withFakeTerminal(t, columns = 80) {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
   const originalStdin = process.stdin;
   const originalColumns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+  const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+  const originalRows = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
   // Only string writes come from the module; the node:test harness writes
   // its internal NDJSON protocol as Buffers — never feed those to the
   // emulator (they would land at the cursor, i.e. inside the input row).
@@ -99,12 +101,21 @@ function withFakeTerminal(t, columns = 80) {
     if (typeof s === 'string') { fakeStdout.write(s); return true; }
     return originalStdoutWrite(s);
   };
-  Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true });
+  // The renderer checks stdout TTY-ness and viewport height before moving the
+  // cursor (paste-burst fix, specs/2026-10-09-paste-burst-redraw). Pin both,
+  // or a suite run behind a pipe would silently take the non-TTY path.
+  Object.defineProperty(process.stdout, 'columns', { value: columns, configurable: true, writable: true });
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true, writable: true });
+  Object.defineProperty(process.stdout, 'rows', { value: rows, configurable: true, writable: true });
   Object.defineProperty(process, 'stdin', { value: fakeStdin, configurable: true });
   t.after(() => {
     process.stdout.write = originalStdoutWrite;
-    if (originalColumns) Object.defineProperty(process.stdout, 'columns', originalColumns);
-    else Object.defineProperty(process.stdout, 'columns', { value: undefined, configurable: true });
+    for (const [name, descriptor] of [
+      ['columns', originalColumns], ['isTTY', originalIsTTY], ['rows', originalRows],
+    ]) {
+      if (descriptor) Object.defineProperty(process.stdout, name, descriptor);
+      else Object.defineProperty(process.stdout, name, { value: undefined, configurable: true, writable: true });
+    }
     Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
     fakeStdin.destroy();
   });
@@ -119,6 +130,35 @@ function typeKeys(fakeStdin, keys) {
       fakeStdin.emit('keypress', k.str ?? undefined, k);
     }
   }
+}
+
+/** One top border `╭` is written per full-block render. */
+function renderCount(writes) {
+  return writes.join('').split('╭').length - 1;
+}
+
+/** A coalesced burst paints when the burst goes quiet (10 ms in the module). */
+function burstSettled() {
+  return new Promise((resolve) => setTimeout(resolve, 40));
+}
+
+/** Cursor-up sequences (`ESC[nA`) actually written to stdout. */
+function cursorUps(writes) {
+  return (writes.join('').match(/\x1B\[(\d+)A/g) || [])
+    .map((seq) => Number(/(\d+)/.exec(seq)[1]));
+}
+
+/** Reconstructs the draft visible on screen from the block's input rows. */
+function visibleInputText(emu) {
+  const plain = emu.lines.map((line) => line.replace(/\x1B\[[0-9;]*m/g, ''));
+  const top = plain.findIndex((line) => line.includes('╭'));
+  const bottom = plain.findIndex((line) => line.includes('╰'));
+  assert.ok(top >= 0 && bottom > top, 'a complete prompt block is on screen');
+  return plain
+    .slice(top + 1, bottom)
+    .map((line, index) => (index === 0 ? line.slice(5) : line.slice(4)))
+    .join('\n')
+    .replace(/\s+$/, '');
 }
 
 test('initial render draws one clean prompt block', async (t) => {
@@ -238,6 +278,7 @@ test('backspace and narrowing keep the screen residue-free', async (t) => {
   persistentPromptInput({ onSubmit: () => 'next' });
 
   typeKeys(fakeStdin, ['/', 'w', 'e', 'b']);
+  await burstSettled(); // four synchronous text keys coalesce into one burst
   assert.ok(emu.text().includes('/websearch'));
   typeKeys(fakeStdin, [{ name: 'backspace' }, { name: 'backspace' }]); // '/w'
   const stripped = emu.lines.map(l => l.replace(/\x1B\[[0-9;]*m/g, ''));
@@ -257,6 +298,9 @@ test('long input lines are clipped, never wrapped', async (t) => {
   persistentPromptInput({ onSubmit: () => 'next' });
 
   typeKeys(fakeStdin, Array.from({ length: 120 }, () => 'a'));
+  // 120 synchronous keys are a paste burst: the coalesced frame lands when the
+  // burst goes quiet (the assertions below are the pre-coalescing ones).
+  await burstSettled();
   assert.equal(emu.wrapped, false, 'no line ever exceeded the terminal width');
   assert.ok(emu.lines.every(l => l.length <= 80), 'every drawn line fits in 80 columns');
   assert.ok(/›\s+a{20}/.test(emu.text().replace(/\x1B\[[0-9;]*m/g, '')), 'text is visible from the start of the line');
@@ -363,4 +407,130 @@ test('redraw() handle repaints a clean block below agent output', async (t) => {
   assert.ok(text2.includes('Enter prompt or /help'), 'prompt block back after the turn');
   assert.equal(text2.split('── hi').length - 1, 1, 'divider appears exactly once');
   assert.ok(emu.wrapped === false);
+});
+
+// ── Paste-burst coalescing + viewport clamp (specs/2026-10-09-paste-burst-redraw) ──
+
+test('bracketed paste coalesces into a single render', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t);
+  const submitted = [];
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: (line) => { submitted.push(line); return 'next'; } });
+
+  // 21 lines / 20 pasted Enters / >500 characters, delivered exactly as a real
+  // bracketed burst arrives: one keypress event per character.
+  const lines = Array.from({ length: 21 }, (_, i) => `line ${i} MARKER${String(i).padStart(2, '0')} ${'x'.repeat(8)}`);
+  const payload = lines.join('\n');
+  assert.ok(payload.length >= 500, `fixture is a large paste (${payload.length} chars)`);
+  assert.equal((payload.match(/\n/g) || []).length, 20, '20 pasted Enters');
+
+  const before = renderCount(writes);
+  fakeStdin.emit('keypress', undefined, { name: 'paste-start' });
+  typeKeys(fakeStdin, [...payload].flatMap((ch) => (ch === '\n' ? [{ name: 'return' }] : [ch])));
+  fakeStdin.emit('keypress', undefined, { name: 'paste-end' });
+
+  assert.deepEqual(submitted, [], 'pasting must not submit');
+  assert.ok(renderCount(writes) - before <= 2, `at most the initial + one paste render (got ${renderCount(writes) - before})`);
+  const plain = emu.text().replace(/\x1B\[[0-9;]*m/g, '');
+  for (const line of lines) {
+    assert.equal(plain.split(line).length - 1, 1, 'pasted line appears exactly once: ' + line);
+  }
+  assert.equal(visibleInputText(emu), payload, 'the complete draft is visible, unduplicated');
+  assert.equal(emu.wrapped, false, 'nothing wrapped');
+
+  fakeStdin.emit('keypress', '', { name: 'return' });
+  assert.deepEqual(submitted, [payload], 'a separate Enter submits the whole payload');
+});
+
+test('non-bracketed keypress burst is coalesced', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  const chars = Array.from({ length: 200 }, (_, i) => String.fromCharCode(97 + (i % 26)));
+  const before = renderCount(writes);
+  typeKeys(fakeStdin, chars); // no paste markers at all — the Windows-console case
+
+  assert.ok(renderCount(writes) - before < 10, `burst repaints bounded (${renderCount(writes) - before} renders, was 200)`);
+  await burstSettled();
+  assert.equal(visibleInputText(emu).replace(/\s+/g, ''), chars.join(''), 'every character landed exactly once');
+  assert.equal(emu.wrapped, false);
+});
+
+test('a burst flushes before the next editing key acts', async (t) => {
+  const { emu, fakeStdin } = withFakeTerminal(t);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  typeKeys(fakeStdin, ['h', 'e', 'l', 'l', 'o']); // burst opens on the third key
+  assert.equal(emu.text().includes('hello'), false, 'no frame is painted inside the burst');
+  typeKeys(fakeStdin, [{ name: 'backspace' }]); // non-pasteable: owed frame first, then edit
+  assert.equal(visibleInputText(emu), 'hell', 'the owed frame was paid before the key applied');
+});
+
+test('Enter after a burst still submits the draft', async (t) => {
+  const { fakeStdin } = withFakeTerminal(t);
+  const submitted = [];
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: (line) => { submitted.push(line); return 'next'; } });
+
+  typeKeys(fakeStdin, ['a', 'b', 'c']); // coalesced burst
+  typeKeys(fakeStdin, [{ name: 'return' }]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(submitted, ['abc'], 'coalescing never swallows a deliberate submit');
+});
+
+test('cursor-up is clamped to the terminal viewport', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t, 80, 10);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  // 30 input rows on a 10-row terminal: erase distance would be 30 unclamped.
+  const payload = Array.from({ length: 30 }, (_, i) => `row${String(i).padStart(2, '0')}`).join('\n');
+  fakeStdin.emit('keypress', undefined, { name: 'paste-start' });
+  typeKeys(fakeStdin, [...payload].flatMap((ch) => (ch === '\n' ? [{ name: 'return' }] : [ch])));
+  fakeStdin.emit('keypress', undefined, { name: 'paste-end' });
+  typeKeys(fakeStdin, [{ name: 'left' }, { name: 'left' }]); // force redraws of the tall block
+  await burstSettled();
+
+  const ups = cursorUps(writes);
+  assert.ok(ups.length > 0, 'the block was redrawn with cursor movement');
+  assert.ok(ups.every((n) => n <= 9), `no ESC[nA exceeds rows-1 (max seen: ${Math.max(...ups)})`);
+  const plain = emu.text().replace(/\x1B\[[0-9;]*m/g, '');
+  const renders = renderCount(writes);
+  assert.ok(renders <= 4, 'paste + two edits cost at most four renders: ' + renders);
+  // Height overflow degrades to scroll: a frame that left the viewport can
+  // never be erased, so copies track renders — never pasted lines or keys.
+  assert.ok(plain.split('row00').length - 1 <= renders, 'no more copies than full-block renders');
+});
+
+test('non-TTY stdout never receives a cursor-up', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, 10);
+  Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true, writable: true });
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  fakeStdin.emit('keypress', undefined, { name: 'paste-start' });
+  typeKeys(fakeStdin, [...'hello\nworld'].flatMap((ch) => (ch === '\n' ? [{ name: 'return' }] : [ch])));
+  fakeStdin.emit('keypress', undefined, { name: 'paste-end' });
+  typeKeys(fakeStdin, [{ name: 'escape' }, 'd']);
+  await burstSettled();
+
+  assert.deepEqual(cursorUps(writes), [], 'no ESC[nA reaches a non-TTY stdout');
+  assert.ok(writes.join('').includes('world'), 'the draft itself still reaches the output');
+});
+
+test('a coalesced burst never survives cleanup', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  typeKeys(fakeStdin, ['a', 'b', 'c']); // burst open, frame owed
+  fakeStdin.emit('keypress', '', { ctrl: true, name: 'c' }); // shutdown
+  const writesAtShutdown = writes.length;
+  assert.ok(writesAtShutdown > 0, 'the prompt wrote to stdout');
+  await burstSettled();
+
+  assert.equal(writes.length, writesAtShutdown, 'no write lands after cleanup');
+  assert.ok(writes.join('').includes('\x1B[?2004l'), 'cleanup still disables bracketed paste');
 });

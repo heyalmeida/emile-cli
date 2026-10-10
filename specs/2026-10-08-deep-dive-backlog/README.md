@@ -54,4 +54,5 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic save
 | P2-10 README refresh | ✅ done — `7e8abc2` |
 | P0-2 skills path | ✅ done — `7ccac7c` + `167c4a6` (spec: `specs/2026-10-08-skills-path-fix/`) |
 | P2-11 doc alignment | ⚠ implemented in working tree, uncommitted (session 2026-10-08) |
+| P0-4 paste-burst redraw | ✅ done — spec: `specs/2026-10-09-paste-burst-redraw/` |
 | all others | ⏳ pending |

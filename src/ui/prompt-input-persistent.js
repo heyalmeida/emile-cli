@@ -3,7 +3,7 @@
 // Design (codex/grok-build-style inline block, rebuilt from scratch):
 //
 // The whole prompt is a "block" of lines: top border, optional autocomplete
-// matches, input rows, bottom border, footer. Rendering follows three hard
+// matches, input rows, bottom border, footer. Rendering follows four hard
 // rules that make the cursor math provably correct:
 //
 //   1. EVERY line is clipped to the terminal width before being written.
@@ -15,8 +15,14 @@
 //      ANSI terminal emulator against real keypress sequences).
 //   3. The only cross-render state is `lastTopOffset`: the distance in rows
 //      from the cursor to the top of the block currently on screen. Erasing
-//      is always "move up lastTopOffset, erase down". Nothing else is
-//      remembered, so a wrong previous state can never compound.
+//      is always "move up lastTopOffset, erase down" — and that move is
+//      clamped to the viewport: a distance longer than `stdout.rows` cannot
+//      reach scrolled lines, so over-erasing is never attempted (height
+//      overflow degrades to scrolling, never to duplicated frames).
+//   4. One burst of pasted input paints one frame. Inside a bracketed paste —
+//      and inside a sub-2 ms run of text keys on terminals without bracketed
+//      paste — keypresses update state only; `render()` is called once when
+//      the burst ends.
 //
 // Async submit handlers temporarily own stdin (agent-turn queue listener,
 // /switch picker, /model picker, etc.). The persistent prompt detaches before
@@ -88,6 +94,59 @@ export function clipLine(line, columns) {
   // terminal cell. A bounded line must never leak styling into the next row.
   if (truncated && sawSgr) out += '\x1B[0m';
   return out;
+}
+
+// ── Paste coalescing (deep-dive § 22.2) ─────────────────────────────
+// A large paste arrives either bracketed (paste-start/paste-end) or, on
+// terminals that ignore the mode, as a synchronous run of keypress events.
+// Drawing on every one of them is both wasteful and visually broken: the
+// erase can only reach rows still inside the viewport, so once the block is
+// taller than the screen the earlier frames have already scrolled into the
+// scrollback and each new line repaints the whole block — the pasted text
+// appears N times. Inside a burst the state is updated and the frame is
+// painted once, when the burst ends.
+//
+// Timing mirrors the grok-build pager: a run of PASTE_BURST_MIN_KEYS text
+// keys with gaps <= PASTE_BURST_WINDOW_MS is a paste, not a typist (a human
+// types an order of magnitude slower), and the burst closes after
+// PASTE_BURST_QUIET_MS of silence or on the first non-text key.
+const PASTE_BURST_WINDOW_MS = 2;
+const PASTE_BURST_QUIET_MS = 10;
+const PASTE_BURST_MIN_KEYS = 3;
+
+/** Keypress names owned by dedicated branches in `onKeypress` — a key outside
+ *  this set that carries a printable string only inserts text, which is what
+ *  makes it a pasteable event.
+ *
+ *  `enter`/`return` are listed on purpose: a coalesced burst must never
+ *  swallow a deliberate submit. Inside a bracketed paste the terminal already
+ *  delimits the payload, so `isPasting` supplies that guarantee instead. */
+const NON_TEXT_KEY_NAMES = new Set([
+  'return', 'enter', 'backspace', 'delete',
+  'left', 'right', 'up', 'down', 'tab', 'escape',
+]);
+
+/** True when a keypress only inserts its text into the draft. */
+function isTextKeypress(str, key = {}) {
+  if (!str || key.ctrl || key.meta) return false;
+  if (isShiftEnterKey(key)) return false;
+  return !NON_TEXT_KEY_NAMES.has(key.name);
+}
+
+/** Rows the cursor can physically travel up: the viewport height minus the row
+ *  it stands on. Anything above that has scrolled into the scrollback, where no
+ *  escape sequence can reach it. */
+function viewportCursorUp() {
+  return Math.max((process.stdout.rows || 24) - 1, 0);
+}
+
+/** Emits a viewport-bounded cursor-up. A non-TTY stdout cannot honor cursor
+ *  movement at all, so it receives none. Never erases more than fits: taller
+ *  blocks degrade to scrolling, never to duplicated frames. */
+function writeCursorUp(rows) {
+  if (!process.stdout.isTTY || rows <= 0) return;
+  const up = Math.min(rows, viewportCursorUp());
+  if (up > 0) process.stdout.write(`\x1B[${up}A`);
 }
 
 /**
@@ -287,6 +346,13 @@ export function persistentPromptInput({
     let settled = false;
     let keypressAttached = false;
     let isPasting = false;
+    // Paste-burst coalescing (see the constants above): while a burst is open
+    // nothing is drawn, and `renderDeferred` remembers that a frame is owed.
+    let burstKeyCount = 0;
+    let burstLastKeyAt = 0;
+    let burstDeferred = false;
+    let renderDeferred = false;
+    let burstFlushTimer = null;
 
     function footerSegments() {
       return buildPromptFooterSegments({ stats, mcpInfo });
@@ -297,11 +363,43 @@ export function persistentPromptInput({
       return cmds.length ? cmds : matchPromptMentions(input, cursor);
     }
 
+    function clearBurstFlush() {
+      if (burstFlushTimer === null) return;
+      clearTimeout(burstFlushTimer);
+      burstFlushTimer = null;
+    }
+
+    /** Opens/extends a non-bracketed paste burst: text keys inside the 2 ms
+     *  window coalesce, and the frame is repaid when the burst goes quiet. */
+    function trackPasteBurst() {
+      const now = Date.now();
+      if (now - burstLastKeyAt > PASTE_BURST_WINDOW_MS) burstKeyCount = 0;
+      burstLastKeyAt = now;
+      burstKeyCount += 1;
+      if (burstKeyCount < PASTE_BURST_MIN_KEYS) return;
+      burstDeferred = true;
+      clearBurstFlush();
+      burstFlushTimer = setTimeout(endBurst, PASTE_BURST_QUIET_MS);
+      // A pending flush must never be the reason the process stays alive.
+      if (typeof burstFlushTimer.unref === 'function') burstFlushTimer.unref();
+    }
+
+    /** Closes the burst: the owed frame is painted before any other key acts on
+     *  the draft, so the screen always matches the state that key modifies. */
+    function endBurst() {
+      clearBurstFlush();
+      burstKeyCount = 0;
+      if (!burstDeferred) return;
+      burstDeferred = false;
+      if (renderDeferred && !settled) render();
+    }
+
     function erasePreviousBlock() {
       if (lastTopOffset === null) return;
-      if (lastTopOffset > 0) {
-        process.stdout.write(`\x1B[${lastTopOffset}A`);
-      }
+      // Clamped: a block taller than the viewport has lines in the scrollback
+      // that no cursor-up can reach. Erasing what fits beats repainting the
+      // block below a frame that cannot be removed (the paste duplication bug).
+      writeCursorUp(lastTopOffset);
       process.stdout.write('\r\x1B[0J');
       lastTopOffset = null;
     }
@@ -312,6 +410,14 @@ export function persistentPromptInput({
       // the prompt block here would wipe/interleave agent output — the
       // block is redrawn once when the turn ends via the redraw() handle.
       if (busy?.isBusy() || submitInFlight) return;
+      // Inside a paste burst, keypresses are state updates only. The frame is
+      // owed exactly once and paid when the burst ends (paste-end / endBurst).
+      if (isPasting || burstDeferred) {
+        renderDeferred = true;
+        return;
+      }
+      renderDeferred = false;
+      clearBurstFlush();
       const columns = process.stdout.columns || 80;
       const matches = currentMatches();
       if (process.env.EMILE_DEBUG_RENDER) process.stderr.write(`[render] input=${JSON.stringify(input)} matches=${matches.length} cursor=${cursor}\n`);
@@ -337,11 +443,10 @@ export function persistentPromptInput({
       }
       process.stdout.write(out);
 
-      // Move the cursor back onto the input row.
-      const rowsUp = layout.height - (layout.inputRowIndex + layout.cursorRow);
-      if (rowsUp > 0) {
-        process.stdout.write(`\x1B[${rowsUp}A`);
-      }
+      // Move the cursor back onto the input row. Same viewport clamp as the
+      // erase: with a draft taller than the screen the caret's row has scrolled
+      // away, and an over-long cursor-up would land on unrelated output.
+      writeCursorUp(layout.height - (layout.inputRowIndex + layout.cursorRow));
       if (layout.cursorCol > 0) {
         // +GUTTER accounts for the two-space prefix every line carries.
         process.stdout.write(`\x1B[${layout.cursorCol + GUTTER}C`);
@@ -357,6 +462,12 @@ export function persistentPromptInput({
 
     function suspendInput() {
       if (!keypressAttached) return;
+      // No burst may outlive stdin ownership: a flush firing while a nested
+      // raw-mode owner holds the terminal would repaint the idle block there.
+      clearBurstFlush();
+      burstKeyCount = 0;
+      burstDeferred = false;
+      renderDeferred = false;
       process.stdin.removeListener('keypress', onKeypress);
       keypressAttached = false;
     }
@@ -421,6 +532,13 @@ export function persistentPromptInput({
     function shutdown() {
       if (settled) return;
       settled = true;
+      // A coalesced burst must not survive the prompt: endBurst() checks
+      // `settled`, and the pending timer is cleared here so nothing can write
+      // to a stdout the REPL has already handed back.
+      clearBurstFlush();
+      burstKeyCount = 0;
+      burstDeferred = false;
+      renderDeferred = false;
       suspendInput();
       // Restore the terminal mode we enabled when this prompt took ownership
       // of raw stdin. This is deliberately best-effort: stdout can be gone
@@ -436,11 +554,32 @@ export function persistentPromptInput({
       if (process.env.EMILE_DEBUG_RENDER) process.stderr.write(`[keypress] str=${JSON.stringify(str)} key=${JSON.stringify(key)}\n`);
       if (key.name === 'paste-start') {
         isPasting = true;
+        // Zero renders for the whole payload. A burst that was still open folds
+        // its owed frame into the single paste-end render.
+        clearBurstFlush();
+        burstKeyCount = 0;
+        if (burstDeferred) {
+          burstDeferred = false;
+          renderDeferred = true;
+        }
         return;
       }
       if (key.name === 'paste-end') {
         isPasting = false;
+        // The one full-block redraw for everything the burst inserted. Any
+        // open non-bracketed burst folds into it as well.
+        clearBurstFlush();
+        burstKeyCount = 0;
+        burstDeferred = false;
+        if (renderDeferred) render();
         return;
+      }
+      // Terminals that ignore bracketed paste deliver the payload as a bare
+      // run of keypresses: coalesce it the same way. Detection reads keypress
+      // metadata only, never the pasted content.
+      if (!isPasting) {
+        if (isTextKeypress(str, key)) trackPasteBurst();
+        else endBurst();
       }
       if (key.ctrl && key.name === 'c') {
         // While an agent turn is running, Esc/Ctrl+C cancel the turn

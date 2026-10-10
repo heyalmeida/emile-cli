@@ -40,7 +40,7 @@ flowchart TD
 | **Multiline tool rows** | Continuation lines are sanitized, width-bounded and indented beneath the argument column instead of restarting at column zero |
 | **Palette tokens** | `C.gold` (#FFD700), `C.ghost` (#3B4261); `GAP` spacing constants |
 | **Terminal title** | OSC 0, activity-first, max 100 chars; real TTY only; duplicate writes suppressed |
-| **Prompt lifecycle** | `persistentPromptInput` owns idle stdin; Tab completes slash commands, bracketed pasted text stays editable (including newlines), and nested pickers receive exclusive ownership. During active turns, `listenTurnKeys` provides the same paste behavior, renders the same full frame, routes stdout above it and leaves the real caret at the draft before returning ownership afterward |
+| **Prompt lifecycle** | `persistentPromptInput` owns idle stdin; Tab completes slash commands, bracketed pasted text stays editable (including newlines) and **coalesces into a single repaint** (a burst of ≥3 text keypresses within 2 ms on terminals without bracketed paste is treated as one paste; redraws clamp their cursor-up to the viewport and skip it on non-TTY stdout), and nested pickers receive exclusive ownership. During active turns, `listenTurnKeys` provides the same paste behavior, renders the same full frame, routes stdout above it and leaves the real caret at the draft before returning ownership afterward |
 | **Applicable security gates** | Assistant output sanitization; terminal title excludes prompts/command/query args and strips ANSI/OSC/control bytes |
 
 ## Where It Lives in the Code
@@ -77,3 +77,4 @@ flowchart TD
 | 2026-08-31 | Multiline tool arguments keep continuation lines aligned beneath the argument column with existing styling, bounds and sanitization | `specs/2026-08-31-aligned-multiline-tool-output` / CHANGELOG |
 | 2026-09-01 | Persistent prompt lifecycle: Tab completion, exact wrapped cursor/reset state, exclusive nested-picker stdin and reliable resume after `/switch` | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
 | 2026-09-02 | Active-turn visual parity: shared full prompt, distinct `●` autocomplete selection, prompt-aware stdout arbitration and real caret preserved at the draft | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
+| 2026-10-09 | Large-paste duplication fixed: a paste (bracketed or a ≥3-keypress burst within 2 ms) repaints the prompt block **once** instead of per character, and every cursor-up is clamped to `stdout.rows - 1` and suppressed entirely on a non-TTY stdout, so height overflow degrades to scrolling rather than duplicated frames | `specs/2026-10-09-paste-burst-redraw` / CHANGELOG |
