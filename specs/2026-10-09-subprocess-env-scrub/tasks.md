@@ -91,4 +91,7 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ (recorded after commit) | `fix(tools): scrub secrets and injection-prone vars from subprocess env` | `src/tools/security.js`, `src/tools/handlers/run-command.js`, `test/subprocess-env-scrub.test.js`, `specs/2026-10-09-subprocess-env-scrub/*`, `CHANGELOG.md`, `README.md`, `docs/architecture.md`, `docs/code-quality-and-security.md`, `docs/deep-dive.md`, `features/built-in-tools.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+| `e360192` | `fix(tools): scrub secrets and injection-prone vars from subprocess env` | `src/tools/security.js`, `src/tools/handlers/run-command.js`, `test/subprocess-env-scrub.test.js`, `specs/2026-10-09-subprocess-env-scrub/*`, `CHANGELOG.md`, `README.md`, `docs/architecture.md`, `docs/code-quality-and-security.md`, `docs/deep-dive.md`, `features/built-in-tools.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+
+> 13 files, explicit paths only (Rule 8). The working tree was clean when this brief started, so every staged modification belongs to this change; no `git add .`/`-A` was used and nothing foreign was included.
+
