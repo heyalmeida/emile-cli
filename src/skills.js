@@ -44,11 +44,19 @@ export function parseSkillFile(filePath) {
 }
 
 /**
- * Scans the .agent/skills directory and loads available skills.
+ * Scans the workspace skills root and loads available skills.
+ *
+ * `.agents/skills/` is the ONE canonical root: it is the convention the wider
+ * agent-CLI ecosystem uses (and the path the documentation promises), so the
+ * agent reads the same directory the user maintains. A second root (a legacy
+ * `.agent/skills/` fallback) is deliberately not scanned — two twin directories
+ * with the same content is what made skills appear to vanish; multi-root
+ * discovery is `specs/2026-10-08-deep-dive-backlog/briefs/p1-5-skills-multi-root.md`.
+ *
  * @returns {Array<{ name: string, description: string, content: string }>}
  */
 export function loadAllSkills() {
-  const skillsDir = path.join(config.workspaceDir, '.agent', 'skills');
+  const skillsDir = path.join(config.workspaceDir, '.agents', 'skills');
   const loadedSkills = [];
 
   if (!fs.existsSync(skillsDir)) {

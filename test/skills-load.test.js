@@ -1,7 +1,8 @@
-// skills-load.test.js — skills discovery contract (spec 2026-10-08-skills-path-fix,
-// deep-dive P0-2): loadAllSkills() scans `<workspace>/.agent/skills/`, explicit
-// lists bypass relevance filtering, auto mode retains clean-code, malformed
-// skills are skipped and compilation stays capped (8k/skill, 24k total).
+// skills-load.test.js — skills discovery contract (spec 2026-10-skills-agents-dir,
+// on top of 2026-10-08-skills-path-fix / deep-dive P0-2): loadAllSkills() scans
+// `<workspace>/.agents/skills/` and ONLY that root, explicit lists bypass
+// relevance filtering, auto mode retains clean-code, malformed skills are skipped
+// and compilation stays capped (8k/skill, 24k total).
 import { test, describe, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,11 +14,12 @@ import {
   detectWorkspaceSkills,
   filterSkillsByRelevance,
   loadAllSkills,
+  parseSkillFile,
 } from '../src/skills.js';
 import { config } from '../src/config.js';
 
 function writeSkill(workspace, name, content, frontmatter = null) {
-  const dir = path.join(workspace, '.agent', 'skills', name);
+  const dir = path.join(workspace, '.agents', 'skills', name);
   fs.mkdirSync(dir, { recursive: true });
   const body = frontmatter
     ? `---\n${frontmatter}\n---\n${content}`
@@ -25,7 +27,14 @@ function writeSkill(workspace, name, content, frontmatter = null) {
   fs.writeFileSync(path.join(dir, 'SKILL.md'), body, 'utf8');
 }
 
-describe('skills discovery (.agent/skills)', () => {
+/** Writes a skill into the FORMER root, to pin that it is no longer scanned. */
+function writeLegacySkill(workspace, name, content) {
+  const dir = path.join(workspace, '.agent', 'skills', name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), content, 'utf8');
+}
+
+describe('skills discovery (.agents/skills)', () => {
   let tmpWorkspace;
   let warnSpy;
   let warnCalls;
@@ -59,6 +68,44 @@ describe('skills discovery (.agent/skills)', () => {
     assert.equal(skills[0].content, 'Keep functions short.');
   });
 
+  test('a skill living only in the former .agent/skills/ root is NOT discovered', () => {
+    // One canonical root: the pre-change directory must not resurface as a
+    // silent second scan (two twin directories made skills look like they
+    // vanished — specs/2026-10-skills-agents-dir).
+    writeLegacySkill(tmpWorkspace, 'legacy-only', 'Should never load.');
+    writeSkill(tmpWorkspace, 'clean-code', 'Keep functions short.');
+
+    const skills = loadAllSkills();
+    assert.deepEqual(skills.map(s => s.name), ['clean-code'], 'only the canonical root is scanned');
+    assert.equal(loadAllSkills().some(s => s.name === 'legacy-only'), false);
+    assert.doesNotMatch(compileSkills(['legacy-only']), /legacy-only/, 'an explicit -s cannot reach the old root either');
+  });
+
+  test('the vendored clean-code starter is discovered from the tracked root', () => {
+    // The repository ships exactly one skill inside `.agents/skills/` so a fresh
+    // clone can satisfy the code's hard requirement on clean-code
+    // (detectWorkspaceSkills always pushes it). This asserts the checked-in file
+    // itself, not a fixture: it fails if the starter stops being tracked there.
+    const repoRoot = path.resolve(import.meta.dirname, '..');
+    const starter = path.join(repoRoot, '.agents', 'skills', 'clean-code', 'SKILL.md');
+    assert.ok(fs.existsSync(starter), 'the starter skill must exist in the canonical root');
+
+    const parsed = parseSkillFile(starter);
+    assert.ok(parsed, 'the starter must parse');
+    assert.equal(parsed.name, 'clean-code');
+    assert.ok(parsed.content.trim().length > 0, 'the starter has real content');
+    assert.ok(parsed.description && parsed.description.length > 0, 'with a description for relevance matching');
+
+    const previousWorkspace = config.workspaceDir;
+    try {
+      config.workspaceDir = repoRoot;
+      const names = loadAllSkills().map(s => s.name);
+      assert.ok(names.includes('clean-code'), `expected clean-code among ${names.join(', ')}`);
+    } finally {
+      config.workspaceDir = previousWorkspace;
+    }
+  });
+
   test('explicit -s list resolves the skill and bypasses relevance filtering', () => {
     writeSkill(tmpWorkspace, 'clean-code', 'Keep functions short.');
     // Prompt shares no token with the skill, yet the explicit list is
@@ -84,7 +131,7 @@ describe('skills discovery (.agent/skills)', () => {
   test('a malformed SKILL.md is skipped with a warn() and never throws', () => {
     writeSkill(tmpWorkspace, 'broken', 'unparseable');
     fs.writeFileSync(
-      path.join(tmpWorkspace, '.agent', 'skills', 'broken', 'SKILL.md'),
+      path.join(tmpWorkspace, '.agents', 'skills', 'broken', 'SKILL.md'),
       '---\n: : : not yaml [open\n---\nbody\n',
       'utf8',
     );
