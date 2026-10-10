@@ -29,10 +29,13 @@ program
   .option('-m, --model <model>', 'Requesty/OpenRouter model to use', config.defaultModel)
   .option('-e, --effort <level>', 'Reasoning effort (low, medium, high, max, min, none)', config.defaultEffort)
   .option('-p, --plans', 'Execute agent in plans mode', false)
-  .option('--no-cache', 'Bypass prompt caching', false)
+  // Negation flags: commander treats the third argument as the default of the
+  // POSITIVE option (`cache`, `safe`) — it must be true, otherwise the feature
+  // is permanently off and `--no-cache`/`--no-safe` become no-ops.
+  .option('--no-cache', 'Bypass prompt caching', true)
   .option('-s, --skills <list>', 'Comma-separated active skills (default: all)', 'all')
   .option('-H, --history', 'Select and resume a past conversation history', false)
-  .option('--no-safe', 'Bypass command execution safe gate', false)
+  .option('--no-safe', 'Bypass command execution safe gate', true)
   .option('--dry-run', 'Simulate changes and command execution', false)
   .option('--web-search', 'Allow OpenRouter web search (additional provider charges may apply)', config.webSearch)
   .option('--export-thinking', 'Include model reasoning in /export output', false)
