@@ -52,9 +52,10 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic save
 |---|---|
 | P2-8 maxLoopIterations | ✅ done — `5ab35de` + `e8d12d1` |
 | P2-10 README refresh | ✅ done — `7e8abc2` |
+| P2-11 doc alignment | ✅ done — `7fd4d67` + `64df2df` (spec: `specs/2026-10-08-doc-alignment/`) |
 | P0-2 skills path | ✅ done — `7ccac7c` + `167c4a6` (spec: `specs/2026-10-08-skills-path-fix/`) |
-| P2-11 doc alignment | ⚠ implemented in working tree, uncommitted (session 2026-10-08) |
-| P0-4 paste-burst redraw | ✅ done — spec: `specs/2026-10-09-paste-burst-redraw/` |
-| P0-5 subprocess env scrub | ✅ done — spec: `specs/2026-10-09-subprocess-env-scrub/` |
-| P0-6 assistant null poison | ✅ done — spec: `specs/2026-10-09-assistant-null-poison/` |
-| all others | ⏳ pending |
+| P0-4 paste-burst redraw | ✅ done — `c839957` (+ spec-hash `5d4623e`) (spec: `specs/2026-10-09-paste-burst-redraw/`) |
+| P0-5 subprocess env scrub | ✅ done — `e360192` (+ spec-hash `a876a52`) (spec: `specs/2026-10-09-subprocess-env-scrub/`) |
+| P0-6 assistant null poison | ✅ done — `2cce204` (+ spec-hash `05f6269`) (spec: `specs/2026-10-09-assistant-null-poison/`) |
+| P1-6 provider system + custom endpoints | ✅ done — `7e7acd8` + `1632ddb` + `64df2df` (spec: `specs/2026-10-09-provider-system/`) |
+| all others | ⏳ pending (P0-1, P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P2-7, P2-9, P2-12…P2-17) |
