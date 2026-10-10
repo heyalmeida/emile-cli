@@ -140,3 +140,5 @@ dist
 .emile/
 .clinerules
 grok-build/
+integrations/
+skills-lock.json
