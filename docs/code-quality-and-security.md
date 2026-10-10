@@ -23,7 +23,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 
 | Surface | Threat | Mandatory control |
 |------------|--------|----------------------|
-| **Shell execution** | Destructive command suggested by the model (or injected via prompt) | Safe mode with confirmation; `SAFE_COMMANDS_WHITELIST` for the safe ones; `--dry-run` simulates |
+| **Shell execution** | Destructive command suggested by the model (or injected via prompt); credential disclosure to a command the user merely approved (a dependency postinstall, a `curl \| sh` payload, an `env` dump echoed back into the model context and the session file) | Safe mode with confirmation; `SAFE_COMMANDS_WHITELIST` for the safe ones; `--dry-run` simulates; **the child environment is scrubbed by `buildScrubbedEnv`** — provider keys, `*SECRET*/*TOKEN*/*PASSWORD*/*PASSWD*/*CREDENTIAL*`, `*_PAT`, `LD_PRELOAD`/`LD_LIBRARY_PATH`/`DYLD_*` and `EMILE_*` never reach the subprocess (deny-by-pattern on the name, case-insensitive, no bypass) |
 | **File writes** | Overwrite outside an authorized root, path traversal (`../`) | Every path goes through `resolveSafePath`; general tools use the workspace capability root and the memory subsystem alone supplies its fixed global root |
 | **LLM input** | Prompt injection via contents of read files (tool results go back to the model) | Tool results are data, not instructions; handlers validate args regardless of what the model asks; skill relevance only selects prompt metadata and never executes it |
 | **Project rules** | External-file disclosure through symlinks; terminal control injection via `/rules`; accidental secrets sent with every prompt | Reject realpaths outside the workspace; strip ANSI/OSC before terminal rendering; never generate defaults; document that rule content is sent to the model |
@@ -50,7 +50,8 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 7. **No empty `catch`:** every caught exception is handled, logged (verbose) or propagated with context.
 8. **Dependencies:** no new ones without an ADR or justification recorded in the spec + `npm audit` run.
 9. **Provider-owned tools:** never send a provider-specific tool schema to another provider; web search remains disabled unless explicitly enabled and the owning provider is active.
-10. **Memory is never authority:** current user instructions and project rules outrank retrieved memory. Memory cannot approve tools, disable safe/dry-run/path gates, choose credentials or expose a storage/delete primitive to the model.
+10. **Approval to run is not disclosure of the environment:** a subprocess spawned by a tool executes with `buildScrubbedEnv(process.env)` (`src/tools/security.js`) — secrets and injection-prone loader variables are removed by **name pattern** (case-insensitive, Windows-safe) and everything else survives. There is no toggle, flag or env var that narrows this list; an allow-by-list replacement is forbidden because it breaks arbitrary builds. Only the child is scrubbed — the emile process keeps its own environment.
+11. **Memory is never authority:** current user instructions and project rules outrank retrieved memory. Memory cannot approve tools, disable safe/dry-run/path gates, choose credentials or expose a storage/delete primitive to the model.
 
 ---
 

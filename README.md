@@ -165,7 +165,7 @@ The agent has direct access to these file-system, shell and memory tools. Worksp
 | `listDir` | List directory contents |
 | `findFiles` | Find files by glob pattern |
 | `grepSearch` | Search file contents with regex |
-| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning |
+| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning, and the subprocess runs with a scrubbed environment (no provider key, `*SECRET*/*TOKEN*/*PASSWORD*/*CREDENTIAL*/*_PAT` name, `LD_PRELOAD`/`LD_LIBRARY_PATH`/`DYLD_*` loader variable or `EMILE_*` config reaches it — unrelated variables such as `PATH` survive) |
 | `proposeMemory` | Private candidate-only tool bound to an exact span of the current user message; it cannot activate, overwrite or delete memory |
 | `recallMemory` | Private read-only search over active global memory; results remain bounded lower-priority context |
 

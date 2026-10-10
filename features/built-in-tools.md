@@ -31,7 +31,7 @@ operation and returning a bounded result to the model.
 | **Slash commands** | `/undo [N]` for recorded file changes |
 | **Tools** | `readFile`, `writeFile`, `editFile`, `listDir`, `findFiles`, `grepSearch`, `runCommand` |
 | **Configuration** | Workspace root from the current working directory; session cwd is workspace-contained and reset by `/new` |
-| **Applicable security gates** | `resolveSafePath`, `normalizeWorkspaceCwd`, safe mode, dry-run, command whitelist, output caps and undo tracking |
+| **Applicable security gates** | `resolveSafePath`, `normalizeWorkspaceCwd`, safe mode, dry-run, command whitelist, **scrubbed child environment** (`buildScrubbedEnv` — no credential, loader-injection variable or `EMILE_*` reaches a subprocess) and undo tracking |
 
 ## Where It Lives in the Code
 
@@ -54,3 +54,4 @@ intentionally leaves the workspace does not change the persisted session cwd.
 |------|--------|-----------|
 | 2026-08-30 | Registered the shipped built-in tool surface | `specs/2026-08-30-feature-registry-completion` |
 | 2026-08-31 | Persisted workspace-contained cwd across `runCommand` calls and added early argument validation for file tools | `specs/2026-08-31-web-search-tool-reliability` |
+| 2026-10-09 | `runCommand` executes with a scrubbed child environment: provider credentials, secret-shaped names (`*KEY*/*SECRET*/*TOKEN*/*PASSWORD*/*PASSWD*/*CREDENTIAL*/*_PAT`), `LD_PRELOAD`/`LD_LIBRARY_PATH`/`DYLD_*` and `EMILE_*` are removed by name pattern (case-insensitive) with no bypass, while PATH and unrelated build variables survive; the emile process keeps its own environment | `specs/2026-10-09-subprocess-env-scrub` / CHANGELOG |

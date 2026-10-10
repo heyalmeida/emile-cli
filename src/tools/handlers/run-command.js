@@ -5,7 +5,7 @@ import path from 'node:path';
 import { exec } from 'node:child_process';
 import { confirm, isCancel } from '@clack/prompts';
 import { config } from '../../config.js';
-import { isSafeCommand, normalizeWorkspaceCwd } from '../security.js';
+import { isSafeCommand, normalizeWorkspaceCwd, buildScrubbedEnv } from '../security.js';
 import { stripTerminalControls } from '../../ui/control.js';
 
 const NETWORK_PIPE_PATTERN = /\b(?:curl|wget)\b[^\n]*\|\s*(?:ba|z|fi)?sh\b/i;
@@ -91,7 +91,13 @@ export async function runCommand({ command }) {
       : null;
     const shellCommand = winBatch ? `"${winBatch.batchPath}"` : `${command}\n${buildCwdProbe(marker)}`;
 
-    exec(shellCommand, { cwd: commandCwd, timeout }, (error, stdout, stderr) => {
+    // The child gets a SCRUBBED environment (security.js buildScrubbedEnv):
+    // provider credentials, secret-shaped names, loader-injection variables and
+    // EMILE_* never reach a process spawned from model-authored text — an
+    // approved `npm install` postinstall or a `curl | sh` payload must not be
+    // able to read them. Recomputed per call, so it always reflects the current
+    // parent env. The emile process itself keeps its own environment.
+    exec(shellCommand, { cwd: commandCwd, timeout, env: buildScrubbedEnv(process.env) }, (error, stdout, stderr) => {
       if (winBatch) winBatch.cleanup();
       const probe = stripCwdProbe(stdout || '', marker);
       let output = probe.output;
