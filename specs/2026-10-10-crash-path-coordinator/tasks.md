@@ -88,5 +88,5 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ | `fix(lifecycle): route crashes through the shutdown coordinator` | `src/lifecycle/crash.js`, `src/lifecycle/index.js`, `bin/emile.js`, `src/commands/handlers.js`, `test/lifecycle-crash.test.js`, `test/lifecycle-stdin.test.js`, spec pack |
-| ⏳ | `docs: sync the crash-path change` | `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/session-lifecycle.md`, pack README |
+| `d0e55a5` | `fix(lifecycle): route crashes through the shutdown coordinator` | `src/lifecycle/crash.js`, `src/lifecycle/index.js`, `bin/emile.js`, `src/commands/handlers.js`, `test/lifecycle-crash.test.js`, `test/lifecycle-stdin.test.js`, spec pack |
+| `7513b82` | `docs: sync the crash-path change` | `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/session-lifecycle.md`, pack README |
