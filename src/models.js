@@ -44,10 +44,10 @@ export const MODEL_INFO = [
 
 // Safe fallback for unknown/custom models
 export const DEFAULT_MODEL_INFO = {
-  context: 128000,
+  context: 262000,
   inputPrice: 3,
   outputPrice: 15,
-  reasoning: false,
+  reasoning: true,
 };
 
 /**
