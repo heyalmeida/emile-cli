@@ -42,10 +42,7 @@ update**, so the terminal repaints the erased region dozens of times per second.
   "only the reasoning flickers" variant; `src/ui/prompt-input-persistent.js`
   `render()`/`erasePreviousBlock` (erase `\r\x1B[0J`) is the "only the prompt
   flickers" variant.
-- Reference (grok-build, verified paths): `xai-grok-pager-render/src/render/draw.rs:500-516`
-  wraps a frame in DEC 2026 (`BEGIN`/`END` at `:750-751`) and **skips it under
-  tmux** (`:38`); `xai-ratatui-inline/src/terminal.rs:497-541` repaints by cell
-  diff, never by erasing to the end of the screen.
+- Reference (grok-build, verified paths): `xai-grok-pager-render/src/render/draw.rs:500-516` wraps a frame in DEC 2026 (`BEGIN`/`END` at `:750-751`); the predicate itself is `xai-grok-pager-render/src/terminal/tmux.rs:55` (`should_emit_synchronized_output`) and it **skips the wrapper under tmux** (`draw.rs:38`); `xai-ratatui-inline/src/terminal.rs:497-541` repaints by cell diff, never by erasing to the end of the screen.
 
 ## Required design (do not re-derive; implement this)
 
