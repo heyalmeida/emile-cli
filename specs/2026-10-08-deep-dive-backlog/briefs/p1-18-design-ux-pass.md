@@ -35,7 +35,11 @@ citation you cannot confirm as a claim to drop, not to write around.
    `Theme` struct. No hardcoded colors elsewhere" (`xai-grok-pager-render/src/theme/mod.rs:1`,
    `theme/tokyonight.rs:1`). Roles, not hues: `accent_user/assistant/thinking/tool/
    system/error/success/running/skill/plan/verify/memory/model`, `text_primary/secondary`,
-   three grays, `command`/`path`/`running`, four border roles, diff tokens, `md_*`.
+   three grays, `command`/`path`/`running`, four border roles, diff tokens,
+   `md_heading_h1..h6` (+ per-level `_mod`). **Corrected 2026-10-11** (the audit
+   verified the tree): there is no `accent_memory` — the memory-adjacent roles are
+   `accent_remember` and `accent_model`; and the markdown tokens are
+   `md_heading_h*`, not `md_h*`.
 2. **A three-step gray hierarchy tied to function** (`theme/tokyonight.rs:70-74`):
    `gray_dim` = meta punctuation (`$`, `(+N/-M)`), `gray` = muted body/collapsed
    content, `gray_bright` = labels/tool accents. One "dim" is never enough.
@@ -56,12 +60,17 @@ citation you cannot confirm as a claim to drop, not to write around.
    (`views/shortcuts_help.rs:1-15`); pinned hints survive narrow widths; an armed
    action echoes `press again to {label}`.
 7. **In-situ expand affordances**: a collapsed foldable row swaps its bullet for
-   `›` (`appearance/config.rs:114-123`) and appends a dim `(ctrl+e to expand)`
+   `›` (`xai-grok-pager-render/src/appearance/config.rs:114-123` — corrected path;
+   the file is under `xai-grok-pager-render/`, not `xai-grok-pager/`) and appends a dim `(ctrl+e to expand)`
    **without adding a row** (`blocks/thinking.rs:16-44`).
 8. **Verb-grouping for consecutive tool calls** (`tool/mod.rs:71-145`): adjacent
    similar rows collapse into one summary line — `Read 3 files`, `Searched 4
-   patterns` — present tense while running, past when done; overflow as
-   `╶╶ N more` / `N tool calls & thoughts`.
+   patterns` — present tense while running, past when done; overflow as a synthetic
+   **"N more" group-header row** (`scrollback/render.rs:444`, label from
+   `truncation_header_label`) — **corrected 2026-10-11**: the `╶╶ N more` glyph does
+   not exist anywhere in the tree. The audit's proposal goes one row further than
+   the reference: fold the count into the group row (`+N more`) instead of emitting
+   a second row.
 9. **One rich turn-status line that degrades by width** (`views/turn_status.rs:1-37`):
    `⠧ Run command 0.2s    1m20s ⇣12k [stop]` — spinner + role-colored activity
    label + optional phase timer (dropped below ~60 cols), right-aligned turn timer
@@ -70,13 +79,16 @@ citation you cannot confirm as a claim to drop, not to write around.
 10. **Non-fabricating, typed feedback**: errors become a `headline: detail` banner
     with a typed error kind, never a raw JSON dump (`app/error_display.rs:1-3`);
     completion is `Worked for 2.3s`; unknown values are OMITTED rather than shown as
-    `0`/`$0.00`; cost hidden below $0.005 (`docs/user-guide/25-status-line.md:22,112`);
-    a successful compaction is deliberately invisible (log-only).
+    `0`/`$0.00`; cost hidden below $0.005 (`docs/user-guide/25-status-line.md:22,112`).
+    **Corrected 2026-10-11**: a successful compaction is NOT invisible — it renders
+    as `Context compacted: A → B tokens` (`blocks/session_event.rs:435-439`, tests at
+    `:1045, :1056`). The rule that DOES hold is one line per outcome, never a
+    duplicate (`session_notification.rs:1660`).
 
 Reference anti-patterns to adopt as rules (verbatim rationale worth keeping):
 terse periodless status copy (`session_event.rs:375`); no animation that could read
 as broken (`notifications/title.rs:18`, `turn_status.rs:29-31`); never recolor block
-borders on selection (`appearance/config.rs:113`); legacy-glyph ASCII fallbacks for
+borders on selection (`xai-grok-pager-render/src/appearance/config.rs:113`); legacy-glyph ASCII fallbacks for
 providers without font fallback (`glyphs.rs:1-7`).
 
 ## Emile's current design state (facts to work FROM, not against)
