@@ -108,4 +108,6 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ (recorded after commit) | `fix(agent): never persist or resume assistant messages without content or tool_calls` | `src/agent/agent.js`, `src/history.js`, `test/history-sanitize.test.js`, `specs/2026-10-09-assistant-null-poison/*`, `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/agent-loop.md`, `features/session-lifecycle.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+| `2cce204` | `fix(agent): never persist or resume assistant messages without content or tool_calls` | `src/agent/agent.js`, `src/history.js`, `test/history-sanitize.test.js`, `specs/2026-10-09-assistant-null-poison/*`, `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/agent-loop.md`, `features/session-lifecycle.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+
+> 12 files, explicit paths only (Rule 8). The working tree was clean when the brief started (the "in-flight" files it warned about had been committed as `c839957` by the P0-4 brief, and no junk untracked files existed), so every staged path belongs to this change; `git add .`/`-A` was never used.
