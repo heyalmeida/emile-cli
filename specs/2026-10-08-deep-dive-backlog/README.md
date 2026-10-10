@@ -43,6 +43,8 @@ Items promoted from the comparison with xAI's production CLI ([deep-dive § 22](
 | 19 | [P1-10 tool-result secret redaction](briefs/p1-10-tool-result-redaction.md) | none (touches agent.js — sequence after P0-6/P1-8/P1-11 to minimize conflicts) |
 | 20 | [P1-11 compression tool-pair repair](briefs/p1-11-compression-sanitize.md) | none (same invariants as P0-6 — dispatch after it) |
 | 21 | [P1-12 retry hardening + stream idle watchdog](briefs/p1-12-retry-hardening.md) | none |
+| 22 | [P1-13 active-turn input cap (400 chars, silent)](briefs/p1-13-turn-input-cap.md) | none (found 2026-10-10 while dispatching P0-1) |
+| 23 | [P2-18 viewport-budgeted prompt block](briefs/p2-18-prompt-viewport-layout.md) | none (closes the § 7.2 duplication family) |
 
 Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic saveSession — pair with P0-3), P2-13 (mid-turn steering), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks).
 
