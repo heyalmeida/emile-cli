@@ -45,6 +45,7 @@ Items promoted from the comparison with xAI's production CLI ([deep-dive § 22](
 | 21 | [P1-12 retry hardening + stream idle watchdog](briefs/p1-12-retry-hardening.md) | none |
 | 22 | [P1-13 active-turn input cap (400 chars, silent)](briefs/p1-13-turn-input-cap.md) | none (found 2026-10-10 while dispatching P0-1) |
 | 23 | [P2-18 viewport-budgeted prompt block](briefs/p2-18-prompt-viewport-layout.md) | none (closes the § 7.2 duplication family) |
+| 24 | [P2-19 cursor-up clamp in the remaining renderers](briefs/p2-19-cursor-up-clamp-remaining.md) | none (found by the P0-1 executor: turn-keys, model-picker, prompt-input) |
 
 Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic saveSession — pair with P0-3), P2-13 (mid-turn steering), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks).
 
@@ -61,4 +62,4 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic save
 | P0-6 assistant null poison | ✅ done — `2cce204` (+ spec-hash `05f6269`) (spec: `specs/2026-10-09-assistant-null-poison/`) |
 | P0-1 thinking append-only | ✅ done — `57058b4` (spec: `specs/2026-10-10-thinking-append-only/`; shared clamp extracted to `src/ui/terminal-cursor.js`) |
 | P1-6 provider system + custom endpoints | ✅ done — `7e7acd8` + `1632ddb` + `64df2df` (spec: `specs/2026-10-09-provider-system/`) |
-| all others | ⏳ pending (P0-1, P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P2-7, P2-9, P2-12…P2-17) |
+| all others | ⏳ pending (P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P1-13, P2-7, P2-9 (half-landed: the marker-count suites from P0-1/P0-4 cover the counting method; the shared emulator + screen-state assertions are still open), P2-12…P2-19) |
