@@ -23,6 +23,10 @@ const RESERVED_ID_SET = new Set(RESERVED_PROVIDER_IDS);
 
 const API_FORMATS = ['anthropic-messages', 'chat-completions', 'responses'];
 
+// Request-body key used to carry the reasoning effort. '' keeps the model-catalog
+// auto path; only consulted for a custom slot using the chat-completions format.
+export const REASONING_STYLES = ['', 'none', 'reasoning_effort', 'reasoning', 'thinking', 'enable_thinking', 'chat_template_kwargs', 'effort', 'reasoningEffort', 'both'];
+
 // Find and load mcp.json if it exists
 function loadMcpConfig() {
   const mcpPath = path.join(workspaceDir, 'mcp.json');
@@ -100,6 +104,9 @@ function cleanSlot(id, raw) {
   if (typeof raw.baseURL === 'string' && raw.baseURL.length > 0) slot.baseURL = raw.baseURL;
   if (typeof raw.format === 'string' && API_FORMATS.includes(raw.format)) slot.format = raw.format;
   if (typeof raw.label === 'string' && raw.label.length > 0) slot.label = raw.label;
+  // Membership, not truthiness: '' is a valid explicit value (model-catalog auto).
+  // Gateways are dropped too: a reserved gateway id has no reasoningStyle field.
+  if (isCustomProvider(id) && typeof raw.reasoningStyle === 'string' && REASONING_STYLES.includes(raw.reasoningStyle)) slot.reasoningStyle = raw.reasoningStyle;
 
   // Gateways are addressable even without a stored key (env fallback).
   if (!isCustomProvider(id)) return slot;
@@ -236,6 +243,8 @@ function slotView(id) {
     isCustom: isCustomProvider(id),
     // Gateways always speak the OpenAI-compatible chat-completions shape.
     format: isCustomProvider(id) ? (slot?.format || 'chat-completions') : 'chat-completions',
+    // Inert for gateways: the reasoning parameter is fixed by their transport.
+    reasoningStyle: isCustomProvider(id) ? (slot?.reasoningStyle || '') : '',
     baseURL: slot?.baseURL || undefined,
     lastModel: slot?.lastModel || undefined,
     hasKey: apiKey.length > 0,
@@ -249,6 +258,7 @@ function blankDef(id) {
     label: undefined,
     isCustom: false,
     format: 'chat-completions',
+    reasoningStyle: '',
     baseURL: undefined,
     lastModel: undefined,
     hasKey: false,
@@ -346,6 +356,7 @@ export function removeProvider(id) {
  * @param {string} [settings.model]     Stored as the slot's lastModel.
  * @param {string} [settings.baseURL]   Custom endpoint (ignored for gateways).
  * @param {string} [settings.format]    One of the three API formats (custom only).
+ * @param {string} [settings.reasoningStyle] One of REASONING_STYLES (custom only).
  * @param {string} [settings.label]     Human-readable slot label.
  * @param {string} [settings.effort]
  * @param {boolean} [settings.webSearch]
@@ -362,7 +373,10 @@ export function saveUserConfig(settings) {
   // saving an unrelated setting never litters the file with empty slots.
   const slotWritesKey = 'apiKey' in settings;
   const slotWritesFormat = isCustomProvider(target) && API_FORMATS.includes(settings.format);
-  if (slotWritesKey || slotWritesFormat || settings.model || settings.baseURL || settings.label) {
+  const slotWritesReasoningStyle = isCustomProvider(target)
+    && typeof settings.reasoningStyle === 'string'
+    && REASONING_STYLES.includes(settings.reasoningStyle);
+  if (slotWritesKey || slotWritesFormat || settings.model || settings.baseURL || settings.label || slotWritesReasoningStyle) {
     if (!state.providers[target]) state.providers[target] = {};
     const slot = state.providers[target];
 
@@ -373,6 +387,7 @@ export function saveUserConfig(settings) {
     if (settings.label) slot.label = settings.label;
     // Reserved gateways always speak chat-completions; never persist a format for them.
     if (slotWritesFormat) slot.format = settings.format;
+    if (slotWritesReasoningStyle) slot.reasoningStyle = settings.reasoningStyle;
   }
 
   if ('effort' in settings) config.defaultEffort = settings.effort;

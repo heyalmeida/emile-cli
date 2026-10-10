@@ -1,28 +1,21 @@
 import OpenAI from 'openai';
-import { config, getActiveProviderDef, isValidProviderURL } from '../config.js';
+import { config, getActiveProviderDef, isValidProviderURL, isCustomProvider } from '../config.js';
 import { getModelInfo } from '../models.js';
-import { C } from '../ui/theme.js';
+import { getRetryDelayMs, formatApiError } from './transports/base.js';
+import { streamChatCompletions, requestChatCompletions } from './transports/chat-completions.js';
+import { streamAnthropicMessages, requestAnthropicMessages, ANTHROPIC_BUDGET_BY_EFFORT } from './transports/anthropic-messages.js';
+import { streamResponses, requestResponses } from './transports/responses.js';
+
+// The retry mechanics now live in transports/base.js and are shared by every
+// transport. Re-exported here so the public import surface (api/index.js,
+// tests) is unchanged (plan § 7 decision 10).
+export { getRetryDelayMs };
 
 let openaiClient = null;
 let currentClientKey = null;
 let currentClientProvider = null;
 let currentClientBaseURL = null;
 let currentClientFormat = null;
-
-// Retry-able HTTP status codes and network error codes
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
-const RETRYABLE_CODES    = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ERR_SOCKET_CONNECTION_TIMEOUT']);
-
-const MAX_RETRIES = 3;
-
-function getErrorStatus(err) {
-  const candidates = [err?.status, err?.response?.status, err?.error?.status, err?.error?.code];
-  for (const candidate of candidates) {
-    const status = Number(candidate);
-    if (Number.isInteger(status) && status >= 400 && status <= 599) return status;
-  }
-  return null;
-}
 
 /**
  * Get or initialize the OpenAI client configured for the active provider.
@@ -95,31 +88,13 @@ export function resetClient() {
 }
 
 /**
- * Returns true if the error is worth retrying (rate-limit, network, server error).
- */
-function isRetryable(err) {
-  const status = getErrorStatus(err);
-  if (status && RETRYABLE_STATUSES.has(status)) return true;
-  if (err?.code  && RETRYABLE_CODES.has(err.code))       return true;
-  if (err?.cause?.code && RETRYABLE_CODES.has(err.cause.code)) return true;
-  // OpenAI SDK wraps network errors as APIConnectionError
-  if (err?.constructor?.name === 'APIConnectionError') return true;
-  return false;
-}
-
-/**
- * Sleep for `ms` milliseconds.
- */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
  * Builds the provider-specific reasoning request parameters.
  * OpenRouter uses the unified `reasoning` object; other OpenAI-compatible
  * providers keep the existing `reasoning_effort` compatibility path.
+ * A custom chat-completions endpoint may override the body key via the slot's
+ * `reasoningStyle` (spec § 3.1 rule 13) — reserved gateways never see it.
  */
-export function buildReasoningParams({ provider, model, effort }) {
+export function buildReasoningParams({ provider, model, effort, reasoningStyle = '' }) {
   const isAnthropicNative = provider === 'anthropic' ||
     (provider === 'requesty' && /^(?:anthropic\/|claude)/i.test(String(model || '')));
   if (isAnthropicNative) {
@@ -138,6 +113,40 @@ export function buildReasoningParams({ provider, model, effort }) {
     return { reasoning: { enabled: true } };
   }
 
+  // Custom chat-completions endpoints: the slot names the body key this
+  // endpoint understands. '' keeps the catalog-gated path below unchanged.
+  if (reasoningStyle && isCustomProvider(provider)) {
+    if (reasoningStyle === 'none' || !effort || effort === 'none') return {};
+    const effortMap = { min: 'low', max: 'high' };
+    const mapped = effortMap[effort] || effort;
+    switch (reasoningStyle) {
+      case 'reasoning_effort':
+        // Sent unconditionally — no catalog reasoning gate for this dialect.
+        return { reasoning_effort: mapped };
+      case 'reasoning': {
+        const openRouterMap = { min: 'minimal', max: 'max' };
+        return { reasoning: { effort: openRouterMap[effort] || effort } };
+      }
+      case 'thinking': {
+        // Same budget clamps as the anthropic-messages transport (AC-29).
+        const budget = Math.max(1024, ANTHROPIC_BUDGET_BY_EFFORT[effort] ?? 4096);
+        return { thinking: { type: 'enabled', budget_tokens: budget } };
+      }
+      case 'enable_thinking':
+        return { enable_thinking: true };
+      case 'chat_template_kwargs':
+        return { chat_template_kwargs: { enable_thinking: true } };
+      case 'effort':
+        return { effort: mapped };
+      case 'reasoningEffort':
+        return { reasoningEffort: mapped };
+      case 'both':
+        return { reasoning_effort: mapped, enable_thinking: true };
+      default:
+        break;
+    }
+  }
+
   const info = getModelInfo(model);
   if (effort && info.reasoning && effort !== 'none') {
     const effortMap = { min: 'low', max: 'high' };
@@ -146,123 +155,20 @@ export function buildReasoningParams({ provider, model, effort }) {
   return {};
 }
 
-/**
- * Computes the retry delay in ms. Honors the server's Retry-After header
- * (seconds or HTTP-date) when present — a fixed backoff against an explicit
- * server hint just burns attempts. Falls back to linear backoff.
- */
-export function getRetryDelayMs(err, attempt) {
-  const retryAfter = err?.headers?.['retry-after'] ?? err?.headers?.get?.('retry-after');
-  if (retryAfter) {
-    const secs = Number(retryAfter);
-    if (!Number.isNaN(secs)) return secs * 1000;
-    const dateMs = Date.parse(retryAfter);
-    if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
-  }
-  if (getErrorStatus(err) === 429) return 10_000;
-  return attempt * 1500;
-}
-
-/** Maps common provider failures to an actionable, secret-free UI message. */
-export function formatApiError(err, { model = '' } = {}) {
-  const status = getErrorStatus(err);
-  const rawMessage = String(err?.error?.message || err?.message || '');
-  const errorCode = err?.code || err?.error?.code;
-  const message = rawMessage.toLowerCase();
-  const safeModel = String(model || 'selected model').replace(/[\r\n\t]/g, ' ').slice(0, 100);
-  const safeDetail = rawMessage
-    .replace(/bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/((?:api[-_ ]?key|token|secret)\s*[:=]\s*)\S+/gi, '$1[redacted]')
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 160);
-  const detail = safeDetail && !/^(provider returned(?: an)? error|api request failed)$/i.test(safeDetail)
-    ? ` Details: ${safeDetail}`
-    : '';
-
-  if (status === 401 || /invalid api key|unauthorized|authentication/.test(message)) {
-    return 'Authentication failed. Check your API key with /connect.';
-  }
-  if (status === 404 || /model not found|unknown model/.test(message)) {
-    return `Model "${safeModel}" not found for this provider. Use /model to switch.`;
-  }
-  if (status === 413 || (status === 400 && /context (length|size|window|too long)|maximum context|too many tokens|request too large|prompt too long/.test(message))) {
-    return 'Context window exceeded. Compressing history and retrying...';
-  }
-  if (status === 402 || /insufficient (credits?|funds?)|payment required|quota exceeded|billing/.test(message)) {
-    return `Provider quota or billing rejected the request${status ? ` (${status})` : ''}. Check the provider account, model limits and search/tool charges.`;
-  }
-  if (status === 403) {
-    return `Provider denied this request (403). Check model access and account permissions.${detail}`;
-  }
-  if (status === 429) {
-    return 'Rate limited. Waiting 10s before retry...';
-  }
-  if (errorCode === 'ETIMEDOUT' || errorCode === 'ERR_SOCKET_CONNECTION_TIMEOUT' || err?.cause?.code === 'ETIMEDOUT') {
-    return 'Request timed out. Check your connection.';
-  }
-  if (status >= 500) {
-    return `Provider server error (${status}). Try again or switch provider/model.${detail}`;
-  }
-  if (status >= 400) {
-    return `Provider rejected the request (${status}). Check the model and tool parameters.${detail}`;
-  }
-  if (errorCode) {
-    return `Provider connection failed (${String(errorCode).slice(0, 40)}). Check your network and provider settings.${detail}`;
-  }
-  return `API request failed. Check your provider settings and connection.${detail}`;
-}
-
-/**
- * Iterates a streaming request with bounded retries for failures that happen
- * before any response chunk is received. Replaying a partially rendered stream
- * would duplicate reasoning, text or tool-call deltas in the terminal.
- */
-async function* streamWithRetries(client, callArgs, signal = null) {
-  let lastErr;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    let receivedChunk = false;
-    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
-    try {
-      const responseStream = await client.chat.completions.create({
-        ...callArgs,
-        stream: true,
-        stream_options: { include_usage: true },
-      }, signal ? { signal } : undefined);
-
-      for await (const chunk of responseStream) {
-        receivedChunk = true;
-        yield chunk;
-      }
-      return;
-    } catch (err) {
-      lastErr = err;
-      // A cancel/signal abort must never be retried — throw immediately.
-      if (signal?.aborted) throw err;
-      const retryable = !receivedChunk && isRetryable(err) && attempt < MAX_RETRIES;
-      if (!retryable) throw err;
-
-      const waitMs = getRetryDelayMs(err, attempt);
-      const status = getErrorStatus(err);
-      const retryMessage = status === 429
-        ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retrying stream...`
-        : `Stream failed before output. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
-      process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);
-      await sleep(waitMs);
-      if (signal?.aborted) throw err;
-      process.stdout.write(`\r\x1B[K  ${C.warn('⟳')} ${C.muted(`Stream attempt ${attempt + 1}/${MAX_RETRIES}...`)}\n`);
-    }
-  }
-
-  throw lastErr;
-}
+// `formatApiError` lives in transports/base.js now so every transport and
+// its callers share one mapping; re-exported for the unchanged import surface.
+export { formatApiError } from './transports/base.js';
 
 /**
  * Creates a chat completion using the active provider's API.
  * Automatically retries up to MAX_RETRIES times on transient failures with
  * exponential backoff. Displays a discrete inline notice on each retry.
+ *
+ * Dispatches on the active slot's wire format (spec 2026-10-09-provider-system,
+ * Stage B): the four reserved gateways and custom chat-completions endpoints
+ * keep the existing SDK path byte-for-byte; `anthropic-messages` and
+ * `responses` custom endpoints go through the fetch transports, whose
+ * normalized chunks match the same frozen shape agent.js consumes.
  *
  * @param {object} params
  * @param {string}        params.model
@@ -286,10 +192,28 @@ export async function createChatCompletion({
   signal = null,
 }) {
   const activeDef = getActiveProviderDef();
+
+  // ── Custom fetch formats: anthropic-messages / responses ─────────────
   if (activeDef && activeDef.isCustom && activeDef.format !== 'chat-completions') {
-    throw new Error(`API format "${activeDef.format}" is not supported yet — this endpoint must use the Chat completions format for now. Change it with /connect.`);
+    if (!isValidProviderURL(activeDef.baseURL)) {
+      throw new Error(`Provider "${activeDef.id}" has an invalid endpoint URL. Run /connect to fix it.`);
+    }
+    const activeModel = overrideModel || model;
+    const opts = {
+      def: { baseURL: activeDef.baseURL, apiKey: activeDef.apiKey },
+      model: activeModel,
+      messages,
+      tools,
+      effort,
+      signal,
+    };
+    if (activeDef.format === 'anthropic-messages') {
+      return stream ? streamAnthropicMessages(opts) : requestAnthropicMessages(opts);
+    }
+    return stream ? streamResponses(opts) : requestResponses(opts);
   }
 
+  // ── Chat completions (gateways + custom) — unchanged SDK path ────────
   const client = getClient();
   const activeModel = overrideModel || model;
 
@@ -303,11 +227,13 @@ export async function createChatCompletion({
     body.tools = tools;
   }
 
-  // Reasoning effort is capability-gated and normalized per provider.
+  // Reasoning effort is capability-gated and normalized per provider;
+  // custom chat-completions slots may pin the body key via reasoningStyle.
   Object.assign(body, buildReasoningParams({
     provider: config.provider,
     model: activeModel,
     effort,
+    reasoningStyle: (activeDef && activeDef.isCustom && activeDef.format === 'chat-completions') ? activeDef.reasoningStyle : '',
   }));
 
   // Cache hint for providers with explicit cache control (Requesty auto-caches)
@@ -321,35 +247,7 @@ export async function createChatCompletion({
     extra_body: Object.keys(extraBody).length > 0 ? extraBody : undefined,
   };
 
-  if (stream) return streamWithRetries(client, callArgs, signal);
+  if (stream) return streamChatCompletions(client, callArgs, signal);
 
-  // ── Retry loop ────────────────────────────────────────────────
-  let lastErr;
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    if (signal?.aborted) throw lastErr ?? new Error('Aborted');
-    try {
-      return await client.chat.completions.create(callArgs, signal ? { signal } : undefined);
-    } catch (err) {
-      lastErr = err;
-
-      if (signal?.aborted || !isRetryable(err) || attempt === MAX_RETRIES) {
-        // Aborted, not retryable, or exhausted — surface error (the abort
-        // path is handled by the caller as a cancel, so stay silent here).
-        if (!signal?.aborted) {
-          process.stdout.write(`\r\x1B[K  ${C.red('✗')} ${C.muted(formatApiError(err, { model: activeModel }))}\n`);
-        }
-        throw err;
-      }
-
-      const waitMs = getRetryDelayMs(err, attempt);
-      const retryMessage = getErrorStatus(err) === 429
-        ? `Rate limited. Waiting ${Math.round(waitMs / 1000)}s before retry...`
-        : `Connection failed. Retrying (${attempt}/${MAX_RETRIES}) in ${Math.round(waitMs / 1000)}s...`;
-      process.stdout.write(`\r\x1B[K  ${C.warn('⚠')} ${C.muted(retryMessage)}\n`);
-      await sleep(waitMs);
-      process.stdout.write(`\r\x1B[K  ${C.warn('⟳')} ${C.muted(`Attempt ${attempt + 1}/${MAX_RETRIES}...`)}\n`);
-    }
-  }
-
-  throw lastErr;
+  return requestChatCompletions(client, callArgs, signal, formatApiError);
 }

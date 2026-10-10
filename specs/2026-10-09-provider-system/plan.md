@@ -36,7 +36,15 @@
 
 **`src/api/client.js` — cache key + custom branch.** The single instance cache becomes keyed on a 4-part composite: `` `${provider}|${apiKey}|${baseURL}|${format}` `` (AC-12). `getClient()` resolves the effective base URL/format for the active slot: reserved ids keep the current hardcoded table and always `chat-completions`; custom ids use their stored values, re-validated by `isValidProviderURL` — a failure throws an actionable error **before** constructing the client, so no socket is opened (AC-16). Custom `chat-completions` slots build an `OpenAI` instance with `{ apiKey, baseURL, defaultHeaders }` and flow through the existing `createChatCompletion` / `streamWithRetries` path unchanged (AC-13). Byte-for-byte identical requests are guaranteed for the four gateways because their options and body construction are untouched.
 
-**Stage B — transport module.** New `src/api/transports/` with one module per format (`chat-completions.js`, `anthropic-messages.js`, `responses.js`) behind a common interface `{ buildRequest, parseStreamChunk } → normalized deltas`. `client.js`/`api/index.js` selects the transport by the slot's `format`. This is **deferred to a later dispatch**; Stage A ships with `chat-completions` as the only implemented transport and the enum already reserved.
+**Stage B — transport module.** A new `src/api/transports/` tree, one module per slot format, behind a common interface `{ buildRequest, streamNormalized } → normalized deltas`. The chunk shape every transport yields is frozen by the consumer in `src/agent/agent.js`; the field-level wire detail of each format (request shape, SSE event names, stop-reason mapping, usage sums, the shared HTTP mechanics) is pinned normatively in **spec §9 Annex A** (A.1 `anthropic-messages`, A.2 `responses`, A.3 shared HTTP mechanics) and is **not restated here** — this section only describes the module layout.
+
+- **`src/api/transports/base.js` — shared skeleton.** Owns the parts that are identical across formats: the SSE event parser reading a `fetch` response body reader (frames `data:` lines, tolerates unparsable JSON per AC-28), the streaming retry skeleton moved out of the current inline code with its **existing inline notice strings unchanged**, the error-status / retryable-status / retry-delay helpers relocated from `client.js` (including `Retry-After` honoring), and a collector that aggregates normalized chunks into an OpenAI-shaped response object for non-streaming calls.
+- **`src/api/transports/chat-completions.js`** — holds the existing SDK streaming path **relocated verbatim**, with no logic rewrite: same `OpenAI` client, same options, same byte-for-byte request bodies for the four reserved gateways (AC-18, AC-32).
+- **`src/api/transports/anthropic-messages.js`** and **`src/api/transports/responses.js`** — the two `fetch` transports. Each exports a **pure request builder** (messages → wire body, no IO) plus a **streaming generator** yielding the frozen chunk shape of Annex A. All wire detail comes from A.1 / A.2 / A.3.
+- **`src/api/transports/index.js`** — the barrel, mirroring the style of `src/api/index.js` (re-export one transport per format plus the shared base helpers).
+- **`src/api/client.js` becomes the dispatcher.** It resolves the active slot definition, keeps the **exact `createChatCompletion` signature** (same arguments, same resolved value, same stream-consumer contract), drops the Stage A unsupported-format guard, and validates the slot URL through `isValidProviderURL` **before any socket is opened** for the two `fetch` formats. `getClient()` keeps its 4-part composite cache key; reserved gateway ids still resolve to hardcoded URLs and `chat-completions`.
+
+Both `fetch` transports receive the slot definition and an **injectable `fetch` implementation as arguments** (defaulting to `globalThis.fetch`), so the tests stay hermetic, drive real `node:http` loopback fixtures and add **no module state**.
 
 ## 2. Architectural Compliance
 
@@ -67,13 +75,17 @@
 
 | Module | Path | Change |
 |--------|---------|--------|
-| Config | `src/config.js` | v2 storage layer, hand-rolled defensive normalization, v1 migration, slot map, `resolveApiKey` isolation, `config` views, v2-only serializer, `isValidProviderURL` |
-| API client | `src/api/client.js` | 4-part composite cache key, custom base URL/format branch, fail-closed URL validation, Stage B transport dispatch seam |
+| Config | `src/config.js` | v2 storage layer, hand-rolled defensive normalization, v1 migration, slot map, `resolveApiKey` isolation, `config` views, v2-only serializer, `isValidProviderURL`, per-slot `reasoningStyle` (RF-S13, AC-29) |
+| API client (dispatcher) | `src/api/client.js` | 4-part composite cache key, custom base URL/format branch, fail-closed URL validation; in Stage B the **Stage A unsupported-format guard is removed** and the module becomes the format dispatcher (resolve slot definition → transport), keeping the exact `createChatCompletion` signature |
 | Commands wizard | `src/commands.js` | Conditional `/connect` manager, custom-endpoint wizard, `/model` manual entry for custom slots, masked provider listing |
 | Command handlers | `src/commands/handlers.js` | New `handleProvider` (ctx-injected select, switch, `resetClient`, title/config box, `initSessionStats` re-sync) |
 | Command dispatch | `src/commands/index.js` | Register `/provider` |
 | Command registry | `src/commands/registry.js` | `/provider` row for `/help` and autocomplete |
-| Transports (Stage B) | `src/api/transports/*.js` | New modules for `chat-completions`, `anthropic-messages`, `responses` (Stage B only) |
+| Transport base (Stage B) | `src/api/transports/base.js` | Shared SSE event parser, streaming retry skeleton (existing inline notices), error-status / retryable / retry-delay helpers relocated from `client.js`, non-streaming chunk collector |
+| Transport — `chat-completions` (Stage B) | `src/api/transports/chat-completions.js` | Existing SDK streaming path relocated verbatim, no logic rewrite |
+| Transport — `anthropic-messages` (Stage B) | `src/api/transports/anthropic-messages.js` | Pure request builder + streaming generator for `/v1/messages` (Annex A.1) |
+| Transport — `responses` (Stage B) | `src/api/transports/responses.js` | Pure request builder + streaming generator for `/responses` (Annex A.2) |
+| Transport barrel (Stage B) | `src/api/transports/index.js` | Barrel mirroring `src/api/index.js`: one transport per format + shared base helpers |
 | API barrel | `src/api/index.js` | Re-export transport selection helpers |
 
 ## 5. Impacted Flags / Slash Commands / Tools
@@ -92,17 +104,20 @@
 | Action | Path (expected) | Notes |
 |------|--------------------|---------------|
 | Create | `test/provider-config.test.js` | Contract tests (a)–(e) from deep-dive §8.4 plus URL-validation and isolation cases |
-| Create | `src/api/transports/chat-completions.js` | Stage B — normalized delta adapter |
-| Create | `src/api/transports/anthropic-messages.js` | Stage B — `/v1/messages` SSE adapter |
-| Create | `src/api/transports/responses.js` | Stage B — Responses SSE adapter |
+| Create | `src/api/transports/base.js` | Stage B — shared SSE parser, retry skeleton, status/retry-delay helpers, non-streaming collector |
+| Create | `src/api/transports/chat-completions.js` | Stage B — existing SDK streaming path relocated verbatim |
+| Create | `src/api/transports/anthropic-messages.js` | Stage B — `/v1/messages` request builder + streaming generator |
+| Create | `src/api/transports/responses.js` | Stage B — `/responses` request builder + streaming generator |
+| Create | `src/api/transports/index.js` | Stage B — transport barrel |
+| Create | `test/api-transports.test.js` | Stage B — contract + negative transport suite over in-test `node:http` loopback fixtures |
 | Create | `features/provider-system.md` | Phase 3 (Rule 7) — **later stage** |
-| Modify | `src/config.js` | v2 schema, migration, views, `isValidProviderURL` |
-| Modify | `src/api/client.js` | Composite cache key, custom branch, fail-closed gate, transport dispatch |
-| Modify | `src/commands.js` | Conditional wizard, custom-endpoint wizard, `/model` custom branch |
+| Modify | `src/config.js` | v2 schema, migration, views, `isValidProviderURL`, per-slot `reasoningStyle` (cleanSlot allow-list, `saveUserConfig`, `slotView`, `getActiveProviderDef`) |
+| Modify | `src/api/client.js` | Composite cache key, custom branch, fail-closed gate; Stage B dispatcher (guard removed, format routing, non-streaming aggregation) |
+| Modify | `src/commands.js` | Conditional wizard, custom-endpoint wizard, `/model` custom branch, `/connect` custom `reasoningStyle` effort-parameter select (chat-completions only) |
 | Modify | `src/commands/handlers.js` | `handleProvider` |
 | Modify | `src/commands/index.js` | `/provider` dispatch entry |
 | Modify | `src/commands/registry.js` | `/provider` help/autocomplete row |
-| Modify | `src/api/index.js` | Transport re-exports (Stage B) |
+| Modify | `src/api/index.js` | Transport re-exports via the new barrel (Stage B) |
 | Modify | `docs/deep-dive.md`, `docs/architecture.md`, `README.md`, `CHANGELOG.md`, `features/README.md` | Phase 3 — Rule 2 / Rule 7 docs sync, **later stage** |
 
 ## 7. Technical Decisions (summary)
@@ -118,6 +133,11 @@
 7. **Transports are normalized into the existing delta contract**, never a new one, so `agent.js` is untouched (spec § 5).
 8. **Stage B is a separate phase** so Stage A can ship and be verified independently.
 9. **Stage A dispatch contract: hand-rolled defensive parsing (no zod schema), Keep/Update/Remove manager, mutable views refreshed on switch — supersedes the deep-dive §8.4 sketch where they differ.**
+10. **`buildReasoningParams` stays in `client.js`.** Its tests and the `reasoningStyle` branch live there, so moving it would produce a diff that is not reviewable and break the existing reasoning suites; only the retry/error helpers move to `base.js`, and `client.js` **re-exports them** so the public import surface is unchanged for existing consumers.
+11. **Non-streaming on a fetch format is an aggregation of the same normalized chunks**, not a second code path: the collector in `base.js` folds the generator's output into an OpenAI-shaped response. `agent.js`, `compression.js` and `session-summary.js` are therefore untouched (AC-30, AC-32).
+12. **The Anthropic thinking budget map is defined once**, inside the `anthropic-messages` transport, and reused by the `chat-completions` `thinking` reasoningStyle. Two copies of the budget clamps would drift (AC-29).
+13. **`reasoningStyle` never overrides a gateway and never applies to the two `fetch` formats.** A reserved gateway id has no `reasoningStyle` field, and for `anthropic-messages` / `responses` the format fixes the reasoning parameter, so the setting is ignored rather than translated (spec § 3.1, AC-29).
+14. **The style list covers the dialects found in the wild, at the user's request.** Beyond the originally planned keys, `effort` (top-level string) and `reasoningEffort` (camelCase) were added because some llama.cpp-style and corporate-proxy servers spell the parameter that way; the mapping is a pure body-key switch in `buildReasoningParams` — the effort VALUE vocabulary stays `min/low/medium/high/max` normalized exactly as the generic path does (`min→low`, `max→high`).
 
 ## 8. Verification Strategy and Gates
 
@@ -129,6 +149,10 @@
 | Contract suite | `node --test test/provider-config.test.js` | AC-01..AC-08, AC-10..AC-12 (mechanical parts), AC-16, AC-17 (`resolveApiKey` part), AC-19 — including deep-dive 8.4 (a) key not erased, (b) `resolveApiKey` isolation, (c) migration + flat-field removal, (d) keyless `/provider` message with no stdin read, (e) `contextLimit` re-sync |
 | Security / permissions suite | `node --test test/config-permissions.test.js` | AC-01 (`0600` mode, POSIX) |
 | Lint | `npm run lint` | all touched files |
+| Syntax (Stage B transports) | `node --check src/api/transports/base.js`, `node --check src/api/transports/chat-completions.js`, `node --check src/api/transports/anthropic-messages.js`, `node --check src/api/transports/responses.js` | all new transport files |
+| Transport contract suite (Stage B) | `node --test test/api-transports.test.js` | AC-21..AC-25 (request shape, normalized chunks, stop-reason mapping) |
+| Transport negative scenarios (Stage B) | The negative scenarios of **AC-26** (redirect refusal), **AC-27** (retry discipline) and **AC-28** (malformed SSE tolerance) run against **in-test `node:http` loopback fixtures**, so they are Windows-safe (no external port assumptions, no live endpoint) and hermetic — nothing leaves the test process | AC-26, AC-27, AC-28 |
+| Gateway regression guard (Stage B) | `node --test test/api-client.test.js` and `node --test test/agent-reasoning-stream.test.js` are the **gateway regression guard**: the reserved gateway requests and the reasoning stream must stay byte-for-byte unchanged | AC-18, AC-32 |
 | Regression | `npm test` (full `node --test test/*.test.js`) | AC-20 and no regressions in agent loop, compression, UI |
 | Manual scripts | `node bin/emile.js --verbose` then `/connect` → `/provider` → `/model` for a gateway and a local `http://127.0.0.1` endpoint; `/connect` list-all masking; `curl`-verified 302 test for AC-14 | AC-07..AC-11, AC-13, AC-14, AC-15 |
 | Dependency audit | Not applicable — no new dependency (ADR-0001); `npm audit` optional | — |
@@ -158,5 +182,5 @@ Negative scenarios executed manually and then encoded as tests: redirect with cr
 | Composite cache key causes an extra client rebuild per turn if any part is unstable | Medium | All four parts derive from immutable slot state; verified by AC-12 and the regression suite. |
 | Defensive parsing rejects a previously-accepted (looser) config and blocks startup | Medium | The load pipeline is tolerant: unknown/invalid **slots** and fields are dropped silently, custom slots without a non-empty `baseURL` are discarded, defaults are filled; only a wholly malformed document falls back to the default gateway view (today's behavior). Never a crash. |
 | Custom endpoints widen the SSRF-ish surface (user-supplied URL + key) | High (inherent) | Dual gate (write time + `getClient()` fail-closed), https-only for remote, no redirect credential forwarding, explicit in § 4.1. Documented, not eliminated — the feature is user-directed. |
-| Stage B transport adapters drift from the real provider SSE formats | Medium | Stage B is deferred and each adapter must normalize into the existing delta contract; agent tests stay untouched by design. |
+| Stage B transport adapters drift from the real provider SSE formats | Medium | The field-level wire detail is pinned normatively in spec §9 Annex A and each adapter normalizes into the existing delta contract; agent tests stay untouched by design and the contract suite asserts against loopback fixtures. |
 | Docs drift while Stage B is unimplemented | Medium | Phase 3 tasks are explicitly unchecked until the transports land, so `/provider` docs are not advertised as supporting formats they cannot yet serve. |

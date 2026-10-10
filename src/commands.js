@@ -118,6 +118,22 @@ const CUSTOM_FORMAT_OPTIONS = [
   { value: 'responses', label: 'Responses (/responses)' },
 ];
 
+// Effort-parameter dialects for custom Chat completions endpoints. Each value
+// is the exact request-body key the endpoint expects (or the composition
+// documented in specs/2026-10-09-provider-system § 3.1 rule 13).
+const REASONING_STYLE_OPTIONS = [
+  { value: '', label: 'Auto (model catalog gate — unchanged default)' },
+  { value: 'none', label: 'None (send no effort parameter)' },
+  { value: 'reasoning_effort', label: 'reasoning_effort (string, sent always)' },
+  { value: 'reasoning', label: 'reasoning ({ effort } object)' },
+  { value: 'thinking', label: 'thinking (Anthropic-native budget object)' },
+  { value: 'enable_thinking', label: 'enable_thinking (boolean)' },
+  { value: 'chat_template_kwargs', label: 'chat_template_kwargs ({ enable_thinking } — vLLM/Qwen)' },
+  { value: 'effort', label: 'effort (top-level string)' },
+  { value: 'reasoningEffort', label: 'reasoningEffort (camelCase string)' },
+  { value: 'both', label: 'both (reasoning_effort + enable_thinking)' },
+];
+
 /**
  * Custom-endpoint flow: name, URL, optional key, API format, model id.
  * @returns {Promise<boolean>} True if saved, false if cancelled.
@@ -184,6 +200,23 @@ async function runCustomEndpointSetup() {
     return false;
   }
 
+  // The effort knob only needs a dialect choice for Chat completions: the
+  // other two formats fix their own reasoning parameter (Anthropic
+  // `thinking`, Responses `reasoning.effort`).
+  let reasoningStyle = '';
+  if (format === 'chat-completions') {
+    reasoningStyle = await select({
+      message: 'Reasoning effort parameter (how this endpoint receives the effort knob):',
+      options: REASONING_STYLE_OPTIONS,
+      initialValue: '',
+    });
+
+    if (isCancel(reasoningStyle)) {
+      cancel('Connection setup cancelled.');
+      return false;
+    }
+  }
+
   const model = await text({
     message: 'Model id served by this endpoint (e.g. qwen2.5-coder):',
     validate(value) {
@@ -201,6 +234,7 @@ async function runCustomEndpointSetup() {
     apiKey: String(key).trim(),
     baseURL: String(url).trim(),
     format,
+    reasoningStyle,
     model: String(model).trim(),
     label: String(name).trim(),
   });
