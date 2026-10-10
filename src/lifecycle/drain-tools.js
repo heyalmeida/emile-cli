@@ -6,7 +6,9 @@ import { C } from '../ui/theme.js';
 /**
  * @typedef {object} PhaseContext
  * @property {boolean} verbose
- * @property {(id: string, reason: string) => void} markAborted
+ * @property {(reason: string) => void} [markAborted] Records the live session as
+ *   interrupted. The caller owns the session identity and no-ops when no turn is
+ *   in flight.
  */
 
 /** @returns {{ name: string, sliceMs: number, run(ctx: PhaseContext): Promise<void> }} */
@@ -42,6 +44,9 @@ export function phase() {
         // phase 3 will flush the session with the aborted result.
         if (verbose) console.log(C.dim(`  [lifecycle] drain-tools: tool exceeded drain window, aborting`));
         try { controller.requestStop('shutdown'); } catch { /* best-effort */ }
+        // The turn is being interrupted mid-tool: record it WITHOUT destroying
+        // the pending checkpoint, so the session stays resumable.
+        try { markAborted?.('shutdown-interrupted-tool'); } catch { /* best-effort */ }
         // Give the abort 200 ms to propagate to the handler before we exit.
         await new Promise(r => setTimeout(r, 200));
       }

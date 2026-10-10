@@ -19,7 +19,6 @@ import {
   persistentPromptInput,
 } from './ui/index.js';
 import { createSpinner } from './ui/spinner.js';
-import { clear } from 'node:console';
 
 
 program
@@ -58,7 +57,7 @@ export async function main() {
   const { runAgent, resumePendingTools, sessionStats, initSessionStats, createTurnControl } = await import('./agent/index.js');
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
   const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions, flushSync, markAborted } = await import('./history.js');
-  const { installShutdownHandlers } = await import('./lifecycle/index.js');
+  const { installShutdownHandlers, isShuttingDown } = await import('./lifecycle/index.js');
   const { runStartupRecovery } = await import('./recovery.js');
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
@@ -148,18 +147,31 @@ export async function main() {
   }
 
   // ── Recovery scan: inspect persisted sessions for pending checkpoints ────
-  // Runs before the REPL; never blocks startup. In --verbose, log the report.
+  // Runs before the REPL; never blocks startup. Corrupt records are quarantined
+  // by the scan itself, so the report below tells the user what happened and
+  // what to do next — and prints nothing when there is nothing to say.
   const recoveryReport = await runStartupRecovery();
+  if (recoveryReport.recoverable > 0) {
+    const noun = recoveryReport.recoverable === 1 ? 'session' : 'sessions';
+    console.log(C.success(`\n  ${recoveryReport.recoverable} recoverable ${noun} — resume with /switch or the resume prompt.`));
+  }
+  if (recoveryReport.corrupt > 0) {
+    const moved = recoveryReport.quarantined.length;
+    console.log(C.warn(`\n  ${recoveryReport.corrupt} corrupt session record${recoveryReport.corrupt === 1 ? '' : 's'}${moved > 0 ? ` — moved to .emile/history/corrupt/` : ' — could not be moved'}.`));
+  }
   if (verbose && recoveryReport.sessionsScanned > 0) {
     console.log(C.muted(`  [recovery] scanned ${recoveryReport.sessionsScanned} sessions`));
-    if (recoveryReport.recoverable > 0) console.log(C.success(`  [recovery] ${recoveryReport.recoverable} recoverable pending`));
-    if (recoveryReport.corrupt > 0)   console.log(C.warn(`  [recovery] ${recoveryReport.corrupt} corrupt`));
-    if (recoveryReport.abandoned > 0) console.log(C.muted(`  [recovery] ${recoveryReport.abandoned} abandoned`));
     if (recoveryReport.scanErrors.length > 0) console.log(C.warn(`  [recovery] ${recoveryReport.scanErrors.length} scan errors`));
   }
 
   // ── Clean screen & unified header moved below, after interactive setup prompts ──
   // (so the plan-confirmation and history-selection prompts are cleared away)
+
+  // Live state the shutdown coordinator needs. Declared here (before the
+  // coordinator is installed) so its closures never depend on a later `let`.
+  let liveSessionId = '';
+  let turnInFlight = false;
+  let livePromptApi = null;
 
   // Wire the lifecycle coordinator after MCP init. The coordinator handles
   // SIGINT/SIGTERM/SIGHUP in order: stop-input → drain-tools →
@@ -169,11 +181,21 @@ export async function main() {
     shutdownMcp,
     flushSync,
     flushMemory: () => flushGlobalMemory({ root: memoryRoot, dryRun: config.dryRun }),
-    markAborted: (id, reason) => markAborted(id),
+    // Record an interrupted turn WITHOUT destroying its resumability. No-ops when
+    // no turn is in flight (idle SIGINT must not invent an aborted turn).
+    markAborted: (reason) => {
+      if (!turnInFlight || !liveSessionId) return;
+      markAborted(liveSessionId, reason);
+    },
+    // Idle SIGINT must release the stdin lease: the prompt's own teardown
+    // removes its keypress listener, restores raw mode and disables bracketed
+    // paste. Safe before the prompt exists.
+    shutdownPrompt: () => { try { livePromptApi?.shutdown?.(); } catch { /* stdin may be gone */ } },
   });
 
   let messages = [];
   let sessionId = `session_${Date.now()}`;
+  liveSessionId = sessionId;
   let sessionSummary = '';
   let isResumed = false;
   let completedTurnCount = 0;
@@ -201,6 +223,7 @@ export async function main() {
       if (loaded) {
         messages = loaded;
         sessionId = selectedId;
+        liveSessionId = sessionId;
         const record = getSessionRecord(selectedId);
         config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || config.workspaceDir;
         const refreshedSessions = listSessions();
@@ -256,6 +279,14 @@ export async function main() {
     const record = getSessionRecord(loadedSessionId);
     if (!record || record.status !== 'tool_pending') return;
 
+    // An interrupted turn keeps its `tool_pending` checkpoint (markAborted is
+    // additive), so it is fully resumable — the user just gets told why the
+    // transcript stops where it does.
+    if (record.aborted) {
+      const reason = record.abortReason ? ` (${record.abortReason})` : '';
+      console.log(C.muted(`\n  This turn was interrupted${reason} — resuming its pending tool calls.\n`));
+    }
+
     const recovery = await resumePendingTools({
       messages: loadedMessages,
       pendingToolCalls: record.pendingToolCalls,
@@ -286,6 +317,7 @@ export async function main() {
       memoryRoot,
     });
     sessionId = loadedSessionId;
+    liveSessionId = sessionId;
     await finalizeSessionTurn();
   };
 
@@ -360,6 +392,8 @@ export async function main() {
     // through turn control; Enter appends a FIFO prompt for the next turn.
     const runAgentTurn = async (initialPrompt) => {
       const control = createTurnControl();
+      // Tells the shutdown coordinator there IS a turn worth recording as aborted.
+      turnInFlight = true;
       const keys = listenTurnKeys({
         control,
         promptOptions: { stats: sessionStats, mcpInfo },
@@ -388,6 +422,7 @@ export async function main() {
         });
       } finally {
         keys.stop();
+        turnInFlight = false;
       }
     };
 
@@ -476,7 +511,7 @@ export async function main() {
       sessionId,
       mcpInfo,
       ctx: { config, memoryRoot },
-      onReady: (api) => { promptApi = api; },
+      onReady: (api) => { promptApi = api; livePromptApi = api; },
       async onSubmit(submitted) {
         const clean = String(submitted || '').trim();
         if (!clean) return 'next';
@@ -501,7 +536,12 @@ export async function main() {
     });
     isRunning = false;
 
-    clear();
+    // When the prompt resolved because the shutdown coordinator tore it down
+    // (idle SIGINT), the coordinator owns the exit: printing a farewell, wiping
+    // the screen or closing MCP here would race its remaining phases and destroy
+    // the transcript the user was reading.
+    if (isShuttingDown()) return;
+
     console.log(C.muted('\n  Goodbye, see you later! \n'));
     setTerminalActivity('');
     await shutdownMcp();

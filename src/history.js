@@ -105,6 +105,34 @@ export function trimPersistedMessages(messages = [], maxBytes = config.maxSessio
 }
 
 /**
+ * Writes a session file durably: temp file beside the target → fsync → rename.
+ *
+ * A bare write in place can be interrupted (forced exit, power loss) and leave
+ * truncated JSON behind — which the boot scan then reports as a corrupt session.
+ * The persistence layer must not manufacture the corruption the recovery layer
+ * exists to repair, so the previous file is only replaced once the new bytes are
+ * on disk, and the temp file is always cleaned up.
+ *
+ * The pattern mirrors src/memory/io.js (open → write → fsync → close → rename).
+ */
+function writeFileAtomically(filePath, contents) {
+  const tempPath = `${filePath}.tmp`;
+  let fd;
+  try {
+    fd = fs.openSync(tempPath, 'w');
+    fs.writeFileSync(fd, contents, 'utf8');
+    // Durable BEFORE the rename replaces the good file.
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    fs.renameSync(tempPath, filePath);
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch { /* best-effort */ } }
+    if (fs.existsSync(tempPath)) { try { fs.unlinkSync(tempPath); } catch { /* best-effort */ } }
+  }
+}
+
+/**
  * Saves a chat session to the local repository.
  * @param {string} sessionId Unique session ID
  * @param {string} summary Title or summary of the chat
@@ -146,7 +174,8 @@ export function saveSession(sessionId, summary, messages, metadata = {}) {
   try {
     const persisted = trimPersistedMessages(messages || []);
     data.messages = persisted.messages;
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    writeFileAtomically(filePath, JSON.stringify(data, null, 2));
+    liveSessionPath = filePath;
     if (persisted.trimmed) {
       warn(`Session exceeded ${Math.round(config.maxSessionSize / (1024 * 1024))}MB; older tool results were truncated on disk.`);
     }
@@ -263,28 +292,60 @@ export function deleteSession(sessionId) {
 }
 
 /**
- * Synchronous fsync of the session file. Called by the lifecycle coordinator
- * during shutdown — must not throw.
+ * Sets the record used by flushSync() so the flush phase has something real to
+ * sync. Set by saveSession on every successful write.
+ */
+let liveSessionPath = null;
+
+/**
+ * Synchronous durability step for the lifecycle coordinator's flush phase.
+ *
+ * fsyncs the live session file and its directory (a rename is only durable once
+ * the directory entry is synced). Best-effort by contract: the phase runs during
+ * shutdown, where a throw would abort the remaining phases, so every failure is
+ * swallowed deliberately.
  */
 export function flushSync() {
-  // saveSession already writes synchronously; this is a no-op placeholder that
-  // documents the flush point. The session is guaranteed to be on disk once
-  // saveSession returns.
+  try {
+    if (liveSessionPath && fs.existsSync(liveSessionPath)) {
+      const fd = fs.openSync(liveSessionPath, 'r');
+      try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    }
+    // Directory entry: unsupported on some platforms (Windows), hence best-effort.
+    let dirFd;
+    try {
+      dirFd = fs.openSync(historyDir, 'r');
+      fs.fsyncSync(dirFd);
+    } catch { /* directory fsync is not portable */ } finally {
+      if (dirFd !== undefined) { try { fs.closeSync(dirFd); } catch { /* best-effort */ } }
+    }
+  } catch {
+    // Shutdown must never throw from here.
+  }
 }
 
 /**
- * Marks a session as aborted (user interrupted mid-tool).
+ * Records that a turn was interrupted, WITHOUT destroying resumability.
+ *
+ * Additive by design: `status` is never touched and `pendingToolCalls` is never
+ * dropped, so a `tool_pending` checkpoint stays replayable by
+ * `resumePendingTools` while the record now also says why the turn stopped. The
+ * previous body set `status = 'aborted'`, which erased the pending batch — that
+ * would have killed exactly the recovery this module exists to support.
+ *
  * @param {string} sessionId
+ * @param {string} [reason] Why the turn was interrupted (e.g. 'shutdown').
  */
-export function markAborted(sessionId) {
+export function markAborted(sessionId, reason = 'shutdown') {
   ensureHistoryDir();
   const filePath = path.join(historyDir, `${sessionId}.json`);
   if (!fs.existsSync(filePath)) return;
   try {
     const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    data.status = 'aborted';
+    data.aborted = true;
+    data.abortReason = typeof reason === 'string' && reason.length > 0 ? reason : 'shutdown';
     data.updatedAt = new Date().toISOString();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    writeFileAtomically(filePath, JSON.stringify(data, null, 2));
   } catch {
     // Best-effort; shutdown must not throw.
   }
@@ -292,14 +353,20 @@ export function markAborted(sessionId) {
 
 /**
  * Moves a corrupt session to .emile/history/corrupt/<sessionId>/.
+ *
+ * `directory` lets the boot scan quarantine inside the directory it actually
+ * scanned (it can be pointed elsewhere); the default is this module's history
+ * directory. Best-effort: a locked or vanished file is left where it is.
+ *
  * @param {string} sessionId
+ * @param {{ directory?: string }} [opts]
  */
-export function moveToCorrupt(sessionId) {
+export function moveToCorrupt(sessionId, { directory = historyDir } = {}) {
   ensureHistoryDir();
-  const filePath = path.join(historyDir, `${sessionId}.json`);
+  const filePath = path.join(directory, `${sessionId}.json`);
   if (!fs.existsSync(filePath)) return;
   try {
-    const corruptDir = path.join(historyDir, 'corrupt', sessionId);
+    const corruptDir = path.join(directory, 'corrupt', sessionId);
     fs.mkdirSync(corruptDir, { recursive: true });
     const ts = Date.now();
     fs.renameSync(filePath, path.join(corruptDir, `${ts}.json`));
@@ -309,11 +376,13 @@ export function moveToCorrupt(sessionId) {
 }
 
 /**
- * Lists sessions with status 'pending'.
+ * Lists sessions holding a `tool_pending` checkpoint (a turn interrupted
+ * mid-tool). Named after the status it filters: the previous `listPending`
+ * looked for `'pending'`, a value no writer ever produced.
  * @returns {Array<object>}
  */
-export function listPending() {
-  return listSessions().filter(s => s.status === 'pending');
+export function listToolPending() {
+  return listSessions().filter(s => s.status === 'tool_pending');
 }
 
 /** Deletes sessions older than the requested positive number of days. */

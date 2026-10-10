@@ -1,3 +1,7 @@
+// NOTE (2026-10-10, P0-3): fixtures use the REAL status vocabulary. The scan
+// used to filter 'pending' — a value no writer ever produced (saveSession writes
+// 'tool_pending' | 'complete') — so these cases never matched production data.
+// The assertions below are unchanged; only the fixture status was corrected.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -59,7 +63,7 @@ test('classifies a valid pending session as recoverable', async () => {
     // Use a path that exists in the actual workspace since we cannot mock resolveSafePath
     fs.writeFileSync(path.join(historyDir, 'pending_ok.json'), JSON.stringify({
       id: 'pending_ok',
-      status: 'pending',
+      status: 'tool_pending',
       pendingToolCalls: [{
         id: 'call_1', type: 'function',
         function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'package.json' }) },
@@ -91,7 +95,7 @@ test('classifies pending without tool calls as corrupt', async () => {
     const historyDir = path.join(dir, '.emile', 'history');
     fs.mkdirSync(historyDir, { recursive: true });
     fs.writeFileSync(path.join(historyDir, 'no_tools.json'), JSON.stringify({
-      id: 'no_tools', status: 'pending', messages: [],
+      id: 'no_tools', status: 'tool_pending', messages: [],
     }));
     const report = await runRecovery(historyDir);
     assert.equal(report.corrupt, 1);
@@ -104,7 +108,7 @@ test('classifies tool call missing function.name as corrupt', async () => {
     const historyDir = path.join(dir, '.emile', 'history');
     fs.mkdirSync(historyDir, { recursive: true });
     fs.writeFileSync(path.join(historyDir, 'bad.json'), JSON.stringify({
-      id: 'bad', status: 'pending',
+      id: 'bad', status: 'tool_pending',
       pendingToolCalls: [{ id: 'c1', type: 'function', function: {} }],
       messages: [],
     }));
@@ -119,7 +123,7 @@ test('classifies tool call with invalid JSON args as corrupt', async () => {
     const historyDir = path.join(dir, '.emile', 'history');
     fs.mkdirSync(historyDir, { recursive: true });
     fs.writeFileSync(path.join(historyDir, 'bad_args.json'), JSON.stringify({
-      id: 'bad_args', status: 'pending',
+      id: 'bad_args', status: 'tool_pending',
       pendingToolCalls: [{
         id: 'c1', type: 'function',
         function: { name: 'readFile', arguments: 'not json' },
@@ -151,12 +155,12 @@ test('multiple sessions are each classified independently', async () => {
     fs.mkdirSync(historyDir, { recursive: true });
     // Use package.json which exists in the actual workspace
     fs.writeFileSync(path.join(historyDir, 's1.json'), JSON.stringify({
-      id: 's1', status: 'pending',
+      id: 's1', status: 'tool_pending',
       pendingToolCalls: [{ id: 'c1', type: 'function', function: { name: 'readFile', arguments: JSON.stringify({ filePath: 'package.json' }) } }],
       messages: [],
     }));
     fs.writeFileSync(path.join(historyDir, 's2.json'), JSON.stringify({
-      id: 's2', status: 'pending', messages: [],
+      id: 's2', status: 'tool_pending', messages: [],
     }));
     fs.writeFileSync(path.join(historyDir, 's3.json'), JSON.stringify({
       id: 's3', status: 'complete', messages: [],
