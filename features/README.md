@@ -43,6 +43,7 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 | [Error UX](./error-ux.md) | active | `feat/ux-ui` | `specs/2026-08-30-error-ux` + `specs/2026-08-31-web-search-tool-reliability` |
 | [MCP Integration](./mcp-integration.md) | active | `feat/mcp-system` | `specs/2026-08-30-mcp-tool-visibility` |
 | [Skills System](./skills-system.md) | active | `feat/skills-system` | `specs/2026-08-30-skill-relevance` |
+| [Provider System](./provider-system.md) | active | `development` | `specs/2026-10-09-provider-system` |
 | [Open-source Quality Gates](./open-source-readiness.md) | active | `chore/quality-gates` | `specs/2026-08-30-open-source-readiness` |
 
 All implementation and documentation work is committed directly on

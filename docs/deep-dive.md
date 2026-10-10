@@ -290,6 +290,8 @@ A **única** multi-key funcional hoje é via ambiente: `ENV_KEY_MAP` (`config.js
 
 **Custo:** S — o esquema de storage já tem precedente (web.json), os hooks de validação de modelo/pós-troca já existem, e nenhum gate de segurança muda de direção, só de cardinalidade (N slots em vez de 1, com o mesmo isolamento por provider).
 
+> **Status: aplicado em 2026-10-09** (`specs/2026-10-09-provider-system/`, commits `feat(config)` + `feat(api)`). O desenho acima foi seguido na forma — `providers{}` versionado (v2, migração do campo plano no load), `/connect` gerenciador condicional (Keep/Update/Remove), `/provider` em 2 teclas com `lastModel` por provider e re-sync de `sessionStats`, isolamento por provider intacto, testes de contrato (a)–(e) em `test/provider-config.test.js`. **Deltas do rascunho:** (1) o parser defensivo do config é manual (`cleanSlot`/allow-lists), **sem zod** — decisão registrada no plan § 7; (2) o campo `version: 2` e os slots custom vieram junto: a feature foi **mesclada com a frente de provedores customizados (§ 21.1 onda 2)** — `/connect` registra endpoint qualquer com formato `anthropic-messages` / `chat-completions` / `responses`, e o knob extra `reasoningStyle` escolhe a chave de corpo do effort (`reasoning_effort`, `reasoning`, `thinking`, `enable_thinking`, `chat_template_kwargs`, `effort`, `reasoningEffort`, `both`) para servidores OpenAI-compatíveis que não seguem a convenção do catálogo.
+
 ---
 
 ## 9. Skills: como funciona hoje e o que falta
@@ -522,7 +524,7 @@ O que **existe e funciona** (verificado em código, seção por seção acima): 
 | **P1-3** | **`modelOverrides` no config global** (context/preço por modelo, UI no `/model`) | XS-S | untrusted config lido com validação zod | § 8.3-A |
 | **P1-4** | **Catálogo `models.dev` para OpenCode/Requesty** com cache próprio | S | network best-effort, sem bloqueeio | § 8.3-B |
 | **P1-5** | **Skills multi-root** (global + projeto + `skillsDirs`, namespaces `plugin:skill`) | M | afeta chave do prefixo congelado | § 9.3 |
-| **P1-6** | **Multi-slot de credencial + `/provider`**: `providers{}` no config, `/connect` gerenciador condicional, troca em 2 teclas com `lastModel` por provider, migração do campo plano legado | S | isol. por provider preservado (config.js:82); `resetClient()` obrigatório | § 8.4 |
+| **P1-6** | ✅ **aplicado 2026-10-09** (specs/2026-10-09-provider-system/; deltas do rascunho registrados em § 8.4 — parser manual sem zod, campo `version`, knob `reasoningStyle`; mesclado com a onda 2 de provedores customizados): Original: **Multi-slot de credencial + `/provider`**: `providers{}` no config, `/connect` gerenciador condicional, troca em 2 teclas com `lastModel` por provider, migração do campo plano legado | S | isol. por provider preservado (config.js:82); `resetClient()` obrigatório | § 8.4 |
 | **P1-7** | **Abort de ferramentas em voo**: `runCommand` ignora o signal do turn control (`run-command.js:43`; `exec` sem abort) e `handleMcpToolCall` não aceita signal/timeout (`agent.js:96-98`, `mcp.js:362`) — o cancelamento é gracioso só no plano do loop | M | contrato dos handlers muda (signal obrigatório) | § 15, § 16 |
 | **P2-7** | Marcar **janela de contexto default/estimada** no status bar e `/cost` (o `~` de tokens estimados já existe, `status-bar.js:20-31` — falta sinalizar o `limit` chutado) | XS | — | § 8.3-C |
 | **P2-8** | Ajuste da divergência `maxLoopIterations` 40 vs 90 (doc ou código) — ✅ **aplicado 2026-10-08**: código unificado em `DEFAULT_MAX_LOOP_ITERATIONS` (90), `|| 40` removido, specs/2026-10-08-maxloop-divergence/ | XS | Regra 0 | § 4 |
@@ -533,6 +535,8 @@ O que **existe e funciona** (verificado em código, seção por seção acima): 
 ### 21.1 Onda grok-build (análise de 2026-10-09 — § 22)
 
 Itens promovidos da comparação com o CLI de produção da xAI. Evidência completa em § 22; os briefs de dispatch estão em `specs/2026-10-08-deep-dive-backlog/briefs/`.
+
+> **Nota 2026-10-09:** a frente de **provedores customizados** (contexto da onda 2, § 21.1 do plano original de credenciais) foi entregue **junto com o P1-6** no mesmo dispatch — config v2 com slots por provider + `/provider` + três formatos de transporte (`anthropic-messages`, `chat-completions`, `responses`) + knob `reasoningStyle`. Ver § 8.4 (status aplicado) e `specs/2026-10-09-provider-system/`.
 
 | # | Item | Esforço | Risco | Brief | Ref |
 |---|---|---|---|---|---|

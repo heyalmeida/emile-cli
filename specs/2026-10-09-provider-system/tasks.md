@@ -62,13 +62,13 @@
 
 > Documentation sync happens in a later stage — these tasks must stay unchecked until Stage A **and** Stage B land.
 
-- [ ] T3.1 — Execute Rule 2 of `.clinerules` (sync of affected docs, including README for flags/commands/tools): `docs/architecture.md` (config v2 schema + transport layer), `docs/deep-dive.md` §8.4 status, `docs/glossary.md`, `README.md` (`/provider`, `/connect` semantics, custom endpoints)
-- [ ] T3.2 — If it's a new/changed feature, create or update `features/provider-system.md` (Rule 7) and the index
-- [ ] T3.3 — Record the entry in `CHANGELOG.md`
-- [ ] T3.4 — Revalidate touched Mermaid blocks
-- [ ] T3.5 — Update the spec status to `implemented` (both stages)
-- [ ] T3.6 — Commit the documentation sync on `development` with only explicit documentation paths staged (Rule 8)
-- [ ] T3.7 — Record in the handoff limitations, non-executed verifications and residual risk (custom-endpoint SSRF surface, Stage B transport coverage per provider)
+- [x] T3.1 — Execute Rule 2 of `.clinerules` (sync of affected docs, including README for flags/commands/tools): `docs/architecture.md` (config v2 schema + transport layer), `docs/deep-dive.md` §8.4 status, `docs/glossary.md`, `README.md` (`/provider`, `/connect` semantics, custom endpoints)
+- [x] T3.2 — If it's a new/changed feature, create or update `features/provider-system.md` (Rule 7) and the index
+- [x] T3.3 — Record the entry in `CHANGELOG.md`
+- [x] T3.4 — Revalidate touched Mermaid blocks
+- [x] T3.5 — Update the spec status to `implemented` (both stages)
+- [x] T3.6 — Commit the documentation sync on `development` with only explicit documentation paths staged (Rule 8)
+- [x] T3.7 — Record in the handoff limitations, non-executed verifications and residual risk (custom-endpoint SSRF surface, Stage B transport coverage per provider)
 
 ---
 
@@ -116,3 +116,5 @@
 | Commit | Message | Files |
 |--------|---------|-------|
 | | | |
+
+> T3.1 caveat: `docs/architecture.md` was updated (config.js/api//commands rows + mermaid node) but **stays uncommitted in the working tree** — the file already carries another session's uncommitted edits and Rule 8/F10 forbids staging it; the orchestrator handoff notes this. README/CHANGELOG/deep-dive/features/spec-status committed in `docs(providers)` unit.

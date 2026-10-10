@@ -4,7 +4,7 @@
 
 **A terminal-based AI coding agent that lives in your workspace.**
 
-Connects to any OpenAI-compatible LLM gateway (Requesty, OpenRouter, OpenCode Zen, OpenCode Go) through a single OpenAI-compatible client, with built-in tools, MCP integration, prompt caching, reasoning control, and a Claude Code–style streaming UI.
+Connects to LLM gateways (Requesty, OpenRouter, OpenCode Zen, OpenCode Go) out of the box, and to any **custom endpoint** speaking Anthropic Messages, OpenAI Chat Completions or OpenAI Responses through `/connect`, with built-in tools, MCP integration, prompt caching, reasoning control, and a Claude Code–style streaming UI.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D18-green.svg)](https://nodejs.org)
@@ -115,8 +115,9 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 
 | Command | Description |
 |---------|-------------|
-| `/connect` | Reconfigure API provider and key |
-| `/model` | Search and switch the active model; type to filter or use ↑/↓ to scroll the full live list |
+| `/connect` | Credential manager for providers: keep/update/remove an already-configured provider without retyping keys, add a gateway, or register a **custom endpoint** (any API URL — Anthropic messages `/v1/messages`, Chat completions `/chat/completions` or Responses `/responses`) |
+| `/provider` | Switch between configured providers in two keystrokes; each keeps its own key and last-used model (masked listing; never prompts for a password) |
+| `/model` | Search and switch the active model; type to filter or use ↑/↓ to scroll the full live list; custom endpoints offer the saved model or manual entry |
 | `/switch` `/sessions` | Resume a previous session |
 | `/sessions clean <days>` | Delete saved sessions older than the specified number of days |
 | `/new` `/clear` | Start a fresh session |
@@ -257,18 +258,26 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 
 ### Config file
 
-User-wide settings and credentials are persisted in `~/.emile/config.json` (auto-created on first run via the connect wizard), so provider setup follows the user across workspaces. This takes precedence over environment variables. The file contains exactly these keys:
+User-wide settings and credentials are persisted in `~/.emile/config.json` (auto-created on first run via the connect wizard, written with mode `0600`), so provider setup follows the user across workspaces. This takes precedence over environment variables. The file is a **version-2 document with one credential slot per provider** (a legacy v1 file migrates on load):
 
 ```json
 {
-  "provider": "requesty",
-  "apiKey": "your-key-here",
-  "model": "anthropic/claude-3-5-sonnet",
+  "version": 2,
+  "activeProvider": "requesty",
+  "providers": {
+    "requesty":   { "apiKey": "your-key-here", "lastModel": "anthropic/claude-3-5-sonnet" },
+    "openrouter": { "apiKey": "another-key", "lastModel": "google/gemini-2.5-pro" },
+    "lm-studio":  { "apiKey": "", "baseURL": "http://localhost:1234/v1",
+                    "format": "chat-completions", "reasoningStyle": "chat_template_kwargs",
+                    "label": "LM Studio", "lastModel": "qwen2.5-coder-32b" }
+  },
   "effort": "low",
   "webSearch": false,
   "maxLoopIterations": 90
 }
 ```
+
+Gateway slots carry `apiKey` + `lastModel`; custom endpoint slots also carry `baseURL`, `format` (`anthropic-messages` | `chat-completions` | `responses`) and, for `chat-completions`, an optional `reasoningStyle` naming the body key this endpoint uses for the reasoning effort (`reasoning_effort`, `reasoning`, `thinking`, `enable_thinking`, `chat_template_kwargs`, `effort`, `reasoningEffort` or `both`). Custom endpoints accept `http://` only for `localhost`/`127.0.0.1`. Keys are never shown beyond their last 4 characters in any listing.
 
 Workspace-scoped sessions, undo state and web configuration remain under the project's gitignored `.emile/` directory; `.agent/` is also gitignored by default.
 
@@ -291,7 +300,7 @@ Use `/remember` for an explicit preference, `/memory list` to inspect it, and `/
 | OpenCode | `https://opencode.ai/zen/v1` | Curated gateway; live model list searchable from `/model` |
 | OpenCode Go | `https://opencode.ai/zen/go/v1` | Curated open-source models; live model list searchable from `/model` |
 
-Any OpenAI-compatible endpoint works — the client uses the `openai` SDK under the hood.
+Any OpenAI-compatible endpoint works via `/connect` → **Custom endpoint**: the four gateways above are just presets. Custom slots speak three wire formats — Anthropic Messages (`/v1/messages`), OpenAI Chat Completions (`/chat/completions`, via the `openai` SDK) and OpenAI Responses (`/responses`) — and their streamed output is normalized internally, so the agent loop behaves identically. Local servers on `http://localhost`/`127.0.0.1` need no key. Switch between all configured providers with `/provider`.
 
 ---
 
@@ -313,10 +322,10 @@ emile-cli/
 │   ├── history.js          # Session persistence (save/restore/list)
 │   ├── mcp.js              # MCP server lifecycle + tool bridging
 │   ├── recovery.js         # Startup recovery of interrupted sessions
-│   ├── commands.js         # Connect/model wizards
+│   ├── commands.js         # Connect/provider/model wizards (incl. custom endpoints)
 │   ├── commands/           # Slash-command registry, dispatch and handlers
 │   ├── agent/              # Agent loop, session stats, history compression
-│   ├── api/                # OpenAI-compatible client + retry
+│   ├── api/                # Provider client + per-format transports (chat-completions, anthropic-messages, responses) + retry
 │   ├── lifecycle/          # Ordered shutdown phases (drain, flushes, close, restore)
 │   ├── memory/             # Global formation, retrieval and crash-safe storage
 │   ├── tools/              # Tool schemas, security gates, per-tool handlers

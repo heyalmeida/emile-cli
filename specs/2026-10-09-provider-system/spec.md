@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | **ID** | `2026-10-09-provider-system` |
-| **Status** | `approved` |
+| **Status** | `implemented` |
 | **Date** | 2026-10-09 |
 | **Phase/Context** | Phase 2 — Configuration & Transport |
 | **Related documents** | [Deep Dive §8.4](../../docs/deep-dive.md), [Architecture](../../docs/architecture.md), [Code Quality and Security](../../docs/code-quality-and-security.md), [ADR-0001](../../docs/adr/0001-tech-stack-choice.md), [ADR-0002](../../docs/adr/0002-quality-gates.md) |
