@@ -46,7 +46,7 @@
 - [x] T3.3 — CHANGELOG entry recorded (part of T3.1)
 - [x] T3.4 — Revalidate touched Mermaid blocks: **no Mermaid block was created or edited** by this change (`features/terminal-ui.md`'s flowchart untouched); edited table rows verified to keep their column counts (Rule 5) — 4 pipes for the 3-column tables, 7 for the § 21.1 backlog table
 - [x] T3.5 — Spec and plan status → `implemented` / code delivered and verified
-- [x] T3.6 — Commit on `development` with only explicit paths staged (Rule 8): spec pack + `src/ui/prompt-input-persistent.js` + `test/prompt-input-render.test.js` + the four doc files; foreign paths (`integrations/`, `skills-lock.json`) left unstaged
+- [x] T3.6 — Commit on `development` with only explicit paths staged (Rule 8): spec pack + `src/ui/prompt-input-persistent.js` + `test/prompt-input-render.test.js` + the four doc files; foreign paths (`integrations/`, `skills-lock.json`) left unstaged. The commit hash is then recorded in this file as a one-file closeout row (Rule 8 allows documentation-only commits on `development`)
 - [x] T3.7 — Handoff limitations recorded below
 
 ---
@@ -90,4 +90,7 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ (recorded after commit) | `fix(ui): coalesce paste bursts and clamp prompt redraw to the viewport` | `src/ui/prompt-input-persistent.js`, `test/prompt-input-render.test.js`, `specs/2026-10-09-paste-burst-redraw/`, `CHANGELOG.md`, `docs/deep-dive.md`, `docs/visual-identity.md`, `features/terminal-ui.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+| `c839957` | `fix(ui): coalesce paste bursts and clamp prompt redraw to the viewport` | `src/ui/prompt-input-persistent.js`, `test/prompt-input-render.test.js`, `specs/2026-10-09-paste-burst-redraw/` (spec+plan+tasks), `CHANGELOG.md`, `docs/deep-dive.md`, `docs/visual-identity.md`, `features/terminal-ui.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+
+> Staged with explicit paths only (Rule 8). The foreign untracked working-tree paths (`integrations/`, `skills-lock.json`) were deliberately left unstaged.
+
