@@ -6,6 +6,12 @@ import { turnState } from './turn-state.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
 import { stripTerminalControls } from './control.js';
+import { createFrontier } from './commit-frontier.js';
+
+// A finished tool grid is FINAL: committed once (print-once, one write,
+// synchronized on a TTY) rather than emitted row by row. `write` stays a thunk
+// so the ADR-0003 stdout lease keeps arbitrating the write.
+const outputFrontier = createFrontier({ write: (chunk) => process.stdout.write(chunk) });
 
 // ──────────────────────────────────────────────
 //  Tool Execution Summary
@@ -100,21 +106,19 @@ export function printToolSummary(toolCalls) {
   // indent(2) + bullet(1) + space(1) + label(8) = 12 chars before the arg
   const maxArg = Math.max(cols - 4 - 2 - LABEL_W - 1, 10);
 
-  const writeMultilineArg = (prefix, value, width) => {
+  const gridLines = [];
+  const pushMultilineArg = (prefix, value, width) => {
     const cleanValue = stripTerminalControls(value);
     const lines = cleanValue.split('\n').map(line =>
       line.length > width ? line.substring(0, width - 1) + '…' : line
     );
     const continuationIndent = ' '.repeat(stripAnsi(prefix).length);
     const renderLine = line => line ? C.dim(line) : '';
-    process.stdout.write(`${prefix}${renderLine(lines[0] || '')}\n`);
+    gridLines.push(`${prefix}${renderLine(lines[0] || '')}`);
     for (const line of lines.slice(1)) {
-      process.stdout.write(`${continuationIndent}${renderLine(line)}\n`);
+      gridLines.push(`${continuationIndent}${renderLine(line)}`);
     }
   };
-
-  // Leading blank line: exactly one gap between this group and the block above
-  process.stdout.write(GAP.section);
 
   for (const d of info.details) {
     const tone = C[d.tone] || C.accent;
@@ -122,16 +126,20 @@ export function printToolSummary(toolCalls) {
       const maxMcp = Math.max(cols - 6, 20);
       const mcpLabel = d.label.length > maxMcp ? d.label.slice(0, maxMcp - 1) + '…' : d.label;
       const prefix = `  ${tone('●')} ${tone(mcpLabel)} `;
-      writeMultilineArg(prefix, d.arg, Math.max(cols - 4 - stripAnsi(prefix).length, 10));
+      pushMultilineArg(prefix, d.arg, Math.max(cols - 4 - stripAnsi(prefix).length, 10));
       continue;
     }
     const label = (d.label || '').substring(0, LABEL_W).padEnd(LABEL_W);
     const prefix = `  ${tone('●')} ${tone(label)} `;
-    writeMultilineArg(prefix, d.arg || '', maxArg);
+    pushMultilineArg(prefix, d.arg || '', maxArg);
   }
 
   // Feed the turn counter — consumed by printAssistantResponse (`↳ N tools`)
   turnState.toolsRun += info.total;
+
+  // Leading blank line: exactly one gap between this group and the block above.
+  // The frontier closes the last row, so every line keeps its own `\n`.
+  outputFrontier.commit(`${GAP.section}${gridLines.join('\n')}`);
 }
 
 /**

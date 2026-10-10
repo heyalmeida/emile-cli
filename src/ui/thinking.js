@@ -4,6 +4,17 @@ import { C, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
 import { clampedCursorUp } from './terminal-cursor.js';
+import { createFrontier } from './commit-frontier.js';
+
+// A CLOSED thinking block is final: its rows are committed once and never
+// repainted (print-once, one write, synchronized on a TTY). The still-open
+// stream keeps the clamped in-place/append-only paths above until it closes, and
+// then commits — see `endThinkingStream`. `write` stays a thunk so the ADR-0003
+// stdout lease keeps arbitrating these writes.
+const outputFrontier = createFrontier({ write: (chunk) => process.stdout.write(chunk) });
+// Identifies each closed block, so a second close of the same stream is a no-op
+// instead of a duplicated footer line (the reference's print-once rule).
+let _thinkingStreamSeq = 0;
 
 
 // Opt-in diagnostic: log every stdout write to stderr with the
@@ -94,6 +105,7 @@ export function startThinkingStream() {
   if (_thinkingStreamActive) return;
   _thinkingStreamActive = true;
   _thinkingBuffer = '';
+  _thinkingStreamSeq += 1;
   resetThinkingLineState();
   _startedAsExpanded = config.expandThinking === true;
 
@@ -236,22 +248,29 @@ export function endThinkingStream() {
   const wordCount = _thinkingBuffer.trim().split(/\s+/).length;
   const secs = Math.max(1, Math.round(wordCount / 50));
   const durationStr = secs === 1 ? '1s' : `${secs}s`;
+  // Identifies the block this call closes: print-once, so a second close of the
+  // same stream can never emit a second footer.
+  const closeId = `thinking:${_thinkingStreamSeq}:close`;
 
   if (!_startedAsExpanded) {
     // Collapsed: rewrite the ghost indicator line in place as the final
-    // one-liner (`··· thought Ns`). Exactly one line — rhythm preserved, no
-    // cursor-up math beyond the single line itself.
+    // one-liner (`··· thought Ns`). Exactly one row — rhythm preserved, no
+    // cursor-up math beyond the single line itself, so the frontier writes it
+    // verbatim (a one-row block is never wrapped in synchronized output).
     if (wordCount > 0) {
-      { const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`; debugWrite('thinking.end.collapsed', _o); process.stdout.write(_o); }
+      const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`;
+      debugWrite('thinking.end.collapsed', _o);
+      outputFrontier.commit({ id: closeId, text: _o });
     }
   } else if (_appendOnly || !process.stdout.isTTY) {
     // Append-only: the header and the closed lines may have scrolled, so there
-    // is no safe way back to the block top. Close the open tail and append a
-    // fresh one-line footer instead — no cursor-up at all.
-    let output = '';
-    if (_openTailWritten) output += '\n';
-    output += `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
-    debugWrite('thinking.end.appendOnly', output); process.stdout.write(output);
+    // is no safe way back to the block top. Close the open tail (that newline
+    // belongs to the STREAM, not to the finalized block) and commit a fresh
+    // one-row footer — no cursor-up at all.
+    let tail = '';
+    if (_openTailWritten) tail += '\n';
+    debugWrite('thinking.end.appendOnly', tail); process.stdout.write(tail);
+    outputFrontier.commit({ id: closeId, text: `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n` });
   } else if (_thinkingHeaderPrinted) {
     // Expanded and still fitting: keep the streamed text in place and update
     // only the known header row with the final duration. Move back to the end
@@ -267,7 +286,8 @@ export function endThinkingStream() {
     if (totalLines > _thinkingHeaderLineCount) {
       output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
     }
-    debugWrite('thinking.end.expanded', output); process.stdout.write(output);
+    debugWrite('thinking.end.expanded', output);
+    outputFrontier.commit({ id: closeId, text: output });
   }
 
   resetThinkingLineState();
@@ -296,22 +316,25 @@ export function printThinking(content) {
 
   // Two leading blank lines so the block breathes after the user's message
   // divider / previous block (vertical rhythm for a standalone reasoning box).
-  console.log(); console.log();
+  let out = '\n\n';
 
   if (!isVerbose) {
     // Collapsed: single ghost line — thinking is background noise
-    process.stdout.write(`  ${C.ghost(`··· thought ${durationStr}`)}\n`);
-    return;
-  }
-
-  // Verbose: muted header + full content (no truncation — every line is wrapped)
-  process.stdout.write(`  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`);
-
-  for (const rawLine of allLines) {
-    for (const wrapped of wrapText(rawLine, innerWidth)) {
-      if (wrapped.trim().length > 0) {
-        process.stdout.write(`    ${C.muted(wrapped)}\n`);
+    out += `  ${C.ghost(`··· thought ${durationStr}`)}\n`;
+  } else {
+    // Verbose: muted header + full content (no truncation — every line is wrapped)
+    out += `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    for (const rawLine of allLines) {
+      for (const wrapped of wrapText(rawLine, innerWidth)) {
+        if (wrapped.trim().length > 0) {
+          out += `    ${C.muted(wrapped)}\n`;
+        }
       }
     }
   }
+
+  // The finished block is FINAL: committed once, never repainted (print-once
+  // applies to identified blocks; this one is one-shot, so a replay of identical
+  // content is legitimately printed again).
+  outputFrontier.commit(out);
 }
