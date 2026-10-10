@@ -3,6 +3,7 @@
 import { C, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
+import { clampedCursorUp } from './terminal-cursor.js';
 
 
 // Opt-in diagnostic: log every stdout write to stderr with the
@@ -38,12 +39,27 @@ function debugWrite(tag, chunk) {
 
 /**
  * Live thinking stream — renders reasoning deltas in real time as they arrive
- * from the API (Claude-Code-style flowing dim text). The block is redrawn on
- * every delta with proper word-wrap + indentation so long lines stay readable.
+ * from the API (Claude-Code-style flowing dim text).
+ *
+ * Two emission strategies, chosen per stream:
+ *
+ *   - **in-place redraw** while the whole block still fits inside the viewport
+ *     (and stdout is a TTY): climb back to the block top and repaint it, so a
+ *     wrapped line can re-flow. Its cursor-up is viewport-clamped.
+ *   - **append-only** the moment the block cannot fit, or when stdout is not a
+ *     TTY: emit only the lines not yet printed, keep the newest line open
+ *     (written without a trailing newline) and rewrite that single row in place
+ *     on the next delta. Nothing that may have scrolled is ever erased.
+ *
+ * The second strategy is the fix for deep-dive § 7.2: the cumulative redraw
+ * assumed the cursor could always climb back to the block top, so once the
+ * block outgrew the viewport (or stdout was a pipe, where cursor movement is
+ * ignored entirely) every frame stayed on screen and the same thought appeared
+ * N times. Append-only renders each fragment exactly once on any terminal.
  *
  * Lifecycle (called from agent.js during the SSE stream):
  *   startThinkingStream()      → emit header, begin the block
- *   appendThinkingStream(delta) → append + redraw wrapped dim text
+ *   appendThinkingStream(delta) → append + emit wrapped dim text
  *   endThinkingStream()        → finalize (leaves rendered text in place)
  */
 let _thinkingStreamActive = false;
@@ -52,14 +68,33 @@ let _thinkingLinesPrinted = 0;
 let _thinkingHeaderPrinted = false;
 let _thinkingHeaderLineCount = 0;
 let _startedAsExpanded = false;
+// Append-only bookkeeping: how many wrapped lines were already emitted WITH a
+// trailing newline, whether the newest one is currently open (emitted without
+// one), and the per-stream latch that keeps the strategy sticky once the block
+// has outgrown the viewport — a scrolled block can never become erasable again.
+let _flushedLineCount = 0;
+let _openTailWritten = false;
+// Text of the currently open tail. A delta that starts a new line leaves this
+// row unchanged, and re-emitting identical text would count as a second
+// emission of that line in the byte stream even though the screen is identical.
+let _openTailText = '';
+let _appendOnly = false;
+
+function resetThinkingLineState() {
+  _thinkingLinesPrinted = 0;
+  _thinkingHeaderPrinted = false;
+  _thinkingHeaderLineCount = 0;
+  _flushedLineCount = 0;
+  _openTailWritten = false;
+  _openTailText = '';
+  _appendOnly = false;
+}
 
 export function startThinkingStream() {
   if (_thinkingStreamActive) return;
   _thinkingStreamActive = true;
   _thinkingBuffer = '';
-  _thinkingLinesPrinted = 0;
-  _thinkingHeaderPrinted = false;
-  _thinkingHeaderLineCount = 0;
+  resetThinkingLineState();
   _startedAsExpanded = config.expandThinking === true;
 
   // Expanded (opt-in via /thinking or Ctrl+P): thinking streams visibly as
@@ -74,6 +109,55 @@ export function startThinkingStream() {
     { const _a = GAP.section; debugWrite('thinking.start.collapsed.a', _a); process.stdout.write(_a); }
     { const _b = `  ${C.ghost('··· thinking')}\n`; debugWrite('thinking.start.collapsed.b', _b); process.stdout.write(_b); }
   }
+}
+
+/**
+ * Emits only the wrapped lines that are not on screen yet, and leaves the
+ * newest one open.
+ *
+ * Append-only is the safe strategy once the block may have scrolled: a closed
+ * line can never be erased again, so the only correct operation is to add new
+ * lines below. `_flushedLineCount` is deliberately monotone — a shrink (a
+ * cumulative snapshot being deduplicated upstream) may clamp which line we
+ * rewrite as the open tail, but it must never rewind the cursor, because
+ * re-emitting an already printed line is exactly the duplication this module
+ * exists to prevent.
+ */
+function appendThinkingLines(newLines) {
+  _appendOnly = true;
+  const lastIndex = Math.max(newLines.length - 1, 0);
+  const tailIndex = Math.min(_flushedLineCount, lastIndex);
+  let output = '';
+  let next = _flushedLineCount;
+
+  if (_openTailWritten) {
+    // The cursor sits on the open tail: rewrite that single row in place when
+    // its text changed (a delta that extends the same wrapped line), which is
+    // always safe even after a scroll because it touches no other row. When the
+    // text is unchanged the row is already correct, so closing it is enough —
+    // re-emitting identical text would be a second occurrence of that line.
+    if (newLines[tailIndex] !== _openTailText) {
+      output += '\r\x1B[K' + '  ' + C.muted(newLines[tailIndex]);
+    }
+    if (lastIndex > _flushedLineCount) {
+      output += '\n'; // that row is now closed; its successors are new
+      next = _flushedLineCount + 1;
+    } else {
+      next = newLines.length; // nothing new to emit
+    }
+  }
+
+  for (let i = next; i < newLines.length; i++) {
+    const isOpenTail = i === lastIndex;
+    output += `  ${C.muted(newLines[i])}${isOpenTail ? '' : '\n'}`;
+  }
+
+  debugWrite('thinking.appendOnly', output);
+  process.stdout.write(output);
+  _flushedLineCount = Math.max(_flushedLineCount, lastIndex);
+  _openTailWritten = newLines.length > 0;
+  _openTailText = newLines[tailIndex];
+  _thinkingLinesPrinted = newLines.length;
 }
 
 export function appendThinkingStream(delta) {
@@ -94,13 +178,30 @@ export function appendThinkingStream(delta) {
     for (const w of wrapText(rawLine, innerW)) newLines.push(w);
   }
 
+  // The in-place redraw is only correct while the whole block fits above the
+  // cursor inside the viewport, and only on a terminal that honors cursor
+  // movement at all. Once either fails, the stream latches append-only for good.
+  const fits = _thinkingHeaderLineCount + newLines.length
+    <= Math.max((process.stdout.rows || 50) - 2, 1);
+  if (!process.stdout.isTTY || _appendOnly || !fits) {
+    appendThinkingLines(newLines);
+    return;
+  }
+
   const oldTotal = _thinkingHeaderLineCount + _thinkingLinesPrinted;
   const newTotal = _thinkingHeaderLineCount + newLines.length;
+
   let output = '';
 
-  // Move cursor up to the start of the thinking block (header + old muted lines)
-  if (oldTotal > 0) {
-    output += `\x1B[${oldTotal}A`;
+  // Move cursor up to the start of the thinking block (header + old muted
+  // lines). Clamped: even if the fit estimate is off by a row, this can never
+  // emit an escape longer than the viewport can honor. Embedded rather than
+  // written through writeCursorUp() because the frame must stay ONE write —
+  // under the ADR-0003 stdout lease the prompt is repainted between writes, so
+  // a separate cursor-up would be erased before the frame it belongs to lands.
+  const up = clampedCursorUp(oldTotal);
+  if (up > 0) {
+    output += `\x1B[${up}A`;
   }
 
   // Re-render header
@@ -118,11 +219,13 @@ export function appendThinkingStream(delta) {
     for (let i = 0; i < oldTotal - newTotal; i++) {
       output += '\r\x1B[K\n';
     }
-    // Move cursor back up so position is consistent
-    output += `\x1B[${oldTotal - newTotal}A`;
+    // Move cursor back up so position is consistent (same clamp, same write)
+    const back = clampedCursorUp(oldTotal - newTotal);
+    if (back > 0) output += `\x1B[${back}A`;
   }
 
   debugWrite('thinking.append', output); process.stdout.write(output);
+
   _thinkingLinesPrinted = newLines.length;
 }
 
@@ -141,23 +244,33 @@ export function endThinkingStream() {
     if (wordCount > 0) {
       { const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`; debugWrite('thinking.end.collapsed', _o); process.stdout.write(_o); }
     }
-  } else {
-    // Expanded: keep the streamed text in place and update only the known
-    // header row with the final duration. Move back to the end of the block
-    // afterwards so the next renderer starts at the correct cursor position.
-    if (_thinkingHeaderPrinted) {
-      const totalLines = _thinkingHeaderLineCount + _thinkingLinesPrinted;
-      let output = `\x1B[${totalLines}A`;
-      output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
-      if (totalLines > _thinkingHeaderLineCount) {
-        output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
-      }
-      debugWrite('thinking.end.expanded', output); process.stdout.write(output);
+  } else if (_appendOnly || !process.stdout.isTTY) {
+    // Append-only: the header and the closed lines may have scrolled, so there
+    // is no safe way back to the block top. Close the open tail and append a
+    // fresh one-line footer instead — no cursor-up at all.
+    let output = '';
+    if (_openTailWritten) output += '\n';
+    output += `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    debugWrite('thinking.end.appendOnly', output); process.stdout.write(output);
+  } else if (_thinkingHeaderPrinted) {
+    // Expanded and still fitting: keep the streamed text in place and update
+    // only the known header row with the final duration. Move back to the end
+    // of the block afterwards so the next renderer starts at the correct cursor
+    // position. The climb is viewport-clamped like every other cursor-up.
+    const totalLines = _thinkingHeaderLineCount + _thinkingLinesPrinted;
+    // Clamped and embedded in the same write, for the same lease-atomicity
+    // reason as the in-place append path above.
+    const up = clampedCursorUp(totalLines);
+    let output = '';
+    if (up > 0) output += `\x1B[${up}A`;
+    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    if (totalLines > _thinkingHeaderLineCount) {
+      output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
     }
+    debugWrite('thinking.end.expanded', output); process.stdout.write(output);
   }
 
-  _thinkingHeaderPrinted = false;
-  _thinkingHeaderLineCount = 0;
+  resetThinkingLineState();
   _startedAsExpanded = false;
 }
 

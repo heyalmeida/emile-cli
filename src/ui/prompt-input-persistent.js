@@ -37,6 +37,7 @@ import { getPlanProgress } from '../plans.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
 import { findMentionCandidates } from '../mentions.js';
+import { writeCursorUp } from './terminal-cursor.js';
 
 export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
@@ -131,22 +132,6 @@ function isTextKeypress(str, key = {}) {
   if (!str || key.ctrl || key.meta) return false;
   if (isShiftEnterKey(key)) return false;
   return !NON_TEXT_KEY_NAMES.has(key.name);
-}
-
-/** Rows the cursor can physically travel up: the viewport height minus the row
- *  it stands on. Anything above that has scrolled into the scrollback, where no
- *  escape sequence can reach it. */
-function viewportCursorUp() {
-  return Math.max((process.stdout.rows || 24) - 1, 0);
-}
-
-/** Emits a viewport-bounded cursor-up. A non-TTY stdout cannot honor cursor
- *  movement at all, so it receives none. Never erases more than fits: taller
- *  blocks degrade to scrolling, never to duplicated frames. */
-function writeCursorUp(rows) {
-  if (!process.stdout.isTTY || rows <= 0) return;
-  const up = Math.min(rows, viewportCursorUp());
-  if (up > 0) process.stdout.write(`\x1B[${up}A`);
 }
 
 /**

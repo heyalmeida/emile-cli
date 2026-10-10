@@ -136,7 +136,7 @@ Retries de stream são permitidos **somente enquanto nenhum chunk foi entregue**
 | Renderer | Quando | Estratégia | Arquivo |
 |---|---|---|---|
 | Spinner | antes do 1º chunk | linha única `\r\x1B[K`, atômica | `ui/spinner.js:60-105` |
-| Thinking expandido | a cada delta de reasoning | **redraw do bloco inteiro** com cursor-up | `ui/thinking.js:79-127` |
+| Thinking expandido | a cada delta de reasoning | **redraw in-place enquanto o bloco cabe** (cursor-up clampado); fora disso, **append-only** (só o sufixo novo, cauda aberta reescrita na própria linha) | `ui/thinking.js:126-230` |
 | Response | fim do stream, uma vez | box aberto, render final | `ui/response.js:31-83` |
 
 O response **não** é redrew por delta neste código — `printAssistantResponse(textContent)` é chamado uma única vez por iteração do loop (`agent.js:596-598`). O `appendResponseStream` do diagnóstico de 2026-09-24 (redraw progressivo do texto, commit `b5e6c37`) **não existe mais** no `response.js` atual (arquivo lido por completo: 84 linhas, única exportação de render é `printAssistantResponse`). **Sobrou o thinking expandido.**
@@ -145,7 +145,7 @@ O response **não** é redrew por delta neste código — `printAssistantRespons
 
 Durante o turno o prompt completo fica visível abaixo da saída do agente. A implementação: `listenTurnKeys` substitui `process.stdout.write` por `interceptedWrite` (linhas 152-163): cada write do agente → **hide do frame do prompt → write real → repaint do frame** (com save/restore de cursor ESC7/ESC8). O frame do prompt reserva linhas físicas com `'\n'.repeat(reserveRows)` + cursor-up (linhas 72-73) para que a saída do agente nunca caia por cima dele.
 
-Consequência direta registrada no próprio ADR: *"renderers should prefer atomic writes"* — um renderer que emite um frame multi-linha com cursor-up precisa ser **atômico** (um único `write` por quadro). `appendThinkingStream` é atômico (monta `output` e faz um `write`, `thinking.js:99-125`) — o que não é atômico é a **matemática do cursor-up** que ele faz, e é aí que o quadro quebra.
+Consequência direta registrada no próprio ADR: *"renderers should prefer atomic writes"* — um renderer que emite um frame multi-linha com cursor-up precisa ser **atômico** (um único `write` por quadro). `appendThinkingStream` é atômico (monta `output` e faz um `write`, `thinking.js:163-230`) — a matemática do cursor-up que ele fazia era o ponto de quebra (§ 7.2), hoje **clampada ao viewport** e com o frame mantido em um único `write` justamente para não perder a atomicidade sob o lease.
 
 ---
 
@@ -162,6 +162,8 @@ O relatório do usuário fala de **mensagens e thoughts** duplicando. Três veto
 3. **Resume de sessão** (`cli.js:321`, `printConversationHistory`): carregar histórico com `-H` reimprime a conversa no terminal; múltiplos resumes na mesma janela de scroll mostram o mesmo texto duas passadas — correto por design, indistinguível de bug para quem lê.
 
 ### 7.2 Causa raiz — redraw cumulativo vs. margem do terminal
+
+> **✅ corrigido em 2026-10-10** (P0-1, `specs/2026-10-10-thinking-append-only/`) — o desenho aplicado está no § 7.4. Os números de linha abaixo são os da revisão **pré-correção**, como registro do diagnóstico.
 
 `appendThinkingStream` (`thinking.js:97-123`), a cada delta:
 
@@ -182,9 +184,15 @@ Não há **nenhuma** guarda hoje: `thinking.js` não consulta `process.stdout.is
 
 O diagnóstico de 2026-09-24 citava `test/live-response-stream.test.js` — esse arquivo **não existe mais** no repo atual (probe direto: não encontrado), assim como `appendResponseStream`. Cobertura de render em si não foi verificada arquivo por arquivo neste documento. O argumento estrutural, porém, vale para qualquer teste do formato atual: um stdout fake que acumula os writes e verifica o texto **final** do buffer está testando o último quadro — e o último quadro de um redraw cumulativo é, por definição, a versão completa correta. O artefato do bug são os **quadros intermediários** que ficam no scrollback. Teste que passa nesse modelo necessariamente falha no terminal real. A regressão de 7.4 (contar ocorrências de marcador, não comparar buffer final) é o que fecha essa lacuna de método, não só de caso.
 
-### 7.4 Correção proposta (design, não aplicada)
+### 7.4 Correção aplicada (2026-10-10, P0-1)
 
-**Invariante-alvo:** um pensamento é impresso **uma única vez**, em qualquer terminal, com ou sem TTY, em qualquer altura.
+**Invariante-alvo (cumprido):** um pensamento é impresso **uma única vez**, em qualquer terminal, com ou sem TTY, em qualquer altura.
+
+**O que foi implementado** (`specs/2026-10-10-thinking-append-only/`): o renderer passou a ter duas estratégias escolhidas por stream. **In-place** apenas enquanto `process.stdout.isTTY`, o stream não travou em append-only e o bloco cabe (`header + linhas <= max((rows || 50) - 2, 1)`); o cursor-up desse caminho passa pelo clamp compartilhado (`clampedCursorUp`), **embutido no mesmo `write`** do frame — separar o cursor-up em outro write faz o lease do ADR-0003 repintar o prompt no meio e apagar as linhas do thinking (descoberto pelo teste do turno ativo). Fora disso o stream **trava em append-only** (`_appendOnly`, irreversível): emite só as linhas ainda não impressas, mantém a mais nova como **cauda aberta** (sem `\n`) e reescreve essa única linha in-place com `\r\x1B[K` — **somente quando o texto dela mudou** (reescrever texto idêntico contaria como uma segunda emissão da mesma linha no stream de bytes). O cursor de flush é **monotônico**: um encolhimento (dedup de snapshot cumulativo) clampa o índice da cauda, nunca rebobina — rebobinar re-emitiria uma linha já impressa, que é a duplicação que este módulo existe para impedir. `endThinkingStream` em append-only não sobe ao header (ele pode ter rolado): fecha a cauda e acrescenta um rodapé novo de uma linha (`✻ Thought for Ns`). Colapsado, wrap math e `EMILE_DEBUG_THINKING` intactos; API pública idêntica.
+
+**Método de teste (a lacuna do § 7.3):** `test/thinking-stream-append.test.js` **conta ocorrências** de um marcador único nos writes crus e parseia todo `ESC[nA` emitido, em vez de comparar o buffer final — o último quadro é correto por definição, então o artefato (os quadros intermediários no scrollback) nunca aparecia nessa comparação.
+
+**Desenho original da correção** (mantido como registro do que foi especificado; ajustes feitos na implementação estão descritos acima):
 
 1. **Append-only streaming** — substituir o redraw por delta completo por emissão incremental:
    - manter `_printedLineCount` (linhas já emitidas) e o buffer atual;
@@ -208,7 +216,7 @@ O diagnóstico de 2026-09-24 citava `test/live-response-stream.test.js` — esse
    Cobrir os três modos: viewport estourado, pipe, e lease ativo (`listenTurnKeys` instalado).
 5. O mesmo padrão de teste deve valer para **response**, garantindo que a remoção do `appendResponseStream` não regrida (ele pode voltar como opção de UX *só* com o modo append-only pronto).
 
-**Custo/benefício:** mudança confinada a `ui/thinking.js` + 1 arquivo de teste; o comportamento colapsado (default histórico `/thinking` off) já é imune porque não redesenha (`thinking.js:84-85`).
+**Custo/benefício:** mudança confinada a `ui/thinking.js` + 1 arquivo de teste; o comportamento colapsado (default histórico `/thinking` off) já é imune porque não redesenha (`thinking.js:168-169`) — e continua byte-estável no teste novo.
 
 ---
 
@@ -497,7 +505,7 @@ Melhorias candidatas: custo de web não aparece em `/cost` (a tabela de preços 
 | **Single-source reasoning display** | `agent.js:433-513` | provider que expõe o mesmo thought em dois canais |
 | **Retry antes do 1º chunk, nunca depois** | `client.js:202-240` | replay parcial duplicaria output renderizado |
 | **Lease temporário de stdout (ADR-0003)** | `turn-keys.js:118-303` | prompt vivo sem framework TUI; writes atômicos são contrato |
-| **Cursor-up frame redraw** | `prompt-input-persistent.js:402,449` (via `writeCursorUp`, clampado a `rows-1`, sem emissão em não-TTY), `thinking.js:79-127` | render de bloco mutável — **no prompt persistente o defect de viewport foi corrigido 2026-10-09 (§ 22.2); em `thinking.js` (§ 7.2) e `turn-keys.js:73,78,91` o cursor-up segue sem clamp — P0-1** |
+| **Cursor-up frame redraw** | `prompt-input-persistent.js:402,449` e `thinking.js:126-230,232-275` (ambos via o clamp compartilhado `ui/terminal-cursor.js`; `thinking.js` ainda degrada para append-only quando o bloco não cabe), `turn-keys.js:73,78,91` | render de bloco mutável — **prompt persistente (§ 22.2, 2026-10-09) e thinking (§ 7.2, 2026-10-10) clampados ao viewport**; `turn-keys.js` segue sem clamp (reportado, sem brief) |
 | **3-layer model metadata** | `models.js:58-77` | catálogo vivo > tabela estática > default |
 | **Histerese de compressão (× 1.4)** | `compression.js:8, 83-89` | comprimir de novo por turno quando não mudou nada |
 | **Forced compression em overflow** | `agent.js:401-416` | erro de tamanho ≠ erro genérico retryável |
@@ -523,7 +531,7 @@ O que **existe e funciona** (verificado em código, seção por seção acima): 
 
 | # | Item | Esforço | Risco | Ref |
 |---|---|---|---|---|
-| **P0-1** | **Streaming expandido append-only** (pensamento não duplica em viewport pequeno/pipe) + teste contando ocorrências | S | UI-only | § 7.4 |
+| **P0-1** | ✅ **aplicado 2026-10-10** (`specs/2026-10-10-thinking-append-only/`): redraw in-place só enquanto cabe (cursor-up clampado), latched append-only fora disso, cauda aberta reescrita in-place; clamp extraído para `ui/terminal-cursor.js`; 9 testes contando ocorrências de marcador. Original: **Streaming expandido append-only** (pensamento não duplica em viewport pequeno/pipe) + teste contando ocorrências | S | UI-only | § 7.4 |
 | **P0-2** | ✅ **aplicado 2026-10-09** (caminho + vendorização; multi-root continua em P1-5): `skills.js:51` → `.agent/skills`, `.agent/skills/clean-code/SKILL.md` vendida no repo, `.gitignore` para de excluir `.agent/`, `test/skills-load.test.js` — specs/2026-10-08-skills-path-fix/. Original:  **Fix do caminho de skills + origem real das skills**: corrigir `skills.js:51` → `.agent/skills` **e** decidir onde as skills passam a viver — vendorizar no repo (revisar `.gitignore:139-142`) ou ancorar nos roots globais do § 9.3; hoje um clone novo tem zero skills apesar do README prometer 40+ | S | Regra 0 (README × código × gitignore) | § 9.1 |
 | **P0-3** | **Consertar o ciclo de vida de recuperação/shutdown**: (a) scanner de boot e `listPending` filtram `'pending'`, estado que ninguém grava (só `tool_pending` existe, `history.js:82`) → scan nunca dispara; `cli.js:154` lê `recoveryReport.abandoned` inexistente; `markAborted` órfão que, se ligado, destrói o `tool_pending` e o resume; (b) fase 1 do shutdown não devolve o raw mode/lease de stdin no idle (setPromptShutdown é no-op, `index.js:55-58`). Ver § 18 | M | dados de recuperação + estado do terminal | § 10, § 18 |
 | **P1-3** | **`modelOverrides` no config global** (context/preço por modelo, UI no `/model`) | XS-S | untrusted config lido com validação zod | § 8.3-A |
