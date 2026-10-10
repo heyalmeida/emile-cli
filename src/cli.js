@@ -7,7 +7,7 @@ import { normalizeWorkspaceCwd } from './tools/security.js';
 // All user-facing output goes through the C palette exported by ui.js —
 // the single source of colors per the visual identity doc (the legacy
 // picocolors remap was removed in the TUI overhaul pass 1).
-import { C, stripTerminalControls, listenTurnKeys } from './ui/index.js';
+import { C, stripTerminalControls, listenTurnKeys, formatQueuePreview } from './ui/index.js';
 
 import {
   printStartupScreen,
@@ -365,9 +365,10 @@ export async function main() {
         promptOptions: { stats: sessionStats, mcpInfo },
         onLine: (line) => {
           pendingQueue.push(line);
-          const preview = line.replace(/\s+/g, ' ');
+          // The preview is display-only and carries a `(+N chars)` marker when
+          // the line is longer, so it can never imply the whole text was taken.
           process.stdout.write(
-            `\r\x1B[K  ${C.muted(`queued: ${preview.slice(0, 90)}${preview.length > 90 ? '…' : ''}`)}\n`
+            `\r\x1B[K  ${C.muted(`queued: ${formatQueuePreview(line)}`)}\n`
           );
         },
       });

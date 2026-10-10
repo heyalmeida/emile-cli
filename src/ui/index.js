@@ -21,7 +21,7 @@ export { printConversationHistory } from './history-replay.js';
 export { promptInput, isShiftEnterKey } from './prompt-input.js';
 export { persistentPromptInput } from './prompt-input-persistent.js';
 export { MODEL_PICKER_LIMIT, filterModelOptions, matchModelOptions, promptModelPicker, promptSearchPicker, sanitizeModelPickerText } from './model-picker.js';
-export { listenTurnKeys } from './turn-keys.js';
+export { listenTurnKeys, TURN_INPUT_MAX_CHARS, formatQueuePreview } from './turn-keys.js';
 export { promptSwitchSession } from './switch-session.js';
 export { stripTerminalControls } from './control.js';
 export { printRulesInfo } from './rules-panel.js';

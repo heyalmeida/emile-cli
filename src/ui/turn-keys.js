@@ -13,8 +13,18 @@
 // prompt without sharing its keypress listener.
 //
 // Esc / Ctrl+C cancel the turn, Enter commits the line to the queue, and
-// ordinary characters fill the buffer with a hard cap.
+// ordinary characters fill the draft.
+//
+// The draft is bounded by TURN_INPUT_MAX_CHARS, which is a guard against
+// unbounded memory and NOT a UX limit: the idle prompt accepts input of any
+// length, so a brief pasted into a running turn must survive intact. When the
+// limit is reached the OLDEST characters are dropped (the newest text is what
+// the user just pasted and wants), the drop is announced once per turn, and the
+// draft size appears in the footer as it approaches the cap. Nothing is ever
+// discarded silently — the previous 400-character behaviour did exactly that
+// and truncated a pasted brief without a word.
 import readline from 'node:readline';
+import { C } from './theme.js';
 import { config } from '../config.js';
 import { isShiftEnterKey } from './prompt-input.js';
 import {
@@ -24,16 +34,72 @@ import {
   matchPromptCommands,
 } from './prompt-input-persistent.js';
 
-const MAX_BUFFER_CHARS = 400;
+/**
+ * Draft limit for input typed while a turn is running. Roughly a page of text:
+ * generous enough that pasting a brief never loses a line, bounded so one live
+ * draft cannot grow without limit. See the file header for the drop policy.
+ */
+export const TURN_INPUT_MAX_CHARS = 16_000;
 
-/** Strips control characters and bounds a queued line before use. */
+/** Draft size at which the footer starts showing the counter. */
+const DRAFT_COUNTER_THRESHOLD = Math.floor(TURN_INPUT_MAX_CHARS * 0.8);
+
+/** Characters shown by the single-line queue preview before the `(+N chars)` marker. */
+const QUEUE_PREVIEW_CHARS = 90;
+
+/** Compact size label used by the notice and the footer counter (`12800` → `12.8k`). */
+const formatK = (n) => {
+  const value = (n / 1000).toFixed(1);
+  return `${value.endsWith('.0') ? value.slice(0, -2) : value}k`;
+};
+
+/**
+ * Bounds a draft (and its cursor) to TURN_INPUT_MAX_CHARS by dropping the
+ * OLDEST characters, keeping the newest — the ones the user just typed.
+ * @param {string} value
+ * @param {number} cursor
+ * @returns {{ value: string, cursor: number, dropped: number }}
+ */
+export function boundDraft(value, cursor) {
+  const text = String(value || '');
+  const dropped = text.length - TURN_INPUT_MAX_CHARS;
+  if (dropped <= 0) return { value: text, cursor, dropped: 0 };
+  return {
+    value: text.slice(dropped),
+    // The cursor tracks the character it was on, which moved back with the head.
+    cursor: Math.max(0, cursor - dropped),
+    dropped,
+  };
+}
+
+/**
+ * Builds the single-line queue preview. Whitespace is flattened for DISPLAY
+ * only — the queued line itself is never touched. A long line carries an
+ * explicit `(+N chars)` marker so the preview cannot imply that the whole text
+ * was taken.
+ *
+ * @param {string} line
+ * @returns {string}
+ */
+export function formatQueuePreview(line) {
+  const preview = String(line || '').replace(/\s+/g, ' ');
+  if (preview.length <= QUEUE_PREVIEW_CHARS) return preview;
+  return `${preview.slice(0, QUEUE_PREVIEW_CHARS)}… (+${preview.length - QUEUE_PREVIEW_CHARS} chars)`;
+}
+
+/**
+ * Normalizes a queued line WITHOUT rewriting its content: CRLF becomes LF,
+ * control characters become spaces and the result is bounded. Tabs (`\u0009`) and
+ * internal spacing are deliberately preserved — collapsing them corrupted
+ * pasted code, and a tab is not a terminal-escape surface. Everything that can
+ * carry an escape or corrupt the transcript (C0 except HT/LF, DEL and the C1
+ * range) is still replaced, exactly as before.
+ */
 function sanitizeLine(value) {
   return String(value || '')
     .replace(/\r\n?/g, '\n')
-    .replace(/[\u0000-\u0009\u000b-\u001f\u007f\u0080-\u009f]/g, ' ')
-    .replace(/[^\S\n]+/g, ' ')
-    .trim()
-    .slice(0, MAX_BUFFER_CHARS);
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f\u0080-\u009f]/g, ' ')
+    .slice(0, TURN_INPUT_MAX_CHARS);
 }
 
 /**
@@ -50,6 +116,13 @@ function createLiveInput(promptOptions = {}, writeDirect = () => {}) {
     if (!enabled) return;
     if (visible) hideFrame();
     const columns = process.stdout.columns || 80;
+    const footerSegments = buildPromptFooterSegments(promptOptions);
+    // Once the draft approaches the cap, show its size in the footer so the
+    // limit is visible BEFORE anything is dropped (same segment row the model /
+    // token / MCP state already uses — no new panel).
+    if (buffer.length > DRAFT_COUNTER_THRESHOLD) {
+      footerSegments.push(C.muted(`queued draft: ${formatK(buffer.length)}/${formatK(TURN_INPUT_MAX_CHARS)}`));
+    }
     const layout = buildPromptLayout({
       input: buffer,
       cursor,
@@ -58,7 +131,7 @@ function createLiveInput(promptOptions = {}, writeDirect = () => {}) {
       matches: matchPromptCommands(buffer),
       selectedIndex,
       columns,
-      footerSegments: buildPromptFooterSegments(promptOptions),
+      footerSegments,
     });
 
     // Save the agent writer's exact cursor, draw one row below it, then move
@@ -135,10 +208,33 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
   let selectedIndex = 0;
   let finished = false;
   let isPasting = false;
+  // One truncation notice per turn (a 20k paste is thousands of insertions; a
+  // per-insertion message would flood the transcript).
+  let truncationNoticed = false;
   const live = createLiveInput(promptOptions, writeDirect);
 
   function currentMatches() {
     return matchPromptCommands(buffer).slice(0, PROMPT_MATCH_LIMIT);
+  }
+
+  /**
+   * Applies a draft mutation and bounds the result, announcing the first drop of
+   * this turn. Never drops the newest text (see boundDraft).
+   * @param {string} nextValue
+   * @param {number} nextCursor
+   */
+  function setBoundDraft(nextValue, nextCursor) {
+    const bounded = boundDraft(nextValue, nextCursor);
+    buffer = bounded.value;
+    cursor = bounded.cursor;
+    if (bounded.dropped > 0 && !truncationNoticed) {
+      truncationNoticed = true;
+      // Through the leased writer so the notice lands above the prompt frame,
+      // exactly like the `queued:` preview does.
+      process.stdout.write(
+        `\r\x1B[K  ${C.dim(`⚠ queued draft reached ${formatK(TURN_INPUT_MAX_CHARS)} chars — oldest text dropped`)}\n`
+      );
+    }
   }
 
   function repaint() {
@@ -194,22 +290,18 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       return;
     }
     if (isShiftEnterKey(key)) {
-      if (buffer.length < MAX_BUFFER_CHARS) {
-        buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
-        cursor++;
-        selectedIndex = 0;
-        repaint();
-      }
+      setBoundDraft(buffer.slice(0, cursor) + '\n' + buffer.slice(cursor), cursor + 1);
+      selectedIndex = 0;
+      repaint();
       return;
     }
     if (key.name === 'return' || key.name === 'enter') {
       if (isPasting) {
-        if (buffer.length < MAX_BUFFER_CHARS) {
-          buffer = buffer.slice(0, cursor) + '\n' + buffer.slice(cursor);
-          cursor++;
-          selectedIndex = 0;
-          repaint();
-        }
+        // A pasted newline always lands: the draft is bounded by dropping the
+        // oldest characters, never by refusing the keypress.
+        setBoundDraft(buffer.slice(0, cursor) + '\n' + buffer.slice(cursor), cursor + 1);
+        selectedIndex = 0;
+        repaint();
         return;
       }
       const selected = currentMatches()[selectedIndex];
@@ -225,7 +317,9 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       cursor = 0;
       selectedIndex = 0;
       repaint();
-      if (line && typeof onLine === 'function') onLine(line);
+      // An all-whitespace draft is not queued — decided here rather than by
+      // rewriting the user's text in sanitizeLine.
+      if (line && line.trim().length > 0 && typeof onLine === 'function') onLine(line);
       return;
     }
     if (key.name === 'backspace') {
@@ -284,12 +378,15 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       repaint();
       return;
     }
-    if (str && !key.ctrl && !key.meta && buffer.length < MAX_BUFFER_CHARS) {
+    if (str && !key.ctrl && !key.meta) {
       const text = str.replace(/\r\n?/g, '\n');
-      const available = MAX_BUFFER_CHARS - buffer.length;
-      const inserted = text.slice(0, available);
-      buffer = buffer.slice(0, cursor) + inserted + buffer.slice(cursor);
-      cursor += inserted.length;
+      // Accept the whole chunk, then bound the draft by dropping the oldest
+      // characters: pasting a brief into a running turn must never truncate the
+      // text that was just pasted (nor refuse the keypress silently).
+      setBoundDraft(
+        buffer.slice(0, cursor) + text + buffer.slice(cursor),
+        cursor + text.length,
+      );
       selectedIndex = 0;
       repaint();
     }
