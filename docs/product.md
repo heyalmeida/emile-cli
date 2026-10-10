@@ -57,7 +57,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
 | **RF-10** | Plans mode (`-p`): agent previews the task, asks for approval before model execution, drafts a plan, then executes | ✅ |
-| **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
+| **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `<server>__<tool>` explicit-map tool keying, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
 | **RF-12** | YAML skills system with workspace detection, task-relevance matching and conditional system-prompt injection (`-s` for an explicit subset) | ✅ |
 | **RF-13** | Context and cost tracking: real API token usage with a pre-call estimate fallback, `/cost` | ✅ |
 | **RF-14** | Coherent terminal UI: Tokyo Night palette, boxes, one persistent full prompt across idle/active turns, slash-command autocomplete, multiline keyboard editing and aligned multiline tool output | ✅ (continuous improvement — see [visual identity](visual-identity.md)) |

@@ -23,7 +23,7 @@
 | **Memory mode** | Global formation/retrieval state: `off`, conservative default `ask`, or two-session-corroborated `auto`. Session-local `/memory pause` is separate and performs no retrieval or persistence. |
 | **Profile memory** | A record with `type: "profile"` (ADR-0005) covering personal context the user volunteers: name, personality, motivations, life situation, opinions. It bypasses the `STABLE_EVIDENCE` source regex; the privacy gate, exact-source binding, `ask`/`auto` state machine and full deletion still apply. |
 | **Keyword matching** | The conditional skill-activation mechanism (`src/skills.js`) so context isn't bloated on every message. |
-| **MCP** | Model Context Protocol — protocol exposing external tools to the agent. STDIO, SSE and streamable HTTP transports are configured in `mcp.json`; tools are namespaced `mcp__<server>__<tool>`. |
+| **MCP** | Model Context Protocol — protocol exposing external tools to the agent. STDIO, SSE and streamable HTTP transports are configured in `mcp.json`; tools are registered under their explicit map key `<server>__<tool>`. |
 | **MCP consent** | One-time per-workspace approval required before a new configured MCP server is connected; only the server name is persisted in `.emile/mcp-consent.json`. |
 | **MCP reconnect** | Bounded recovery after an unexpected MCP transport close: attempts at 500ms, 1s and 2s, then leaves the server unavailable with a warning. |
 | **Prompt caching** | Provider-side reuse of the conversation's stable prefix (Requesty) to cut cost. `--no-cache` disables it. |
