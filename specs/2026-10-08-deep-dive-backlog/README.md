@@ -47,7 +47,7 @@ Items promoted from the comparison with xAI's production CLI ([deep-dive § 22](
 | 23 | [P2-18 viewport-budgeted prompt block](briefs/p2-18-prompt-viewport-layout.md) | none (closes the § 7.2 duplication family) |
 | 24 | [P2-19 cursor-up clamp in the remaining renderers](briefs/p2-19-cursor-up-clamp-remaining.md) | none (found by the P0-1 executor: turn-keys, model-picker, prompt-input) |
 
-Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic saveSession — pair with P0-3), P2-13 (mid-turn steering), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks).
+Un-briefed wave-2 backlog (generate a brief when scheduling): P2-13 (mid-turn steering — brief exists as the un-briefed row in § 21.1 of the deep-dive), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks). P2-12 (atomic saveSession) was **folded into the P0-3 brief** as item 8 — same durability surface, same files.
 
 ## Status
 
