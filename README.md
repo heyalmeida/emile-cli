@@ -31,7 +31,7 @@ This is a personal project that grew into something useful enough to share. It's
 - **Prompt caching** — Requesty supports automatic prompt caching to reduce cost on repeated context
 - **Reasoning effort control** — dial reasoning depth from `min` to `max` (plus `none`) per session or per run
 - **Plans mode** — agent drafts an implementation plan and waits for your approval before touching files
-- **Skills system** — skills are YAML-frontmatter `SKILL.md` files you place under `.agent/skills/` in your workspace; the agent auto-detects relevant ones from your project and task, or you activate a list explicitly with `-s` (no skills are bundled — bring your own)
+- **Skills system** — skills are YAML-frontmatter `SKILL.md` files you place under `.agents/skills/` in your workspace; the agent auto-detects relevant ones from your project and task, or you activate a list explicitly with `-s` (no skills are bundled — bring your own)
 - **User-authored project rules** — optional `.emilerules` preferences, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks
 - **User-global agent memory** — confirmed preferences, workflow conventions and recurring corrections follow you across workspaces and providers, with conservative learning and explicit inspection/deletion controls
 - **Session persistence** — conversations are saved per workspace; resume, switch, export to Markdown, or rewind to edit your last message
@@ -188,9 +188,12 @@ When web search is on in `enhanced` mode (and the corresponding provider is enab
 
 ## Skills system
 
-Skills are YAML-frontmatter markdown files in `.agent/skills/<name>/SKILL.md` in
-your workspace. Each skill defines a `name`, `description`, and `keywords`. No
-skills are bundled with this repository — you bring your own.
+Skills are YAML-frontmatter markdown files in `.agents/skills/<name>/SKILL.md` in
+your workspace. That directory is the one canonical skills root — the `.agents/`
+spelling the wider agent-CLI ecosystem uses, so Emile reads the same folder you
+maintain. Each skill defines a `name`, `description`, and `keywords`. Only the
+`clean-code` starter is versioned with this repository; everything else is yours
+to bring.
 
 By default (`-s all`) the agent scans your workspace (e.g. `package.json`
 dependencies, `Dockerfile`, `requirements.txt`) and your current task, then
@@ -206,7 +209,7 @@ Activate a subset with `-s`:
 emile -s clean-code,tdd-workflow,react-patterns "Refactor the dashboard components"
 ```
 
-Add your own by dropping a `SKILL.md` into `.agent/skills/your-skill/`:
+Add your own by dropping a `SKILL.md` into `.agents/skills/your-skill/`:
 
 ```yaml
 ---
@@ -279,7 +282,7 @@ User-wide settings and credentials are persisted in `~/.emile/config.json` (auto
 
 Gateway slots carry `apiKey` + `lastModel`; custom endpoint slots also carry `baseURL`, `format` (`anthropic-messages` | `chat-completions` | `responses`) and, for `chat-completions`, an optional `reasoningStyle` naming the body key this endpoint uses for the reasoning effort (`reasoning_effort`, `reasoning`, `thinking`, `enable_thinking`, `chat_template_kwargs`, `effort`, `reasoningEffort` or `both`). Custom endpoints accept `http://` only for `localhost`/`127.0.0.1`. Keys are never shown beyond their last 4 characters in any listing.
 
-Workspace-scoped sessions, undo state and web configuration remain under the project's gitignored `.emile/` directory; `.agent/` is also gitignored by default.
+Workspace-scoped sessions, undo state and web configuration remain under the project's gitignored `.emile/` directory. `.agents/skills/` is your local skills root and is gitignored too — the repository versions only the `clean-code` starter skill inside it; the former `.agent/` directory is gitignored as well and is no longer read.
 
 ### Project rules
 
@@ -331,7 +334,7 @@ emile-cli/
 │   ├── tools/              # Tool schemas, security gates, per-tool handlers
 │   ├── web/                # Enhanced web tools (Tavily/Firecrawl) + security gates
 │   └── ui/                 # Terminal rendering (theme, boxes, prompt, thinking…)
-├── .agent/skills/          # Your workspace skills (gitignored; add your own SKILL.md)
+├── .agents/skills/         # Your workspace skills (gitignored; add your own SKILL.md)
 ├── .emile/                 # Runtime config + session storage (gitignored)
 ├── mcp.json                # MCP server configuration
 └── package.json
@@ -398,7 +401,7 @@ This project follows formal Software Engineering practices (documentation as the
 | [Code Improvements](./docs/IMPROVEMENTS.md) | Prioritized codebase improvement backlog (robustness, security, testing) | 🟢 Current |
 | [Decisions (ADRs)](./docs/adr/) | Architecture decisions (stack, quality gates, active prompt output) | 🟢 Current |
 
-> The [`.agent/`](./.agent/) directory contains generic AI agent kit configuration (agents, skills, workflows) — it is not product documentation.
+> `.agents/skills/` is the workspace skills root the CLI reads (`src/skills.js`), and `.agent/` is the former spelling it no longer scans — both are local, gitignored directories, not product documentation.
 
 ---
 
@@ -406,7 +409,7 @@ This project follows formal Software Engineering practices (documentation as the
 
 This is a personal project, but issues and pull requests are welcome. See the [contribution guide](./CONTRIBUTING.md) for the full SDD workflow, branch/commit conventions, and quality gates. Quick pointers:
 
-- **New skill**: Add `.agent/skills/your-skill/SKILL.md` with valid YAML frontmatter
+- **New skill**: Add `.agents/skills/your-skill/SKILL.md` with valid YAML frontmatter
 - **New tool**: Add a definition to `src/tools/definitions.js` and a handler under `src/tools/handlers/`, following the existing pattern
 - **New provider**: Add a `baseURL` branch in `src/api/client.js` and an env var in `src/config.js`
 - **Bug fix**: Open an issue with reproduction steps, or submit a PR with a clear description

@@ -15,7 +15,7 @@
 | **`resolveSafePath`** | Capability-root path resolver that defaults to workspace confinement. Only internal memory code supplies the fixed global-memory root; model-facing file tools cannot broaden it. |
 | **Undo stack** | Stack of file modifications made by the agent, powering `/undo`. |
 | **Plans mode** | Mode (`-p`) where the agent drafts an implementation plan and waits for approval before writing any file. |
-| **Skill** | Knowledge module in YAML frontmatter + markdown (`.agent/skills/`) injected into the system prompt when the user's prompt matches its keywords. |
+| **Skill** | Knowledge module in YAML frontmatter + markdown (`.agents/skills/`) injected into the system prompt when the user's prompt matches its keywords. |
 | **Project rules** | Optional always-on preferences authored by the workspace maintainer in `.emilerules`, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks; inspected read-only via `/rules`. |
 | **Global agent memory** | Provider-independent state under `~/.emile/memory/v1/` for confirmed user preferences, workflow and recurring corrections across workspaces; it is native client state, not MCP or model weights, and current user intent/project rules outrank it. |
 | **Memory candidate** | Non-active inferred memory that passed exact-source/privacy validation but still needs explicit acceptance in `ask` mode or equivalent evidence from a distinct session in `auto` mode. |

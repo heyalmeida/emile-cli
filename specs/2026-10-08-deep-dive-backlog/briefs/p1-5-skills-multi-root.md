@@ -12,7 +12,7 @@ Skills are workspace-only today (and, before P0-2, effectively nonexistent). Imp
 
 ```
 1. <workspace>/.emile/skills      5. ~/.emile/skills
-2. <workspace>/.agent/skills      6. ~/.agents/skills
+2. <workspace>/.agents/skills     6. ~/.agents/skills
 3. <workspace>/.claude/skills     7. ~/.claude/skills
 4. <workspace>/.zcode/skills      8. config.skillsDirs[] (in order)
 ```
