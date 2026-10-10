@@ -77,3 +77,4 @@ flowchart LR
 | 2026-09-02 | Per-provider `resolveApiKey` (no cross-provider fallback); config file mode `0600` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | `package.json` engines field `node >=18` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | Moved the protected provider configuration to user-global `~/.emile/config.json` | `76e3f96` / CHANGELOG |
+| 2026-10-09 | History-shape invariant: an assistant with neither content nor `tool_calls` can no longer be created, persisted or resumed (`isValidAssistantMessage` guards generation in `agent.js`, `preparePersistedMessages` and `getSessionRecord` in `history.js`), so an existing poisoned transcript self-heals on resume without the file being rewritten | `specs/2026-10-09-assistant-null-poison` / CHANGELOG |

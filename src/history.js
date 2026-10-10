@@ -15,9 +15,47 @@ function ensureHistoryDir(directory = historyDir) {
 }
 
 /**
+ * True unless the message is an assistant turn that carries NOTHING the wire
+ * accepts: no content and no tool calls.
+ *
+ * Why this exists (deep-dive § 10, P0-6): a stream that errors or ends empty
+ * used to push `{role:'assistant', content:null}` into the live history, and
+ * `preparePersistedMessages` then stripped the reasoning fields that were the
+ * turn's only payload — so exactly that record landed on disk. Every following
+ * request resends the whole history, the provider rejects it with
+ * `400 messages[i] needs content or tool_calls`, and because 400 is neither
+ * retryable nor a context overflow, compression never triggers: the session is
+ * permanently dead and each new user turn appends another poisoned record.
+ *
+ * The predicate guards all three boundaries — generation (`agent.js`), persist
+ * and load — so the shape can neither be created nor survive a round trip.
+ *
+ * `content: null` WITH `tool_calls` is a valid shape (it is what providers
+ * themselves return for a tool-only turn) and is deliberately preserved, as is
+ * any structured/multimodal content. Non-assistant roles and non-object
+ * entries are never judged here: orphan `tool`/`tool_calls` repair belongs to
+ * the compression sanitizer (P1-11), not to this boundary.
+ *
+ * @param {object} message
+ * @returns {boolean}
+ */
+export function isValidAssistantMessage(message) {
+  if (!message || typeof message !== 'object') return true;
+  if (message.role !== 'assistant') return true;
+  const hasToolCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+  if (hasToolCalls) return true;
+  if (typeof message.content === 'string') return message.content.length > 0;
+  return message.content !== null && message.content !== undefined;
+}
+
+/**
  * Creates the persisted view of a message list without changing live history.
  * Model reasoning is useful while the process is running but is omitted from
  * session snapshots to reduce size and accidental disclosure.
+ *
+ * Empty assistant turns are dropped here as well: `reasoning_content` never
+ * reaches disk, so keeping such a message would persist exactly the shape that
+ * kills every later request (see `isValidAssistantMessage`).
  */
 export function preparePersistedMessages(messages = []) {
   const memoryCallIds = new Set();
@@ -40,7 +78,7 @@ export function preparePersistedMessages(messages = []) {
       persisted.content = '[global memory tool result omitted from session storage]';
     }
     return persisted;
-  });
+  }).filter(isValidAssistantMessage);
 }
 
 function preparePersistedToolCalls(toolCalls = []) {
@@ -120,6 +158,14 @@ export function saveSession(sessionId, summary, messages, metadata = {}) {
 /**
  * Reads a complete session record, including optional checkpoint metadata.
  * Legacy records without a status are treated as complete.
+ *
+ * Sanitizes on read (deep-dive § 10 invariant, P0-6): empty assistant messages
+ * left by sessions written before the generation guard are filtered out so a
+ * poisoned transcript cannot resume into a permanent `400 … needs content or
+ * tool_calls`. This is deliberately **read-time only** — the file on disk is
+ * never rewritten here; the next `saveSession` persists the clean projection.
+ * Consecutive `user` messages left behind are valid on the chat-completions
+ * wire, so they are neither merged nor reordered.
  */
 export function getSessionRecord(sessionId) {
   ensureHistoryDir();
@@ -128,12 +174,22 @@ export function getSessionRecord(sessionId) {
 
   try {
     const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    return {
+    const record = {
       ...data,
       status: data.status === 'tool_pending' ? 'tool_pending' : 'complete',
       pendingToolCalls: Array.isArray(data.pendingToolCalls) ? data.pendingToolCalls : [],
       sessionCwd: normalizeWorkspaceCwd(data.sessionCwd) || config.workspaceDir,
     };
+    // Sanitize only a real array: a record without `messages` keeps its previous
+    // (falsy) shape so callers that treat it as "failed to load" still do.
+    if (Array.isArray(data.messages)) {
+      const kept = data.messages.filter(isValidAssistantMessage);
+      if (kept.length !== data.messages.length) {
+        warn(`Session ${sessionId}: dropped ${data.messages.length - kept.length} empty assistant message(s) on load.`);
+      }
+      record.messages = kept;
+    }
+    return record;
   } catch (err) {
     console.warn(`[Warning] Failed to read session record: ${err.message}`);
     return null;

@@ -56,4 +56,5 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic save
 | P2-11 doc alignment | ⚠ implemented in working tree, uncommitted (session 2026-10-08) |
 | P0-4 paste-burst redraw | ✅ done — spec: `specs/2026-10-09-paste-burst-redraw/` |
 | P0-5 subprocess env scrub | ✅ done — spec: `specs/2026-10-09-subprocess-env-scrub/` |
+| P0-6 assistant null poison | ✅ done — spec: `specs/2026-10-09-assistant-null-poison/` |
 | all others | ⏳ pending |

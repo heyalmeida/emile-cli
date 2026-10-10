@@ -24,6 +24,7 @@ import { createSpinner, RESPONSE_WAITING_LABEL } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
 import { compileMentionAttachments } from '../mentions.js';
+import { isValidAssistantMessage } from '../history.js';
 import { setActiveTool, clearActiveTool } from '../lifecycle/index.js';
 import { MEMORY_TOOL_NAMES } from '../memory/constants.js';
 import { appendMemoryContext } from '../memory/context.js';
@@ -537,6 +538,7 @@ async function runAgentInner({
       // A cancel that aborted the request mid-stream is not an error — it is
       // handled below via streamCanceled/shouldStop with a proper notice.
       spinner.stop();
+      streamErrored = true;
       if (!control?.shouldStop()) {
         // Surface the failure — a silent swallow made mid-response failures
         // look like empty replies. Partial reasoning/text still renders below.
@@ -655,13 +657,19 @@ async function runAgentInner({
       if (assistantMessage.tool_calls) {
         process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — pending tool calls discarded.')}\n`);
       } else {
-        messages.push(assistantMessage);
+        // Same shape rule as the normal path: a canceled turn that produced no
+        // text has nothing valid to contribute and must not enter history.
+        if (isValidAssistantMessage(assistantMessage)) messages.push(assistantMessage);
         process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — partial response kept.')}\n`);
       }
       break;
     }
 
-    messages.push(assistantMessage);
+    // Never push an assistant turn with neither content nor tool_calls: the
+    // provider rejects it on EVERY later request (400 needs content or
+    // tool_calls), which is neither retryable nor an overflow, so one dead
+    // stream would permanently poison the session (deep-dive § 10, P0-6).
+    if (isValidAssistantMessage(assistantMessage)) messages.push(assistantMessage);
 
     // Process tool calls as a batch — no clack spinner, just text output
     if (executableToolCalls.length > 0) {

@@ -57,5 +57,6 @@ OpenRouter-specific and may incur provider charges, including on free routes.
 | 2026-08-30 | Registered the shipped agent-loop capability | `specs/2026-08-30-feature-registry-completion` |
 | 2026-08-31 | Added provider-gated OpenRouter web search to the effective tool set | `specs/2026-08-31-web-search-tool-reliability` |
 | 2026-09-01 | Added graceful turn interrupt/queue and serialized stdin ownership across the persistent prompt, active-turn input and `/switch`; restored Tab completion and post-picker typing | `specs/2026-09-01-turn-interrupt-queue` / CHANGELOG |
+| 2026-10-09 | An assistant turn with neither content nor tool_calls is never pushed into history (empty/error-only turns), and the dead `streamErrored` flag is now set so a zero-chunk stream error no longer also prints "(empty response)" | `specs/2026-10-09-assistant-null-poison` / CHANGELOG |
 | 2026-09-02 | Replaced the compact active row with the shared full prompt frame; preserved drafts and the real caret across spinner/reasoning/output writes | `specs/2026-09-01-turn-interrupt-queue` / ADR-0003 |
 | 2026-09-02 | Moved provider/model/effort configuration to user-global `~/.emile/config.json` so it follows the user across workspaces | `76e3f96` / CHANGELOG |
