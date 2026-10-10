@@ -302,6 +302,24 @@ A **única** multi-key funcional hoje é via ambiente: `ENV_KEY_MAP` (`config.js
 
 ---
 
+### 8.5 O hit% de cache é métrica do provider, não do emile (medido 2026-10-10)
+
+**O número do rodapé é uma média acumulada da sessão, não o hit do último request.** `sessionStats.promptTokens` e `cachedPromptTokens` somam em TODA chamada (`agent.js:574`) e o footer divide os dois (`prompt-input-persistent.js:264`). Consequências diretas: (a) o primeiro request de cada conversa é sempre 0% e fica no denominador para sempre; (b) cada iteração de ferramenta acrescenta uma cauda nova que ainda não está no cache do provider; (c) a média só sobe quando o prefixo é reenviado sem novidade — ou seja, `87%` numa sessão que chegou a 558k tokens é o esperado, não um defeito. O número útil seria o hit **do último request** (por request, um prefixo estável neste provider rende ~98-99% — abaixo).
+
+**Medição direta no endpoint custom do usuário (`whiskers`, `deepseek-v4.1-flash`), prefixo byte-idêntico reenviado:**
+
+| prompt_tokens | cached (2ª chamada) | hit | folga não cacheada |
+|---|---|---|---|
+| 1 255 | 1 024 | 81,6% | 231 |
+| 3 649 | 3 072 | 84,2% | 577 |
+| 12 049 | 11 776 | 97,7% | 273 |
+
+O provider cacheia **em blocos** e deixa uma folga no fim — a folga é do provider (prefixo idêntico, sem variação do emile) e o hit% sobe com o comprimento. O campo que o emile lê (`prompt_tokens_details.cached_tokens`) é preenchido corretamente (`whiskers` também espelha em `cached_read_tokens`/`cached_write_tokens`). **Não é bug do emile** — e o invariante do prefixo congelado (§ 14) está intacto: `messages[0]` só é reconstruído quando a chave `(plansMode, relevantSkills)` muda (`agent.js:225-236`).
+
+**O único amplificador do lado do emile:** trocar `plansMode` (Tab) ou a lista de skills relevantes **reconstrói o system prompt** e invalida o prefixo inteiro naquele request — num contexto de 558k isso custa a re-leitura completa. Precedente do usuário: a suspeita anterior de que `fd376dc` teria quebrado o cache foi disproven pelo mesmo motivo — a variação é do provider/chave, não do caminho de request. Diagnóstico definitivo (replay do prefixo real com contagem por request) fica como próximo passo opcional; ver P1-14 § Stage C.
+
+---
+
 ## 9. Skills: como funciona hoje e o que falta
 
 ### 9.1 O caminho atual — `skills.js` (e um bug)
@@ -572,6 +590,7 @@ Itens promovidos da comparação com o CLI de produção da xAI. Evidência comp
 | **P1-13** | ✅ **aplicado 2026-10-10** (`specs/2026-10-10-turn-input-cap/`): `TURN_INPUT_MAX_CHARS = 16_000` (`turn-keys.js:42`), drop-oldest via `boundDraft` (`:63-73`), um aviso por turno (`setBoundDraft`, `:226-238`), contador no footer (`:124`), preview com `(+N chars)` (`formatQueuePreview`, `:84-88`, usado em `cli.js:371`), `sanitizeLine` sem colapsar espaços/tabs (`:98-103`). 14 testes novos. Original: **Input do turno ativo descarta tudo além de 400 chars, em silêncio** (reportado 2026-10-10 ao colar um brief num turno em andamento): `MAX_BUFFER_CHARS = 400` com `slice(0, available)` sem aviso (`turn-keys.js:27, 287-292`) e `sanitizeLine` recolapsando espaços/tabs (`:30-36`); o preview de 90 chars esconde o corte. O prompt **idle** não tem limite (8 681 chars aceitos inteiros — verificado no JSON da sessão) | S | UI + perda silenciosa de dados | `p1-13-turn-input-cap.md` | § 19 |
 | **P2-18** | **Bloco do prompt sem budget de altura** — `buildPromptLayout` emite uma linha por linha do rascunho (só a largura é clipada): um paste de 8,7 KB gera ~200 linhas num terminal de ~40. O clamp do P0-4 impede a duplicação, mas o erase não alcança o topo, então sobra um frame parcial no scrollback ("meu prompt foi cortado" — 2026-10-10, `prompt-paste-text.txt`; o dado nunca foi perdido). Fix: budget de altura + janela ao redor do cursor com marcadores `⌃ N earlier rows` / `⌄ N later rows` — fecha o terceiro e último membro da família § 7.2 | S | UI-only | `p2-18-prompt-viewport-layout.md` | § 7.4, § 22.2 |
 | **P2-19** | **Emissores de cursor-up restantes sem clamp** — com P0-4 e P0-1 aplicados, sobram quatro sítios que ainda emitem `ESC[nA` sem bound (relatados pelo executor do P0-1): `turn-keys.js:151, 164` (o frame do prompt do turno ATIVO, sob o lease do ADR-0003), `model-picker.js:145` e `prompt-input.js:192, 234, 242, 365`; roteá-los pelo clamp compartilhado (`src/ui/terminal-cursor.js`) — fecha a família § 7 nos renderers que faltam | XS-S | UI-only | `p2-19-cursor-up-clamp-remaining.md` | § 7.2, § 22.2 |
+| **P1-14** | **Fundação de UI com o grok-build como base de código** — portar a ARQUITETURA do pager de referência para `src/ui/` (Rust ≠ JS: portam-se invariantes, cada um com `file:line` de referência; reúso literal exigiria ADR): **Stage A** fronteira de commit print-once (`commit.rs:145-168`) + emissão por scroll-insert (`terminal.rs:661-687`) + frame do prompt com budget de `stdout.rows` (`mod.rs:692-733`) + synchronized output (`common.rs:70-86`) — isto subsume P2-18 e P2-19; **Stage B** chip `[Pasted: N lines]` (`prompt_widget/mod.rs:2286-2344`) e thinking dobrável com `ctrl+e` (`thinking.rs:284-455`); **Stage C** status line, diff e o hit de cache **por request** ao lado da média acumulada (§ 8.5) | L (3 stages S/M) | UI-only | `p1-14-ui-foundation-from-grok-build.md` | § 19, § 22 |
 
 Cada item acima, ao ser implementado, nasce como spec em `specs/YYYY-MM-DD-nome/` (Regra 3, SDD), fecha com CHANGELOG + registro em `features/` (Regra 7), e as decisões estruturais (multi-root de skills, override de modelo como superfície de config) pedem ADR próprio (Regra 2). A linguagem deste documento é pt-BR por decisão de conveniência para leitura do dono do projeto; os documentos canônicos seguem em inglês conforme [ADR-0001](adr/0001-tech-stack-choice.md) § Derived policies 4 — se a intenção for publicar a doc junto do repositório, converter antes do commit.
 
