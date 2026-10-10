@@ -61,7 +61,7 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-13 (mid-turn st
 | P0-4 paste-burst redraw | ✅ done — `c839957` (+ spec-hash `5d4623e`) (spec: `specs/2026-10-09-paste-burst-redraw/`) |
 | P0-5 subprocess env scrub | ✅ done — `e360192` (+ spec-hash `a876a52`) (spec: `specs/2026-10-09-subprocess-env-scrub/`) |
 | P0-6 assistant null poison | ✅ done — `2cce204` (+ spec-hash `05f6269`) (spec: `specs/2026-10-09-assistant-null-poison/`) |
-| P0-3 recovery/shutdown integrity | ✅ done — spec: `specs/2026-10-10-lifecycle-recovery-integrity/` (P2-12 folded in) |
+| P0-3 recovery/shutdown integrity | ✅ done — `a95be54` + `e5b946b` + docs `ea30f96` (spec: `specs/2026-10-10-lifecycle-recovery-integrity/`; P2-12 folded in) |
 | P1-13 turn-input cap | ✅ done — `3c68ca7` (spec: `specs/2026-10-10-turn-input-cap/`) |
 | P0-1 thinking append-only | ✅ done — `57058b4` (spec: `specs/2026-10-10-thinking-append-only/`; shared clamp extracted to `src/ui/terminal-cursor.js`) |
 | P1-6 provider system + custom endpoints | ✅ done — `7e7acd8` + `1632ddb` + `64df2df` (spec: `specs/2026-10-09-provider-system/`) |

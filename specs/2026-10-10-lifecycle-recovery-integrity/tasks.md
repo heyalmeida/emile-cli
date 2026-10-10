@@ -145,6 +145,6 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ | `fix(lifecycle): make recovery, abort and shutdown honest` | recovery/history/cli + tests + spec |
-| ⏳ | `fix(lifecycle): return the stdin lease, keep the transcript, force the second exit` | lifecycle phases + prompt handle + tests |
-| ⏳ | `docs: sync recovery, abort and shutdown changes` | CHANGELOG + architecture + deep-dive + features + pack |
+| `a95be54` | `fix(lifecycle): make recovery, abort and shutdown honest` | `src/recovery.js`, `src/history.js`, `src/cli.js`, `src/lifecycle/drain-tools.js`, 4 test files, spec pack |
+| `e5b946b` | `fix(lifecycle): return the stdin lease, keep the transcript, force the second exit` | `src/lifecycle/index.js`, `src/lifecycle/restore-terminal.js`, `src/ui/prompt-input-persistent.js`, `test/lifecycle-stdin.test.js` |
+| `ea30f96` | `docs: sync the recovery, abort and shutdown changes` | `CHANGELOG.md`, `docs/architecture.md`, `docs/deep-dive.md`, `features/session-lifecycle.md`, pack README |
