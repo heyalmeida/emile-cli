@@ -63,6 +63,19 @@ without breaking the cache-stable prefix.
      success for a tool you did not call.
    - **No tool for its own sake**: do not invoke a skill or a server tool without
      a task need; "available" is not "required".
+   - **Availability is not the model's decision to reverse on cost grounds**: when
+     a task needs information the workspace cannot supply (current docs, a library
+     version, anything after the training cutoff) and a web tool IS available, USE
+     it — a charge warning in the CLI is a notice to the user, not a reason for the
+     agent to decline. **Evidence this is needed (observed 2026-10-10):** with
+     Tavily + Firecrawl configured and `searchWeb`/`browsePage` verifiably in the
+     request (the user's own "list your tools" run returned 11, including both),
+     the agent still answered "there is no websearch function in my schema" and
+     fell back to `curl`. The plumbing was verified correct end to end
+     (`web/definitions.js:42-49` gate reproduced, `agent.js:378` sends `allTools`
+     whole, `ctx.config` is the singleton at `cli.js:513`, `test/agent-web.test.js:60`
+     covers it) — so the refusal was model behaviour, and the policy text is the
+     lever that fixes it.
 2. **Dynamic awareness of CONNECTED servers (cache-honest).** Export a cheap
    `getMcpToolSignature()` from `src/mcp.js` (sorted joiner of the tool names,
    e.g. `server__tool` joined by `,`; `''` when none). When non-empty, the prompt
