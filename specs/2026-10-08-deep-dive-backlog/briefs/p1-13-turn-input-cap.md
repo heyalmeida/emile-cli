@@ -18,7 +18,11 @@ queued (reported 2026-10-10 while dispatching a P0-1 brief by paste).
 
 - `MAX_BUFFER_CHARS = 400` (`turn-keys.js:27`); `sanitizeLine` slices to it
   (`:36`); the insert path slices the incoming chunk to the remaining room
-  (`:287-292`) and stops accepting keys entirely once full.
+  (`:287-292`) and stops accepting keys entirely once full. Bracketed paste IS
+  handled (`isPasting`, `:137, 180-187`) — but the Enter inside a paste
+  (`:205-214`) and Shift+Enter (`:196-204`) are gated on
+  `buffer.length < MAX_BUFFER_CHARS` too, so pasted NEWLINES also vanish at the
+  cap: a 8 KB paste keeps the first 400 chars and loses every line after it.
 - No notice, no counter, no way to see the drop.
 - `cli.js` `pendingQueue.push(line)` + a preview line `queued: <first 90 chars>`
   (`cli.js:364-369` region) — the preview hides the truncation too.
@@ -59,7 +63,10 @@ queued (reported 2026-10-10 while dispatching a P0-1 brief by paste).
 ## Constraints
 
 - Do not touch `persistentPromptInput`'s state machine beyond the preview
-  marker; do not change the burst coalescing (P0-4).
+  marker; do not change the burst coalescing (P0-4) or the thinking renderer
+  (P0-1, `src/ui/terminal-cursor.js`).
+- `turn-keys.js`'s uncapped cursor-up (`:78, :91`) is backlog item **P2-19** —
+  report if it interacts, do not fix it here.
 - No new dependencies. `EMILE_DEBUG_*` diagnostics unchanged.
 
 ## Verification
