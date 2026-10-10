@@ -445,6 +445,7 @@ export function persistentPromptInput({
     let cursor = initial.length;
     let selectedIndex = 0;
     let lastTopOffset = null; // rows from the cursor to the top of the drawn block
+    let lastBlockHeight = 0;  // rows that block drew — the bounded erase's extent
     let settled = false;
     let keypressAttached = false;
     let isPasting = false;
@@ -497,18 +498,41 @@ export function persistentPromptInput({
     }
 
     /**
-     * The erase that precedes a frame, as a chunk. Clamped: a block taller than
-     * the viewport has lines in the scrollback that no cursor-up can reach —
-     * erasing what fits beats repainting the block below a frame that cannot be
-     * removed (the paste duplication bug). The climb is embedded rather than
-     * written through `writeCursorUp` because it now belongs to the ONE write
-     * the whole frame is emitted as (the lease rule, see the file header).
+     * The erase that precedes a frame, as a chunk, bounded to the block's OWN
+     * rows.
+     *
+     * `ESC[0J` erased from the block top to the end of the screen, so the
+     * terminal had to repaint everything below the block on every keystroke.
+     * The block's rows are known exactly (the pure layout just produced them),
+     * so this walks them, clearing each with `ESC[K` while stepping with
+     * `ESC[1B` — cursor-down never scrolls — and returns to the block's top row,
+     * which is where the next frame is drawn from.
+     *
+     * Clamped like every other climb: a block taller than the viewport has rows
+     * in the scrollback that no cursor-up can reach, and erasing what fits beats
+     * repainting the block below a frame that cannot be removed (the paste
+     * duplication bug). The climb is embedded rather than written through
+     * `writeCursorUp` because it belongs to the ONE write the whole frame is
+     * emitted as (the lease rule, see the file header).
      */
     function eraseChunk() {
       if (lastTopOffset === null) return '';
+      const rows = Math.max(lastBlockHeight, 1);
       const up = clampedCursorUp(lastTopOffset);
       lastTopOffset = null;
-      return `${up > 0 ? `\x1B[${up}A` : ''}\r\x1B[0J`;
+      lastBlockHeight = 0;
+      let out = up > 0 ? `\x1B[${up}A` : '';
+      for (let i = 0; i < rows; i += 1) {
+        if (i > 0) out += '\x1B[1B';
+        out += '\r\x1B[K';
+      }
+      // Back up to the block's top row: the next frame starts there. Clamped
+      // like every other climb in this module — on a non-TTY stdout it is zero,
+      // so the erase keeps degrading to appends instead of leaking a cursor-up
+      // into a pipe (the same rule `writeCursorUp` follows).
+      const back = clampedCursorUp(rows - 1);
+      if (back > 0) out += `\x1B[${back}A`;
+      return `${out}\r`;
     }
 
     /** Erases the previous block on its own — the submit path, which prints the
@@ -574,8 +598,10 @@ export function persistentPromptInput({
 
       // Remember where the block top is, relative to the cursor we just
       // positioned: inputRowIndex rows above the first input row, plus the
-      // cursor row inside the input area.
+      // cursor row inside the input area — and how many rows the block drew,
+      // which is exactly what the next bounded erase must clear.
       lastTopOffset = layout.inputRowIndex + layout.cursorRow;
+      lastBlockHeight = layout.height;
     }
 
     let submitInFlight = false;

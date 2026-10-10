@@ -3,11 +3,14 @@
 // screen state after each step (rebuild of the prompt block renderer).
 //
 // The emulator implements exactly the escape sequences the module emits:
-//   \r  \n  ESC[K  ESC[0J  ESC[<n>A  ESC[<n>C  and ignores SGR (ESC[...m)
-// plus the DEC 2026 synchronized-output pair (ESC[?2026h/l), which has no
-// cursor or cell effect by definition — the frame it wraps is presented
-// atomically, but every row lands exactly where it would have landed without
-// the wrapper (specs/2026-10-10-ui-commit-frontier).
+//   \r  \n  ESC[K  ESC[<n>A  ESC[<n>B  ESC[<n>C  ESC7  ESC8  and ignores SGR
+// (ESC[...m) plus the DEC 2026 synchronized-output pair (ESC[?2026h/l), which has
+// no cursor or cell effect by definition — the frame it wraps is presented
+// atomically, but every row lands exactly where it would have landed without the
+// wrapper (specs/2026-10-10-ui-commit-frontier).
+// ESC[<n>B and ESC7/ESC8 are what the bounded frame erase walks with
+// (specs/2026-10-10-frame-transition-flicker): modelling them is what makes the
+// residue-free assertions meaningful for the erase that replaced ESC[0J.
 // Any wrap would therefore be visible as broken assertions, since the
 // module guarantees it never writes a line wider than the terminal.
 import test from 'node:test';
@@ -21,6 +24,7 @@ function createEmulator(columns = 80) {
     col: 0,
     columns,
     wrapped: false,
+    saved: null,
   };
 
   function ensureRow(row) {
@@ -41,6 +45,12 @@ function createEmulator(columns = 80) {
     let i = 0;
     while (i < chunk.length) {
       const ch = chunk[i];
+      if (chunk.startsWith('\x1B7', i)) { state.saved = { row: state.row, col: state.col }; i += 2; continue; }
+      if (chunk.startsWith('\x1B8', i)) {
+        if (state.saved) ({ row: state.row, col: state.col } = state.saved);
+        i += 2;
+        continue;
+      }
       if (ch === '\x1B') {
         // `?`/`>`/`!` private-mode markers are accepted so the DEC 2026 pair is
         // consumed as one sequence instead of leaking `[?2026h` as text.
@@ -49,6 +59,7 @@ function createEmulator(columns = 80) {
           const n = Number(m[1]) || 0;
           switch (m[2]) {
             case 'A': state.row = Math.max(0, state.row - n); break;
+            case 'B': ensureRow(state.row + n); state.row += n; break;
             case 'C': state.col += n; break;
             case 'K': ensureRow(state.row); state.lines[state.row] = state.lines[state.row].slice(0, state.col); break;
             case 'J': {
@@ -808,6 +819,190 @@ test('the legacy prompt clamps its erase and caret climbs to the viewport', asyn
 
   assertClamped(writes, 8, 'prompt-input at rows=8');
   fakeStdin.removeAllListeners('keypress');
+});
+
+// ── Atomic active-turn transition (specs/2026-10-10-frame-transition-flicker) ──
+// The flicker itself is not assertable in CI — it is a property of what the
+// terminal PRESENTS. These cases assert the necessary conditions the fix
+// established: one synchronized update per burst, an erase bounded to the
+// frame's own rows (never ESC[0J), a coalesced single redraw, no redundant
+// repaint, and the tmux / non-TTY guards.
+
+const countOf = (text, needle) => text.split(needle).length - 1;
+
+/**
+ * The writes the UI module itself made. `node:test`'s own reporter also writes
+ * STRINGS to stdout (its NDJSON protocol), and while a turn leases stdout those
+ * go through the transition like any other write — correct behaviour, but noise
+ * for frame assertions (they easily dwarf a frame line, which is why the
+ * in-place proof must not be asserted over the raw concatenation).
+ */
+function moduleWrites(writes) {
+  return writes.filter((w) => !(w.startsWith('{') && w.includes('"')));
+}
+
+/** Waits for the coalesced redraw (one event-loop turn). */
+function frameSettled() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/** Starts a real active-turn key listener over the captured terminal. */
+async function startTurn(t, { rows = 24, isTTY = true } = {}) {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, rows);
+  // `enabled` is decided when the lease takes over, so a non-TTY stdout has to be
+  // pinned before the listener starts — that is the real "piped stdout" startup.
+  Object.defineProperty(process.stdout, 'isTTY', { value: isTTY, configurable: true, writable: true });
+  const { listenTurnKeys } = await import('../src/ui/turn-keys.js');
+  const keys = listenTurnKeys({
+    control: { requestStop() {}, shouldStop: () => false },
+    onLine: () => {},
+    promptOptions: {},
+  });
+  t.after(() => keys.stop());
+  const frames = () => moduleWrites(writes);
+  return { fakeStdin, writes, keys, frames };
+}
+
+test('a burst of agent writes makes ONE synchronized frame transition', async (t) => {
+  const { frames, keys } = await startTurn(t);
+  // Settle whatever the harness itself wrote through the lease, then open and
+  // settle the measured transition inside ONE synchronous block, so only the
+  // burst belongs to it.
+  keys.redraw();
+  const framesBefore = countOf(frames().join(''), '╭');
+  const beginsBefore = countOf(frames().join(''), '\x1B[?2026h');
+
+  // The spinner writes every 80 ms and deltas arrive at 50–100/s: 50 writes
+  // inside one event-loop turn is ordinary streaming traffic.
+  for (let i = 0; i < 50; i += 1) process.stdout.write(`agent line ${i}\n`);
+
+  assert.equal(countOf(frames().join(''), '\x1B[?2026h'), beginsBefore + 1, 'the burst opens exactly one update');
+  assert.equal(countOf(frames().join(''), '╭'), framesBefore, 'no half-written frame is presented inside the burst');
+
+  keys.redraw(); // the CLI's own re-anchor, which settles the owed redraw
+
+  const after = frames().join('');
+  assert.equal(countOf(after, '\x1B[?2026h'), beginsBefore + 1, 'exactly one BEGIN for the burst');
+  assert.equal(countOf(after, '\x1B[?2026l'), beginsBefore + 1, 'exactly one END for the burst');
+  assert.equal(countOf(after, '╭'), framesBefore + 1, 'at most one full frame draw');
+  const plain = plainFrame(after);
+  for (const probe of ['agent line 0', 'agent line 25', 'agent line 49']) {
+    assert.equal(countOf(plain, probe), 1, `the agent's bytes land exactly once: ${probe}`);
+  }
+  assert.equal(countOf(plain, 'Enter prompt or /help'), 2, 'the frame is on screen exactly once');
+});
+
+test('the coalesced redraw lands on the next turn and every update is closed', async (t) => {
+  const { frames } = await startTurn(t);
+  const drawsBefore = countOf(frames().join(''), '╭');
+
+  process.stdout.write('streamed line\n');
+  await frameSettled();
+
+  const text = frames().join('');
+  assert.equal(countOf(text, '╭'), drawsBefore + 1, 'the deferred redraw painted the frame once');
+  assert.equal(
+    countOf(text, '\x1B[?2026h'),
+    countOf(text, '\x1B[?2026l'),
+    'no synchronized update is left open',
+  );
+});
+
+test('a frame hide erases only the frame own rows, never to the end of the screen', async (t) => {
+  const { fakeStdin, frames, keys } = await startTurn(t);
+
+  // The initial draw is ONE write, and each of its rows carries a clear.
+  const draw = frames().at(-1);
+  const frameRows = countOf(draw, '\r\x1B[K');
+  assert.ok(frameRows >= 3, `the frame drew ${frameRows} rows`);
+
+  keys.redraw(); // settle the harness's own traffic before measuring
+  const mark = frames().length;
+  process.stdout.write('agent output\n');
+  keys.redraw();
+
+  const transition = frames().slice(mark).join('');
+  assert.equal(countOf(transition, '\x1B[?2026h'), 1, 'the transition is one synchronized update');
+  assert.doesNotMatch(transition, /\x1B\[0?J/, 'no erase reaches the end of the screen');
+  const erase = transition.slice(0, transition.indexOf('\x1B8'));
+  assert.equal(countOf(erase, '\r\x1B[K'), frameRows, 'one clear per row the frame drew');
+  assert.equal(countOf(erase, '\x1B[1B'), frameRows - 1, 'stepped down its own rows only, never further');
+  assert.equal(countOf(erase, '\x1B[1A'), 1, 'one clamped climb to the frame top');
+  assert.ok(transition.includes('╭'), 'and the frame comes back inside the same update');
+
+  // The bounded erase must not disturb the agent's output above the frame.
+  assert.equal(countOf(plainFrame(transition), 'agent output'), 1);
+  fakeStdin.emit('keypress', 'x', { name: 'x' });
+  assert.ok(frames().length > mark, 'the draft repaint still happens');
+});
+
+test('an unchanged frame is not re-emitted while it is on screen', async (t) => {
+  const { fakeStdin, frames, keys } = await startTurn(t);
+
+  const before = frames().length;
+  keys.redraw(); // the handle the CLI calls after each agent write
+  keys.redraw();
+  assert.equal(frames().length, before, 'a byte-identical frame emits nothing — not even an erase');
+
+  fakeStdin.emit('keypress', 'x', { name: 'x' });
+  assert.ok(frames().length > before, 'a changed frame is repainted');
+  const afterChange = frames().length;
+  keys.redraw();
+  assert.equal(frames().length, afterChange, 'and the unchanged frame after it is not');
+});
+
+test('the transition omits the synchronized markers under tmux', async (t) => {
+  const previousTmux = process.env.TMUX;
+  process.env.TMUX = '1';
+  try {
+    const { frames } = await startTurn(t);
+    process.stdout.write('tick\n');
+    await frameSettled();
+
+    const text = frames().join('');
+    assert.ok(text.includes('╭'), 'the frame is still drawn under tmux');
+    assert.doesNotMatch(text, /\x1B\[\?2026[hl]/, 'tmux repaints the pane itself — no DEC 2026 marker');
+  } finally {
+    if (previousTmux === undefined) delete process.env.TMUX;
+    else process.env.TMUX = previousTmux;
+  }
+});
+
+test('a non-TTY stdout receives neither marker nor cursor escape from the frame', async (t) => {
+  const { frames } = await startTurn(t, { isTTY: false });
+
+  process.stdout.write('tick\n');
+  await frameSettled();
+
+  const text = frames().join('');
+  assert.equal(countOf(text, 'tick'), 1, 'the agent bytes still reach the pipe');
+  assert.doesNotMatch(text, /╭/, 'no frame is drawn to a pipe');
+  assert.doesNotMatch(text, /\x1B\[\?2026[hl]/, 'no DEC 2026 marker to a pipe');
+  assert.doesNotMatch(text, /\x1B\[\d*[ABCD]/, 'no cursor escape to a pipe');
+});
+
+test('the row reservation is emitted only when the redraw cannot prove it lands in place', async (t) => {
+  const { frames, keys } = await startTurn(t);
+
+  // Spinner traffic: no newline, so the redraw lands exactly on the rows the
+  // frame just vacated. Those rows are on screen, so the pre-scroll reservation
+  // is pointless — and it was the per-repaint screen scroll (F3).
+  keys.redraw();
+  let mark = frames().length;
+  process.stdout.write('\r\x1B[K⠋ thinking…');
+  keys.redraw();
+  const inPlaceDraw = frames().slice(mark).find((w) => w.includes('╭'));
+  assert.ok(inPlaceDraw, 'the frame is still redrawn in place');
+  assert.doesNotMatch(inPlaceDraw, /\n{2,}\x1B\[\d*A\x1B7/, 'no reservation when the rows are known to be free');
+
+  // A write that moved the cursor down cannot prove it: the reservation stays,
+  // because a scroll between ESC7 and ESC8 would make ESC8 restore into the frame.
+  mark = frames().length;
+  process.stdout.write('a response line\n');
+  keys.redraw();
+  const reservedDraw = frames().slice(mark).find((w) => w.includes('╭'));
+  assert.ok(reservedDraw, 'the frame is redrawn after the response line');
+  assert.match(reservedDraw, /\n{2,}\x1B\[\d*A\x1B7/, 'the reservation is kept when the proof does not hold');
 });
 
 test('the shared clamp suppresses embedded climbs on a non-TTY stdout too', async (t) => {
