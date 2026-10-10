@@ -683,6 +683,11 @@ export function persistentPromptInput({
     if (typeof onReady === 'function') {
       onReady({
         redraw: render,
+        // The lifecycle coordinator calls this on SIGINT so an IDLE prompt
+        // releases the stdin lease: remove the keypress listener, restore the
+        // incoming raw mode and disable bracketed paste. It is the same teardown
+        // the prompt's own Ctrl+C path uses — not a second implementation.
+        shutdown,
         setInput(value) {
           input = String(value || '');
           cursor = input.length;
