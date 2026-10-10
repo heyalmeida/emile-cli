@@ -63,4 +63,4 @@ Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic save
 | P1-13 turn-input cap | ✅ done — `3c68ca7` (spec: `specs/2026-10-10-turn-input-cap/`) |
 | P0-1 thinking append-only | ✅ done — `57058b4` (spec: `specs/2026-10-10-thinking-append-only/`; shared clamp extracted to `src/ui/terminal-cursor.js`) |
 | P1-6 provider system + custom endpoints | ✅ done — `7e7acd8` + `1632ddb` + `64df2df` (spec: `specs/2026-10-09-provider-system/`) |
-| all others | ⏳ pending (P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P1-13, P2-7, P2-9 (half-landed: the marker-count suites from P0-1/P0-4 cover the counting method; the shared emulator + screen-state assertions are still open), P2-12…P2-19) |
+| all others | ⏳ pending (P0-3, P1-3, P1-4, P1-5, P1-7, P1-8…P1-12, P2-7, P2-9 (half-landed: the marker-count suites from P0-1/P0-4 cover the counting method; the shared emulator + screen-state assertions are still open), P2-12…P2-19) |
