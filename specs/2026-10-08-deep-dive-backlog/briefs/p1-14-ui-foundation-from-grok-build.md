@@ -34,7 +34,7 @@ and the reason this item exists; B and C are parity work.
 | Emission via scroll-insert, never erase | `xai-ratatui-inline/src/terminal.rs:661-687` (`insert_before_rows`), slack-row math `:802-858` (two slack rows so a streaming wrap cannot autowrap off the last line) | the block moves UP into native scrollback instead of being re-painted |
 | Frame budget vs terminal rows | `xai-grok-pager/src/app/mod.rs:692-733` (`set_viewport_height` scrolls overflow out before growing), `views/agent.rs:423-429` (`rows_available_for_prompt`) | the prompt frame can never exceed the viewport (this is P2-18's requirement, done right) |
 | Cell-diff repaint (full-screen mode) | `xai-ratatui-inline/src/terminal.rs:497-541` (`try_draw`), `:148-181` (double buffer) | only changed cells are written; no cursor-up math at all |
-| Synchronized output around multi-row writes | `xai-grok-pager-render/src/terminal/common.rs:70-86` (`ESC[?2026h`/`l`) | kills tearing during fast repaints |
+| Wrapper for multi-row writes | `xai-grok-pager-render/src/render/draw.rs:500-516` (`should_emit_synchronized_output`, used at `:515`), literals `BEGIN`/`END` at `:750-751` — and note the reference **omits** the wrapper when tmux is the immediate terminal (`:38`: tmux repaints the pane and already synchronizes) | kills tearing during fast repaints; port the tmux exception too |
 | Paste as data, big pastes collapse | `xai-grok-pager/src/event_loop.rs:3610-3710` (burst coalescing), `views/prompt_widget/mod.rs:2286-2344` (`[Pasted: N lines]` chip) | P0-4 took the first half; the chip is stage B |
 | Thinking display modes | `scrollback/blocks/thinking.rs:284-455` (Collapsed / Truncated / Expanded), `finished_display_mode = Collapsed` (`:532-560`) | fold-on-finish with `ctrl+e` to expand, instead of emile's all-or-nothing `expandThinking` |
 
@@ -55,16 +55,11 @@ and the reason this item exists; B and C are parity work.
    being erased. This is P2-18's fix (`⌃ N earlier rows` / `⌄ N later rows`
    markers) — implement it HERE, in the frontier-aware layout, not as a separate
    pass.
-4. Wrap every multi-row write in synchronized output (`ESC[?2026h`/`l`),
-   reference `common.rs:70-86`.
-5. Acceptance for stage A: no code path in `src/ui/` emits an `ESC[nA` beyond
-   the clamp (P2-19's remaining sites included: `turn-keys.js:78,91`,
-   `model-picker.js:145`, `prompt-input.js:192,234,242,365` — route them through
-   `src/ui/terminal-cursor.js`), and a tall draft / long agent output leaves no
-   stale frame on any terminal size. Tests: extend `test/prompt-input-render.test.js`
-   (emulator) + `test/thinking-stream-append.test.js` (marker-count) + a new
-   `test/commit-frontier.test.js` (print-once: a committed block is never
-   re-emitted; a failed write retries once).
+4. Wrap every multi-row write in synchronized output (`ESC[?2026h`/`l`), reference `render/draw.rs:500-516` — including the reference's tmux exception (`:38`): when `$TMUX` is set, skip the wrapper.
+5. Acceptance for stage A: no code path in `src/ui/` emits an `ESC[nA` beyond the clamp. The sites still uncapped TODAY (re-verified 2026-10-10 — `thinking.js:204, 224, 265` are already clamped via `clampedCursorUp`, do NOT touch them):
+   `turn-keys.js:146, 151, 164` (re-derived after P1-13 rewrote the file), `model-picker.js:145`, `prompt-input.js:192, 234, 242, 365` — route them through `src/ui/terminal-cursor.js`. Also P2-18's height budget lives here: `buildPromptLayout` still has NO `maxRows` parameter (only `input`, `columns`, …), so a tall draft draws an unbounded block.
+6. Existing UI suites that must stay green (counts verified today): `test/prompt-input-render.test.js` (20), `test/thinking-stream-append.test.js` (9), `test/turn-input-cap.test.js` (14), `test/thinking-during-active-turn.test.js` (1). `test/prompt-input-render.test.js` already carries the ANSI emulator and pins `isTTY`/`rows` — build the new cases on top of it, and note P1-15 added `shutdown()` to the `onReady` handle in `prompt-input-persistent.js` (do not disturb it).
+7. Tests for stage A: new `test/commit-frontier.test.js` (print-once: a committed block is never re-emitted; a failed write stays uncommitted and is retried once; eviction order), plus new cases in `test/prompt-input-render.test.js` (a 200-line draft with `rows = 24` → block height ≤ rows-1, elision markers with correct counts, cursor always inside the window; `rows = 8` → still ≤ 7, no crash) and the P2-19 clamp assertions for the four sites listed in item 5.
 
 ## Stage B — component parity
 
