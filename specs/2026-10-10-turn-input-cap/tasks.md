@@ -124,4 +124,4 @@
 
 | Commit | Message | Files |
 |--------|---------|-------|
-| ⏳ (recorded after commit) | `fix(ui): stop silently truncating input typed during a running turn` | `src/ui/turn-keys.js`, `src/cli.js`, `src/ui/index.js`, `test/turn-input-cap.test.js`, `specs/2026-10-10-turn-input-cap/*`, `CHANGELOG.md`, `docs/deep-dive.md`, `features/terminal-ui.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
+| `3c68ca7` | `fix(ui): stop silently truncating input typed during a running turn` | `src/ui/turn-keys.js`, `src/cli.js`, `src/ui/index.js`, `test/turn-input-cap.test.js`, `specs/2026-10-10-turn-input-cap/*`, `CHANGELOG.md`, `docs/deep-dive.md`, `features/terminal-ui.md`, `specs/2026-10-08-deep-dive-backlog/README.md` |
