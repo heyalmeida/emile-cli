@@ -27,11 +27,13 @@ import readline from 'node:readline';
 import { C } from './theme.js';
 import { config } from '../config.js';
 import { isShiftEnterKey } from './prompt-input.js';
+import { clampedCursorUp } from './terminal-cursor.js';
 import {
   PROMPT_MATCH_LIMIT,
   buildPromptFooterSegments,
   buildPromptLayout,
   matchPromptCommands,
+  promptFrameBudget,
 } from './prompt-input-persistent.js';
 
 /**
@@ -132,6 +134,9 @@ function createLiveInput(promptOptions = {}, writeDirect = () => {}) {
       selectedIndex,
       columns,
       footerSegments,
+      // Same live budget as the idle frame: the active-turn block must fit the
+      // terminal too, or its climb could not reach its own top.
+      maxRows: promptFrameBudget(),
     });
 
     // Save the agent writer's exact cursor, draw one row below it, then move
@@ -143,11 +148,16 @@ function createLiveInput(promptOptions = {}, writeDirect = () => {}) {
     // reservation, drawing the frame could scroll after ESC7 and make ESC8
     // restore into the prompt instead of the agent output row.
     const reserveRows = layout.height + 1;
-    let output = '\n'.repeat(reserveRows) + `\x1B[${reserveRows}A\x1B7\n`;
+    // Every climb in this frame is viewport-clamped and embedded in the ONE
+    // write the frame is emitted as (the ADR-0003 lease makes that write the
+    // atomic unit): a distance longer than the viewport cannot reach scrolled
+    // rows and would land the ESC7 save slot on unrelated output.
+    const reserveUp = clampedCursorUp(reserveRows);
+    let output = '\n'.repeat(reserveRows) + (reserveUp > 0 ? `\x1B[${reserveUp}A` : '') + '\x1B7\n';
     for (const line of layout.lines) {
       output += `\r\x1B[K${line}\n`;
     }
-    const rowsUp = layout.height - (layout.inputRowIndex + layout.cursorRow);
+    const rowsUp = clampedCursorUp(layout.height - (layout.inputRowIndex + layout.cursorRow));
     if (rowsUp > 0) output += `\x1B[${rowsUp}A`;
     output += '\r';
     if (layout.cursorCol + 2 > 0) {
@@ -161,7 +171,9 @@ function createLiveInput(promptOptions = {}, writeDirect = () => {}) {
   function hideFrame() {
     if (!enabled || !visible) return;
     let output = '';
-    if (lastTopOffset > 0) output += `\x1B[${lastTopOffset}A`;
+    // Same clamp, same single write as the draw above.
+    const up = clampedCursorUp(lastTopOffset);
+    if (up > 0) output += `\x1B[${up}A`;
     output += '\r\x1B[0J\x1B8';
     writeDirect(output);
     visible = false;

@@ -23,6 +23,17 @@
 //      and inside a sub-2 ms run of text keys on terminals without bracketed
 //      paste — keypresses update state only; `render()` is called once when
 //      the burst ends.
+//   5. The block is BUDGETED by the terminal: `buildPromptLayout` is given
+//      `stdout.rows - 1` on every render and never draws more rows than that
+//      (a draft that does not fit is windowed around the cursor, with dim
+//      elision markers). Combined with rule 3 this makes the erase exact by
+//      construction: the block can always reach its own top, so a stale frame
+//      — the "prompt cortado" remnant — is structurally impossible rather
+//      than merely clamped.
+//   6. Erase + block + caret reposition are assembled into ONE write, wrapped
+//      in DEC 2026 synchronized output (`ui/commit-frontier.js`), so the
+//      terminal presents the frame atomically instead of showing the
+//      half-erased intermediate state.
 //
 // Async submit handlers temporarily own stdin (agent-turn queue listener,
 // /switch picker, /model picker, etc.). The persistent prompt detaches before
@@ -37,10 +48,23 @@ import { getPlanProgress } from '../plans.js';
 import { printUserMessage } from './user-message.js';
 import { isShiftEnterKey } from './prompt-input.js';
 import { findMentionCandidates } from '../mentions.js';
-import { writeCursorUp } from './terminal-cursor.js';
+import { clampedCursorUp } from './terminal-cursor.js';
+import { wrapSynchronizedOutput } from './commit-frontier.js';
 
 export const PROMPT_MATCH_LIMIT = 6;
 const GUTTER = 2; // every block line starts with two spaces
+
+/**
+ * The live frame budget for the prompt block, read from the terminal on every
+ * render (a resize between two renders is normal). `rows - 1` is the physical
+ * bound: the row the cursor stands on cannot be reached by a cursor-up either
+ * (`ui/terminal-cursor.js`). Below `PROMPT_MIN_BLOCK_ROWS` the layout sacrifices
+ * chrome — the footer first, then the suggestion menu — down to the block's
+ * physical minimum, so the bound is never exceeded.
+ */
+export function promptFrameBudget() {
+  return Math.max((process.stdout.rows || 24) - 1, 1);
+}
 
 import { matchCommands as matchRegistryCommands } from '../commands/registry.js';
 
@@ -134,15 +158,62 @@ function isTextKeypress(str, key = {}) {
   return !NON_TEXT_KEY_NAMES.has(key.name);
 }
 
+/** Rows the block needs at the very least (two borders plus one input row), and
+ *  the floor the caller applies to the live frame budget. Below this the
+ *  terminal cannot hold even the block's fixed chrome. */
+export const PROMPT_MIN_BLOCK_ROWS = 6;
+
+/** Elision rows a windowed draft may consume: `⌃ earlier` + `⌄ later`. */
+const ELISION_MARKER_ROWS = 2;
+
+/** Pluralises an elision count (`1 earlier row` / `12 earlier rows`). */
+function elisionLabel(count, side) {
+  return `${count} ${side} row${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * Fits the block's fixed chrome to the live frame budget by shrinking the two
+ * optional sections — the footer first (informational), then the suggestion menu
+ * (contextual, and the only section that can lose rows without hiding the
+ * draft).
+ * @returns {{ menuRows: number, showFooter: boolean }}
+ */
+function fitChrome({ budget, menuRowCount, footerVisible }) {
+  const chrome = (menu, footer) => 2 + (menu > 0 ? menu + 1 : 0) + (footer ? 1 : 0);
+  let menuRows = menuRowCount;
+  let showFooter = footerVisible;
+  // The draft area must keep room for one input row plus both elision markers.
+  while (chrome(menuRows, showFooter) + ELISION_MARKER_ROWS + 1 > budget && (showFooter || menuRows > 0)) {
+    if (showFooter) showFooter = false;
+    else menuRows -= 1;
+  }
+  return { menuRows, showFooter };
+}
+
 /**
  * Pure layout builder — the single source of truth for the prompt block.
+ *
+ * `maxRows` is the budget for the WHOLE assembled block, not only for the input
+ * rows: this builder is the only place that knows how many menu rows exist and
+ * whether a footer is present, so the chrome accounting lives here instead of
+ * being re-derived (and drifting) at each call site. The caller supplies the
+ * physical bound, `stdout.rows - 1`, recomputed on every render.
+ *
+ * **Invariant (P2-18):** `lines.length <= maxRows` always, and for any terminal
+ * with `rows >= PROMPT_MIN_BLOCK_ROWS` the drawn block therefore never exceeds
+ * `stdout.rows - 1` rows — so the erase can always reach its own top and a
+ * stale frame is structurally impossible, not merely clamped. `cursorRow` is
+ * always inside the drawn window.
+ *
  * @returns {{
  *   lines: string[],
  *   height: number,
- *   inputRowIndex: number,   // 0-based index of the first input row in lines
- *   cursorRow: number,       // 0-based input row where the cursor sits
+ *   inputRowIndex: number,   // 0-based index of the first DRAWN input row in lines
+ *   cursorRow: number,       // 0-based drawn input row where the cursor sits
  *   cursorCol: number,       // 0-based col of the cursor relative to the line start
- *   rows: Array<{ text: string, plain: string }>,
+ *   rows: Array<{ text: string, plain: string, start: number }>, // every input row
+ *   elidedEarlier: number,   // input rows hidden above the window
+ *   elidedLater: number,     // input rows hidden below the window
  * }}
  */
 export function buildPromptLayout({
@@ -154,6 +225,7 @@ export function buildPromptLayout({
   selectedIndex = 0,
   columns = 80,
   footerSegments = [],
+  maxRows = Infinity,
 } = {}) {
   const promptStr = `${message} `;
   const promptLength = stripAnsi(promptStr).length;
@@ -196,46 +268,89 @@ export function buildPromptLayout({
     cursorOffset = Math.min(Math.max(cursor - rows[i].start, 0), rows[i].plain.length);
   }
 
-  // ── Block assembly ───────────────────────────────────────────
+  // ── Frame budget: chrome first, then the draft window (P2-18) ─
+  const budget = Number.isFinite(maxRows) && maxRows > 0 ? Math.floor(maxRows) : Infinity;
   const visibleMatches = matches.slice(0, PROMPT_MATCH_LIMIT);
   // Clamp: a selection beyond the visible list (e.g. after completion
   // narrows the match list) would leave no highlighted row.
   selectedIndex = Math.min(selectedIndex, Math.max(visibleMatches.length - 1, 0));
+  const chrome = fitChrome({
+    budget,
+    menuRowCount: visibleMatches.length,
+    footerVisible: footerSegments.length > 0,
+  });
+  // Window the draft around the cursor row: a draft taller than the live region
+  // is never drawn whole, because the rows above it could scroll out of reach.
+  const available = budget === Infinity
+    ? rows.length
+    : Math.max(budget - (2 + (chrome.menuRows > 0 ? chrome.menuRows + 1 : 0) + (chrome.showFooter ? 1 : 0)), 0);
+  const windowing = rows.length > available;
+  const windowRows = windowing ? Math.max(Math.min(available - ELISION_MARKER_ROWS, rows.length), 1) : rows.length;
+  const windowStart = windowing
+    ? Math.min(Math.max(cursorRow - Math.floor(windowRows / 2), 0), rows.length - windowRows)
+    : 0;
+  // Markers are paid for out of what the window actually leaves: a terminal too
+  // small for both still reports the elision it can (see the invariant note).
+  const markerSlots = Math.min(Math.max(available - windowRows, 0), ELISION_MARKER_ROWS);
+  const elidedEarlier = windowing ? windowStart : 0;
+  const elidedLater = windowing ? rows.length - windowStart - windowRows : 0;
+  const drawnRows = windowing ? rows.slice(windowStart, windowStart + windowRows) : rows;
+  // A menu that had to shrink keeps the highlighted entry visible.
+  const menuOffset = chrome.menuRows < visibleMatches.length
+    ? Math.min(Math.max(selectedIndex - chrome.menuRows + 1, 0), visibleMatches.length - chrome.menuRows)
+    : 0;
+  const menu = visibleMatches.slice(menuOffset, menuOffset + chrome.menuRows);
+
+  // ── Block assembly ───────────────────────────────────────────
   const lines = [];
   const frameWidth = Math.max(columns - GUTTER - 3, 1);
   const topBorder = C.muted(`  ╭${'─'.repeat(frameWidth)}`);
   const bottomBorder = C.muted(`  ╰${'─'.repeat(frameWidth)}`);
   lines.push(topBorder);
-  for (const [index, cmd] of visibleMatches.entries()) {
-    const selected = index === selectedIndex;
+  for (const [index, cmd] of menu.entries()) {
+    const selected = index + menuOffset === selectedIndex;
     // Reserve `›` for the actual writing field. Reusing it here made the
     // selected suggestion look like a second prompt/input row.
     const marker = selected ? C.accent('●') : C.muted('・');
     const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
     lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
   }
-  if (visibleMatches.length > 0) lines.push(C.muted(`  ├${'─'.repeat(frameWidth)}`));
+  if (menu.length > 0) lines.push(C.muted(`  ├${'─'.repeat(frameWidth)}`));
+  if (elidedEarlier > 0 && markerSlots > 0) {
+    lines.push(`  ${C.dim(`⌃ ${elisionLabel(elidedEarlier, 'earlier')}`)}`);
+  }
   const inputRowIndex = lines.length;
-  for (const [index, row] of rows.entries()) {
-    if (index === 0) {
+  for (const [index, row] of drawnRows.entries()) {
+    // Only the draft's OWN first row carries the prompt glyph; a window that
+    // starts deeper into the draft renders every row as a continuation.
+    if (windowStart + index === 0) {
       lines.push(`  ${C.accent(promptStr)} ${row.text}`);
     } else {
       lines.push(`  ${' '.repeat(promptLength)}${row.text}`);
     }
   }
+  if (elidedLater > 0 && markerSlots > 1) {
+    lines.push(`  ${C.dim(`⌄ ${elisionLabel(elidedLater, 'later')}`)}`);
+  }
   lines.push(bottomBorder);
-  if (footerSegments.length > 0) {
+  if (chrome.showFooter) {
     lines.push('  ' + footerSegments.join(C.muted(' · ')));
   }
 
   // ── Final clip: every line fits in `columns` visible cells ───
   const clipped = lines.map(line => clipLine(line, columns));
 
+  // Hard guarantee of the invariant above. It is reachable only on a terminal
+  // too small to hold even the block's chrome (`rows < PROMPT_MIN_BLOCK_ROWS`),
+  // a budget the caller never asks for; the cursor row sits within the first
+  // `1 + menu + marker` rows, so it survives the cut.
+  if (clipped.length > budget) clipped.length = budget;
+
   return {
     lines: clipped,
     height: clipped.length,
     inputRowIndex,
-    cursorRow,
+    cursorRow: windowing ? cursorRow - windowStart : cursorRow,
     // Row 0 renders as `<gutter><prompt> <text>` (an extra separator space
     // between the prompt and the text); deeper rows render as
     // `<gutter><prompt-width spaces><text>` with no separator. The cursor
@@ -246,6 +361,8 @@ export function buildPromptLayout({
       Math.max(columns - GUTTER - 1, 0),
     ),
     rows,
+    elidedEarlier,
+    elidedLater,
   };
 }
 
@@ -379,14 +496,26 @@ export function persistentPromptInput({
       if (renderDeferred && !settled) render();
     }
 
-    function erasePreviousBlock() {
-      if (lastTopOffset === null) return;
-      // Clamped: a block taller than the viewport has lines in the scrollback
-      // that no cursor-up can reach. Erasing what fits beats repainting the
-      // block below a frame that cannot be removed (the paste duplication bug).
-      writeCursorUp(lastTopOffset);
-      process.stdout.write('\r\x1B[0J');
+    /**
+     * The erase that precedes a frame, as a chunk. Clamped: a block taller than
+     * the viewport has lines in the scrollback that no cursor-up can reach —
+     * erasing what fits beats repainting the block below a frame that cannot be
+     * removed (the paste duplication bug). The climb is embedded rather than
+     * written through `writeCursorUp` because it now belongs to the ONE write
+     * the whole frame is emitted as (the lease rule, see the file header).
+     */
+    function eraseChunk() {
+      if (lastTopOffset === null) return '';
+      const up = clampedCursorUp(lastTopOffset);
       lastTopOffset = null;
+      return `${up > 0 ? `\x1B[${up}A` : ''}\r\x1B[0J`;
+    }
+
+    /** Erases the previous block on its own — the submit path, which prints the
+     *  divider next and therefore cannot share the frame's write. */
+    function erasePreviousBlock() {
+      const chunk = eraseChunk();
+      if (chunk) process.stdout.write(chunk);
     }
 
     function render() {
@@ -415,27 +544,33 @@ export function persistentPromptInput({
         selectedIndex,
         columns,
         footerSegments: footerSegments(),
+        // The live frame budget, recomputed on every render: a resize between
+        // two renders is normal, and the block must never outgrow the terminal.
+        maxRows: promptFrameBudget(),
       });
 
-      erasePreviousBlock();
+      // Erase + block + caret reposition are assembled into ONE write and
+      // wrapped in synchronized output (DEC 2026), so the terminal presents the
+      // frame atomically instead of showing the half-erased intermediate state.
+      let out = eraseChunk();
 
-      // Write the block. Each line ends with \n, so afterwards the cursor
-      // sits exactly one line below the block at column 1 — a known
-      // position, by construction.
-      let out = '';
+      // Each line ends with \n, so afterwards the cursor sits exactly one line
+      // below the block at column 1 — a known position, by construction.
       for (const line of layout.lines) {
         out += `\r\x1B[K${line}\n`;
       }
-      process.stdout.write(out);
 
       // Move the cursor back onto the input row. Same viewport clamp as the
       // erase: with a draft taller than the screen the caret's row has scrolled
       // away, and an over-long cursor-up would land on unrelated output.
-      writeCursorUp(layout.height - (layout.inputRowIndex + layout.cursorRow));
+      const up = clampedCursorUp(layout.height - (layout.inputRowIndex + layout.cursorRow));
+      if (up > 0) out += `\x1B[${up}A`;
       if (layout.cursorCol > 0) {
         // +GUTTER accounts for the two-space prefix every line carries.
-        process.stdout.write(`\x1B[${layout.cursorCol + GUTTER}C`);
+        out += `\x1B[${layout.cursorCol + GUTTER}C`;
       }
+
+      process.stdout.write(wrapSynchronizedOutput(out));
 
       // Remember where the block top is, relative to the cursor we just
       // positioned: inputRowIndex rows above the first input row, plus the

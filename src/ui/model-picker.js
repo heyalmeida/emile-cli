@@ -4,6 +4,7 @@
 // the terminal interaction and the deterministic filtering used by it.
 import readline from 'node:readline';
 import { C } from './theme.js';
+import { writeCursorUp } from './terminal-cursor.js';
 
 export const MODEL_PICKER_LIMIT = 7;
 
@@ -141,9 +142,11 @@ export function promptSearchPicker(options, {
       }
       lines.push(`  ${C.dim('↑↓ select  Enter choose  Esc cancel')}`);
 
-      if (lastRenderedHeight > 0) {
-        process.stdout.write(`\x1B[${lastRenderedHeight}A`);
-      }
+      // Viewport-clamped: the list is bounded (MODEL_PICKER_LIMIT), but a
+      // terminal shrunk between two renders must not be asked for a climb it
+      // cannot make — the frame would be repainted below the previous one
+      // (deep-dive § 7.2, the duplication family).
+      writeCursorUp(lastRenderedHeight);
       for (const line of lines) {
         process.stdout.write(`\r\x1B[K${line}\n`);
       }

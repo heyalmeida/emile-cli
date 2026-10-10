@@ -3,7 +3,11 @@
 // screen state after each step (rebuild of the prompt block renderer).
 //
 // The emulator implements exactly the escape sequences the module emits:
-//   \r  \n  ESC[K  ESC[0J  ESC[<n>A  ESC[<n>C  and ignores SGR (ESC[...m).
+//   \r  \n  ESC[K  ESC[0J  ESC[<n>A  ESC[<n>C  and ignores SGR (ESC[...m)
+// plus the DEC 2026 synchronized-output pair (ESC[?2026h/l), which has no
+// cursor or cell effect by definition — the frame it wraps is presented
+// atomically, but every row lands exactly where it would have landed without
+// the wrapper (specs/2026-10-10-ui-commit-frontier).
 // Any wrap would therefore be visible as broken assertions, since the
 // module guarantees it never writes a line wider than the terminal.
 import test from 'node:test';
@@ -38,7 +42,9 @@ function createEmulator(columns = 80) {
     while (i < chunk.length) {
       const ch = chunk[i];
       if (ch === '\x1B') {
-        const m = /^\x1B\[([0-9;]*)([A-Za-z])/.exec(chunk.slice(i));
+        // `?`/`>`/`!` private-mode markers are accepted so the DEC 2026 pair is
+        // consumed as one sequence instead of leaking `[?2026h` as text.
+        const m = /^\x1B\[([?>!]?[0-9;]*)([A-Za-z])/.exec(chunk.slice(i));
         if (m) {
           const n = Number(m[1]) || 0;
           switch (m[2]) {
@@ -54,6 +60,8 @@ function createEmulator(columns = 80) {
               break;
             }
             case 'm': break; // SGR — zero width, ignore
+            case 'h': break; // ESC[?2026h / ESC[?2004h — mode set, no cursor effect
+            case 'l': break; // ESC[?2026l / ESC[?2004l — mode reset, no cursor effect
             default: break;  // sequences the module never emits
           }
           i += m[0].length;
@@ -146,6 +154,33 @@ function burstSettled() {
 function cursorUps(writes) {
   return (writes.join('').match(/\x1B\[(\d+)A/g) || [])
     .map((seq) => Number(/(\d+)/.exec(seq)[1]));
+}
+
+/** Every `ESC[nA` in a log stays inside the viewport (`n <= rows - 1`). */
+function assertClamped(writes, rows, label) {
+  const ups = cursorUps(writes);
+  assert.ok(ups.length > 0, `${label}: a climb is expected in this scenario`);
+  assert.ok(
+    ups.every((n) => n <= rows - 1),
+    `${label}: no ESC[nA above rows-1 = ${rows - 1} (saw ${ups.join(',')})`,
+  );
+}
+
+/** Strips SGR plus the DEC 2026 pair so frame text can be asserted directly. */
+function plainFrame(text) {
+  return String(text).replace(/\x1B\[[0-9;]*m/g, '').split('\x1B[?2026h').join('').split('\x1B[?2026l').join('');
+}
+
+/** Lines the draft hides: `row000` .. `row199`, one per input row. */
+function tallDraft(count = 200) {
+  return Array.from({ length: count }, (_, i) => `row${String(i).padStart(3, '0')}`);
+}
+
+/** Types a whole draft as one bracketed paste (the real terminal's shape). */
+function pasteDraft(fakeStdin, payload) {
+  fakeStdin.emit('keypress', undefined, { name: 'paste-start' });
+  typeKeys(fakeStdin, [...payload].flatMap((ch) => (ch === '\n' ? [{ name: 'return' }] : [ch])));
+  fakeStdin.emit('keypress', undefined, { name: 'paste-end' });
 }
 
 /** Reconstructs the draft visible on screen from the block's input rows. */
@@ -533,4 +568,260 @@ test('a coalesced burst never survives cleanup', async (t) => {
 
   assert.equal(writes.length, writesAtShutdown, 'no write lands after cleanup');
   assert.ok(writes.join('').includes('\x1B[?2004l'), 'cleanup still disables bracketed paste');
+});
+
+// ── Viewport-budgeted prompt block + the P2-19 clamps ────────────────────────
+// specs/2026-10-10-ui-commit-frontier (deep-dive P1-14 Stage A, subsuming P2-18
+// and P2-19). The block is budgeted by `stdout.rows`, so the erase can always
+// reach its own top, and no `src/ui/` renderer can ask for a climb the viewport
+// cannot honour.
+
+test('the block never exceeds its budget at any terminal height', async () => {
+  const { buildPromptLayout, PROMPT_MIN_BLOCK_ROWS } = await import('../src/ui/prompt-input-persistent.js');
+  const draft = tallDraft().join('\n');
+  const matches = Array.from({ length: 6 }, (_, i) => ({ name: `/cmd-${i}`, desc: `suggestion ${i}` }));
+
+  for (let maxRows = 1; maxRows <= 30; maxRows += 1) {
+    for (const cursor of [0, Math.floor(draft.length / 2), draft.length]) {
+      const layout = buildPromptLayout({
+        input: draft,
+        cursor,
+        columns: 80,
+        maxRows,
+        matches,
+        selectedIndex: 3,
+        footerSegments: ['model', 'tokens'],
+      });
+      assert.ok(
+        layout.lines.length <= maxRows,
+        `maxRows=${maxRows} cursor=${cursor}: height ${layout.lines.length} must not exceed the budget`,
+      );
+      if (maxRows >= PROMPT_MIN_BLOCK_ROWS) {
+        assert.ok(
+          layout.inputRowIndex + layout.cursorRow < layout.height,
+          `maxRows=${maxRows} cursor=${cursor}: the cursor row must be drawn`,
+        );
+      }
+    }
+  }
+});
+
+test('promptFrameBudget follows the live terminal and never goes below one row', async () => {
+  const { promptFrameBudget } = await import('../src/ui/prompt-input-persistent.js');
+  const saved = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
+  try {
+    for (const [rows, expected] of [[24, 23], [8, 7], [40, 39], [2, 1], [1, 1], [undefined, 23]]) {
+      Object.defineProperty(process.stdout, 'rows', { value: rows, configurable: true, writable: true });
+      assert.equal(promptFrameBudget(), expected, `rows=${String(rows)} budgets rows-1 (floored at 1)`);
+    }
+  } finally {
+    if (saved) Object.defineProperty(process.stdout, 'rows', saved);
+    else Object.defineProperty(process.stdout, 'rows', { value: undefined, configurable: true, writable: true });
+  }
+});
+
+test('a draft taller than the budget is windowed around the cursor', async () => {
+  const { buildPromptLayout } = await import('../src/ui/prompt-input-persistent.js');
+  const lines = tallDraft();
+  const draft = lines.join('\n');
+  const layoutFor = (cursor, maxRows, footerSegments = ['model']) =>
+    buildPromptLayout({ input: draft, cursor, columns: 80, maxRows, footerSegments });
+  const plain = (layout) => layout.lines.map((line) => line.replace(/\x1B\[[0-9;]*m/g, ''));
+
+  // Cursor at the end: only "earlier" rows can be hidden.
+  const atEnd = layoutFor(draft.length, 23);
+  assert.ok(atEnd.height <= 23, `block height ${atEnd.height} must not exceed the budget`);
+  assert.equal(atEnd.elidedLater, 0, 'nothing is hidden below the last row');
+  assert.ok(atEnd.elidedEarlier > 0, 'the rows above the window are hidden');
+  const endLines = plain(atEnd);
+  assert.ok(endLines.includes(`  ⌃ ${atEnd.elidedEarlier} earlier rows`), 'the hidden count is reported above the window');
+  assert.ok(!endLines.some((line) => line.includes('⌄')), 'no later marker when the window touches the end');
+  const drawnInputRows = endLines.slice(atEnd.inputRowIndex, atEnd.inputRowIndex + atEnd.cursorRow + 1);
+  assert.ok(drawnInputRows.at(-1).includes('row199'), 'the cursor row is drawn (it is the last draft row)');
+  assert.equal(atEnd.elidedEarlier + drawnInputRows.length, lines.length, 'hidden + drawn accounts for every input row');
+
+  // Cursor in the middle: both markers appear and the counts stay exact.
+  const middleCursor = draft.indexOf('row100');
+  assert.ok(middleCursor > 0, 'the fixture has a row100');
+  const inMiddle = layoutFor(middleCursor, 23);
+  assert.ok(inMiddle.height <= 23);
+  assert.ok(inMiddle.elidedEarlier > 0 && inMiddle.elidedLater > 0, 'both sides are hidden around a middle cursor');
+  const midLines = plain(inMiddle);
+  assert.ok(midLines.includes(`  ⌃ ${inMiddle.elidedEarlier} earlier rows`));
+  assert.ok(midLines.includes(`  ⌄ ${inMiddle.elidedLater} later rows`));
+  const cursorLine = midLines[inMiddle.inputRowIndex + inMiddle.cursorRow];
+  assert.match(cursorLine, /row100/, 'the cursor row is always inside the window');
+  // The window is exactly the contiguous slice the markers advertise: this
+  // fixture wraps one draft line per row, so the labels are unambiguous.
+  const drawnLabels = midLines.slice(inMiddle.inputRowIndex).filter((line) => /row\d{3}/.test(line)).map((l) => l.trim());
+  assert.equal(drawnLabels[0], `row${String(inMiddle.elidedEarlier).padStart(3, '0')}`, 'the window starts where the earlier count says');
+  assert.equal(drawnLabels.at(-1), `row${String(lines.length - 1 - inMiddle.elidedLater).padStart(3, '0')}`, 'and ends where the later count says');
+  assert.equal(drawnLabels.length, lines.length - inMiddle.elidedEarlier - inMiddle.elidedLater, 'every other row is drawn');
+
+  // A tiny terminal: same guarantee, no crash.
+  const tiny = layoutFor(draft.length, 7);
+  assert.ok(tiny.height <= 7, `tiny budget respected (height ${tiny.height})`);
+  assert.ok(tiny.cursorRow >= 0 && tiny.inputRowIndex + tiny.cursorRow < tiny.height, 'the cursor row is still drawn');
+  const tinyLines = plain(tiny);
+  assert.ok(tinyLines.some((line) => line.includes('row199')), 'the draft tail is what a caret-at-the-end shows');
+});
+
+test('a draft that fits keeps the block exactly as before (no markers)', async () => {
+  const { buildPromptLayout } = await import('../src/ui/prompt-input-persistent.js');
+  const input = 'short draft';
+  const layout = buildPromptLayout({ input, cursor: input.length, columns: 80, maxRows: 23, footerSegments: ['model'] });
+  const text = layout.lines.join('\n').replace(/\x1B\[[0-9;]*m/g, '');
+
+  assert.equal(layout.elidedEarlier, 0);
+  assert.equal(layout.elidedLater, 0);
+  assert.doesNotMatch(text, /⌃|⌄/, 'a fitting block carries no elision marker');
+  assert.equal(layout.height, 4, 'top border, input row, bottom border, footer');
+});
+
+test('a 200-line draft never draws a block taller than the terminal', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t, 80, 24);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  const lines = tallDraft();
+  pasteDraft(fakeStdin, lines.join('\n'));
+  const frame = writes.at(-1); // the whole block is ONE write
+  const height = frame.split('\n').length - 1;
+  assert.ok(height <= 23, `block height ${height} must stay within rows-1`);
+  assert.ok(plainFrame(frame).includes('⌃ '), 'the hidden rows above the window are reported');
+
+  const marker = /⌃ (\d+) earlier rows/.exec(plainFrame(frame));
+  const firstVisible = lines.find((line) => plainFrame(frame).includes(line));
+  assert.ok(marker, 'the elision marker carries a count');
+  assert.equal(Number(marker[1]), lines.indexOf(firstVisible), 'the reported count equals the hidden rows');
+
+  assertClamped(writes, 24, 'persistent prompt at rows=24');
+  assert.equal(emu.wrapped, false, 'no row wraps');
+});
+
+test('scrolling the caret re-windows the draft and reports both sides', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, 24);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  const lines = tallDraft();
+  pasteDraft(fakeStdin, lines.join('\n'));
+  // Walking left through the draft moves the caret up; the window follows it.
+  typeKeys(fakeStdin, Array.from({ length: 600 }, () => ({ name: 'left' })));
+
+  const frame = plainFrame(writes.at(-1));
+  assert.match(frame, /⌃ \d+ earlier rows/, 'rows above the window are reported');
+  assert.match(frame, /⌄ \d+ later rows/, 'rows below the window are reported');
+  assert.ok(frame.split('\n').length - 1 <= 23, 'the block stays inside the budget while scrolling');
+  assertClamped(writes, 24, 'persistent prompt while re-windowing');
+});
+
+test('a tiny terminal keeps the block inside rows-1 and the caret visible', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t, 80, 8);
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: () => 'next' });
+
+  const lines = tallDraft();
+  pasteDraft(fakeStdin, lines.join('\n'));
+  const frame = plainFrame(writes.at(-1));
+  const height = writes.at(-1).split('\n').length - 1;
+
+  assert.ok(height <= 7, `block height ${height} must stay within rows-1 = 7`);
+  assert.match(frame, /row199/, 'the caret row is drawn, no crash on a tiny terminal');
+  assertClamped(writes, 8, 'persistent prompt at rows=8');
+  assert.equal(emu.wrapped, false);
+});
+
+test('submitting a tall draft leaves no remnant: the erase reaches the block top', async (t) => {
+  const { emu, fakeStdin, writes } = withFakeTerminal(t, 80, 24);
+  const submitted = [];
+  const { persistentPromptInput } = await import('../src/ui/prompt-input-persistent.js');
+  persistentPromptInput({ onSubmit: (line) => { submitted.push(line); return 'next'; } });
+
+  const lines = tallDraft();
+  pasteDraft(fakeStdin, lines.join('\n'));
+  const rendersBeforeSubmit = renderCount(writes);
+  fakeStdin.emit('keypress', '', { name: 'return' });
+  await burstSettled();
+
+  assert.equal(submitted.length, 1, 'the complete draft was submitted');
+  assert.ok(plainFrame(writes.join('')).includes('── row000'), 'the divider carries the submitted draft');
+  assertClamped(writes, 24, 'submit path');
+  assert.equal(renderCount(writes) - rendersBeforeSubmit, 1, 'exactly one frame follows the submit');
+  assert.ok(writes.at(-1).split('\n').length - 1 <= 5, 'and it is the fresh empty prompt, not a repaint of the tall block');
+  // The erase reached the block top and erased downward, so no part of the tall
+// frame survives below the divider — the "prompt cortado" remnant cannot
+// happen, whatever the draft height was.
+  const onScreen = emu.lines.map((line) => line.replace(/\x1B\[[0-9;]*m/g, ''));
+  assert.equal(onScreen.filter((line) => line.includes('╭')).length, 1, 'only the fresh prompt block remains');
+  assert.equal(emu.text().split('── row000').length - 1, 1, 'the divider appears exactly once');
+  assert.doesNotMatch(onScreen.join('\n'), /row198/, 'no row of the erased tall frame is left on screen');
+  assert.equal(emu.wrapped, false);
+});
+
+// ── P2-19: the remaining unconditional climbs go through the shared clamp ────
+
+test('the active-turn frame clamps every climb to the viewport', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, 8);
+  const { listenTurnKeys } = await import('../src/ui/turn-keys.js');
+  const queued = [];
+  const keys = listenTurnKeys({
+    control: { requestStop() {}, shouldStop: () => false },
+    onLine: (line) => queued.push(line),
+    promptOptions: {},
+  });
+
+  try {
+    // A draft far taller than the 8-row terminal: draw, caret climb and hide all
+    // have to stay inside the viewport.
+    const lines = tallDraft(40);
+    pasteDraft(fakeStdin, lines.join('\n'));
+    typeKeys(fakeStdin, [{ name: 'left' }]);
+    assertClamped(writes, 8, 'turn-keys frame at rows=8');
+    assert.match(plainFrame(writes.join('')), /⌃ \d+ earlier rows/, 'the active frame is budgeted too');
+  } finally {
+    keys.stop();
+  }
+});
+
+test('the model picker clamps its frame climb to the viewport', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, 8);
+  const { promptSearchPicker } = await import('../src/ui/model-picker.js');
+  const options = Array.from({ length: 20 }, (_, index) => ({ value: `p/model-${index}`, label: `Model ${index}` }));
+
+  const settled = promptSearchPicker(options, { message: 'Select a model', limit: 20 });
+  typeKeys(fakeStdin, ['m']); // a longer list than the terminal is tall
+  typeKeys(fakeStdin, [{ name: 'escape' }]);
+
+  assertClamped(writes, 8, 'model picker at rows=8');
+  assert.equal(await settled, null, 'the picker still cancels cleanly');
+});
+
+test('the legacy prompt clamps its erase and caret climbs to the viewport', async (t) => {
+  const { fakeStdin, writes } = withFakeTerminal(t, 80, 8);
+  const { promptInput } = await import('../src/ui/prompt-input.js');
+  promptInput({ message: '❯', placeholder: 'draft' });
+
+  // Ten wrapped rows on an 8-row terminal: erase + caret climbs unclamped used
+  // to ask for distances the viewport cannot honour.
+  typeKeys(fakeStdin, [...'a'.repeat(700), { name: 'return', shift: true }, ...'b'.repeat(200)]);
+
+  assertClamped(writes, 8, 'prompt-input at rows=8');
+  fakeStdin.removeAllListeners('keypress');
+});
+
+test('the shared clamp suppresses embedded climbs on a non-TTY stdout too', async (t) => {
+  const { clampedCursorUp, writeCursorUp } = await import('../src/ui/terminal-cursor.js');
+  const { writes } = withFakeTerminal(t, 80, 10);
+  const saved = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+  try {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true, writable: true });
+    // An embedded climb must vanish exactly like a written one: a pipe cannot
+    // honor cursor movement, so it must not receive the escape as text either.
+    assert.equal(clampedCursorUp(9), 0, 'an embedded climb is zero on a pipe');
+    writeCursorUp(9);
+    assert.deepEqual(cursorUps(writes), [], 'no ESC[nA reaches the pipe');
+  } finally {
+    if (saved) Object.defineProperty(process.stdout, 'isTTY', saved);
+  }
 });

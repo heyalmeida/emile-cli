@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
 import { printUserMessage } from './user-message.js';
+import { clampedCursorUp } from './terminal-cursor.js';
 
 // ──────────────────────────────────────────────
 //  Interactive Prompt Input (ZONA 2/3 boundary)
@@ -188,8 +189,11 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       // Move up from input line to the top border of the old block.
       const distToTop = linesAbove + lastCursorLine;
 
-      if (distToTop > 0 && lastRenderedHeight > 0) {
-        output += `\x1B[${distToTop}A`;
+      // Clamped and embedded: the whole frame is one `output` write below, and
+      // a climb longer than the viewport cannot reach the rows it targets.
+      if (lastRenderedHeight > 0) {
+        const up = clampedCursorUp(distToTop);
+        if (up > 0) output += `\x1B[${up}A`;
       }
 
       // ── Re-draw every line (safe: only clears each line, never erases below) ─
@@ -231,15 +235,17 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
         for (let i = 0; i < oldBlockHeight - newTotal; i++) {
           output += '\r\x1B[K\n';
         }
-        output += `\x1B[${oldBlockHeight - newTotal}A`;
+        const back = clampedCursorUp(oldBlockHeight - newTotal);
+        if (back > 0) output += `\x1B[${back}A`;
       }
 
       // Reposition the cursor onto its rendered row, at its column (always
       // within the row — an overflowing column wrapped the cursor onto the
       // next line and corrupted the display)
       const cursorFromBottom = linesBelow + (currentInputLinesCount - absCursorLine);
-      if (cursorFromBottom > 0) {
-        output += `\x1B[${cursorFromBottom}A`;
+      const caretUp = clampedCursorUp(cursorFromBottom);
+      if (caretUp > 0) {
+        output += `\x1B[${caretUp}A`;
       }
       output += '\r';
       if (cursorCol > 0) {
@@ -361,10 +367,11 @@ export function promptInput({ message = '❯', placeholder = '', initial = '', s
       // Cursor is on its input row. Move up to the top border of the box,
       // then erase the entire prompt block (safe: nothing below it to destroy).
       const distToTop = 1 /* top border */ + lastCursorLine;
-      if (distToTop > 0) {
-        process.stdout.write(`\x1B[${distToTop}A`);
-      }
-      process.stdout.write('\r\x1B[J');
+      // Clamped and emitted in the SAME write as the erase: a climb longer than
+      // the viewport cannot reach the block top, and sending it separately would
+      // let the erase land on the wrong rows.
+      const up = clampedCursorUp(distToTop);
+      process.stdout.write(`${up > 0 ? `\x1B[${up}A` : ''}\r\x1B[J`);
 
       // On submission, echo the message as the command divider (the turn's
       // chapter marker — consistent with the history replay rendering).

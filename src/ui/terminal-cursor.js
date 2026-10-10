@@ -26,9 +26,16 @@ export function viewportCursorUp() {
  * under the ADR-0003 stdout lease repaints the prompt between writes, so a
  * cursor-up sent separately would be erased before the frame it belongs to
  * arrives — embed this number in their own buffer instead of calling
- * `writeCursorUp`. Same clamp, same single source of truth.
+ * `writeCursorUp`. Same clamp, same single source of truth — including the
+ * non-TTY rule below, so an embedded escape cannot outlive the guarantee that
+ * `writeCursorUp` makes for the same stream.
+ *
+ * A non-TTY stdout (pipe, redirect, `tee`) honors no cursor movement at all, so
+ * the bounded distance is zero: every embedded climb disappears from the output
+ * instead of landing in it as text.
  */
 export function clampedCursorUp(rows) {
+  if (!process.stdout.isTTY) return 0;
   return Math.min(Math.max(rows, 0), viewportCursorUp());
 }
 
