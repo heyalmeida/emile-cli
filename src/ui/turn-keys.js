@@ -53,7 +53,7 @@
 // discarded silently — the previous 400-character behaviour did exactly that
 // and truncated a pasted brief without a word.
 import readline from 'node:readline';
-import { C } from './theme.js';
+import { ROLE } from './theme.js';
 import { config } from '../config.js';
 import { isShiftEnterKey } from './prompt-input.js';
 import { clampedCursorUp } from './terminal-cursor.js';
@@ -231,7 +231,8 @@ function createLiveInput(promptOptions = {}) {
     // limit is visible BEFORE anything is dropped (same segment row the model /
     // token / MCP state already uses — no new panel).
     if (buffer.length > DRAFT_COUNTER_THRESHOLD) {
-      footerSegments.push(C.muted(`queued draft: ${formatK(buffer.length)}/${formatK(TURN_INPUT_MAX_CHARS)}`));
+      // A counter is meta punctuation: the dimmest step of the scale.
+      footerSegments.push(ROLE.meta.punct(`queued draft: ${formatK(buffer.length)}/${formatK(TURN_INPUT_MAX_CHARS)}`));
     }
     const layout = buildPromptLayout({
       input: buffer,
@@ -463,7 +464,7 @@ export function listenTurnKeys({ control, onLine, promptOptions = {} } = {}) {
       // Through the leased writer so the notice lands above the prompt frame,
       // exactly like the `queued:` preview does.
       process.stdout.write(
-        `\r\x1B[K  ${C.dim(`⚠ queued draft reached ${formatK(TURN_INPUT_MAX_CHARS)} chars — oldest text dropped`)}\n`
+        `\r\x1B[K  ${ROLE.meta.punct(`⚠ queued draft reached ${formatK(TURN_INPUT_MAX_CHARS)} chars — oldest text dropped`)}\n`
       );
     }
   }

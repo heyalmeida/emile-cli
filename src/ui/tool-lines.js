@@ -1,6 +1,6 @@
 // tool-lines.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { config } from '../config.js';
 import { turnState } from './turn-state.js';
 import { getModelInfo } from '../models.js';
@@ -31,28 +31,28 @@ export function formatToolSummary(toolCalls) {
     try { args = JSON.parse(tc.function.arguments); } catch { /* ignore */ }
 
     // Short lowercase labels for the grid-aligned tool lines (label column is
-    // 8 chars). `tone` drives the semantic color of the line (visual identity):
-    //   info = passive read · warn = mutates state · red = side effects
-    //   gold = search · fg = low-impact listing · accent = workflow/plans
-    // MCP tools (mcp__server__tool) render their last name segment.
+    // 8 chars). `tone` is a ROLE key (never a hue): it says WHY the row has a
+    // color, so the palette can be retuned without re-deciding the taxonomy —
+    // see ROLE.tool in theme.js and visual-identity § 3. MCP tools
+    // (mcp__server__tool) render their last name segment.
     let label = name;
     let arg = '';
-    let tone = 'accent';
+    let tone = 'workflow';
 
-    if (name === 'readFile' && args.path) { label = 'read'; arg = args.path; tone = 'info'; }
-    else if (name === 'writeFile' && args.path) { label = 'write'; arg = args.path; tone = 'warn'; }
-    else if (name === 'editFile' && args.path) { label = 'edit'; arg = args.path; tone = 'warn'; }
-    else if (name === 'listDir') { label = 'list'; arg = args.path || '.'; tone = 'fg'; }
-    else if (name === 'findFiles' && args.pattern) { label = 'find'; arg = args.pattern; tone = 'gold'; }
-    else if (name === 'grepSearch' && args.query) { label = 'grep'; arg = args.query; tone = 'gold'; }
-    else if (name === 'runCommand' && args.command) { label = 'exec'; arg = args.command.substring(0, 120); tone = 'red'; }
-    else if (name === 'proposeMemory') { label = 'memory'; arg = 'candidate'; tone = 'warn'; }
-    else if (name === 'recallMemory') { label = 'recall'; arg = 'global memory'; tone = 'info'; }
-    else if (name === 'searchWeb' && args.query) { label = 'web'; arg = stripTerminalControls(args.query); tone = 'gold'; }
+    if (name === 'readFile' && args.path) { label = 'read'; arg = args.path; tone = 'passive'; }
+    else if (name === 'writeFile' && args.path) { label = 'write'; arg = args.path; tone = 'mutate'; }
+    else if (name === 'editFile' && args.path) { label = 'edit'; arg = args.path; tone = 'mutate'; }
+    else if (name === 'listDir') { label = 'list'; arg = args.path || '.'; tone = 'plain'; }
+    else if (name === 'findFiles' && args.pattern) { label = 'find'; arg = args.pattern; tone = 'search'; }
+    else if (name === 'grepSearch' && args.query) { label = 'grep'; arg = args.query; tone = 'search'; }
+    else if (name === 'runCommand' && args.command) { label = 'exec'; arg = args.command.substring(0, 120); tone = 'danger'; }
+    else if (name === 'proposeMemory') { label = 'memory'; arg = 'candidate'; tone = 'mutate'; }
+    else if (name === 'recallMemory') { label = 'recall'; arg = 'global memory'; tone = 'passive'; }
+    else if (name === 'searchWeb' && args.query) { label = 'web'; arg = stripTerminalControls(args.query); tone = 'search'; }
     else if (name === 'browsePage' && args.url) {
       label = 'browse';
       try { arg = new URL(args.url).hostname; } catch { arg = 'invalid URL'; }
-      tone = 'info';
+      tone = 'passive';
     }
     else if (name === 'createPlan') { label = 'plan'; }
     else if (name === 'updateTask') { label = 'task'; }
@@ -62,7 +62,7 @@ export function formatToolSummary(toolCalls) {
       const tool = name.slice(separator + 2);
       label = `[mcp:${server}]`;
       arg = tool;
-      tone = 'info';
+      tone = 'passive';
     }
 
     details.push({
@@ -121,7 +121,9 @@ export function printToolSummary(toolCalls) {
   };
 
   for (const d of info.details) {
-    const tone = C[d.tone] || C.accent;
+    // The tone is a role key; an unrecognised one falls back to the workflow
+    // role, exactly as the previous hue lookup fell back to the accent.
+    const tone = ROLE.tool[d.tone] || ROLE.tool.workflow;
     if (d.mcp) {
       const maxMcp = Math.max(cols - 6, 20);
       const mcpLabel = d.label.length > maxMcp ? d.label.slice(0, maxMcp - 1) + '…' : d.label;

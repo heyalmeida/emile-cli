@@ -48,6 +48,19 @@
           "message": "Do not define a local color helper here; consume the canonical UI palette from src/ui/theme.js."
         }]
       }
+    },
+    {
+      "files": ["src/ui/**/*.js"],
+      "excludedFiles": ["src/ui/theme.js"],
+      "rules": {
+        "no-restricted-syntax": ["error", {
+          "selector": "Literal[value=/38;2;/], TemplateElement[value.raw=/38;2;/]",
+          "message": "One palette, one source: no truecolor literal outside src/ui/theme.js — consume C or ROLE instead."
+        }, {
+          "selector": "FunctionDeclaration[id.name='rgb']",
+          "message": "The rgb() helper lives in src/ui/theme.js only; consume C or ROLE instead."
+        }]
+      }
     }
   ]
 }

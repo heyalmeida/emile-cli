@@ -41,7 +41,7 @@
 // so two keypress consumers can never race and nested cleanup cannot leave the
 // REPL paused.
 import readline from 'node:readline';
-import { C, stripAnsi, fmtK } from './theme.js';
+import { C, ROLE, stripAnsi, fmtK } from './theme.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import { getPlanProgress } from '../plans.js';
@@ -235,7 +235,7 @@ export function buildPromptLayout({
   // ── Input rows (never wider than the terminal) ────────────────
   const rows = [];
   if (input === '' && placeholder) {
-    rows.push({ text: C.muted(clipLine(placeholder, inputWidth)), plain: clipLine(placeholder, inputWidth), start: 0 });
+    rows.push({ text: ROLE.meta.label(clipLine(placeholder, inputWidth)), plain: clipLine(placeholder, inputWidth), start: 0 });
   } else if (input === '') {
     rows.push({ text: '', plain: '', start: 0 });
   } else {
@@ -304,37 +304,38 @@ export function buildPromptLayout({
   // ── Block assembly ───────────────────────────────────────────
   const lines = [];
   const frameWidth = Math.max(columns - GUTTER - 3, 1);
-  const topBorder = C.muted(`  ╭${'─'.repeat(frameWidth)}`);
-  const bottomBorder = C.muted(`  ╰${'─'.repeat(frameWidth)}`);
+  const topBorder = ROLE.border.box(`  ╭${'─'.repeat(frameWidth)}`);
+  const bottomBorder = ROLE.border.box(`  ╰${'─'.repeat(frameWidth)}`);
   lines.push(topBorder);
   for (const [index, cmd] of menu.entries()) {
     const selected = index + menuOffset === selectedIndex;
     // Reserve `›` for the actual writing field. Reusing it here made the
     // selected suggestion look like a second prompt/input row.
-    const marker = selected ? C.accent('●') : C.muted('・');
-    const label = `${cmd.name.padEnd(15)} ${C.muted(cmd.desc)}`;
-    lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
+    const marker = selected ? ROLE.border.focused('●') : ROLE.meta.label('・');
+    const label = `${cmd.name.padEnd(15)} ${ROLE.meta.label(cmd.desc)}`;
+    lines.push(`  ${marker} ${selected ? C.bold(ROLE.border.focused(label)) : ROLE.user(label)}`);
   }
-  if (menu.length > 0) lines.push(C.muted(`  ├${'─'.repeat(frameWidth)}`));
+  if (menu.length > 0) lines.push(ROLE.border.box(`  ├${'─'.repeat(frameWidth)}`));
   if (elidedEarlier > 0 && markerSlots > 0) {
-    lines.push(`  ${C.dim(`⌃ ${elisionLabel(elidedEarlier, 'earlier')}`)}`);
+    // An elision marker is meta punctuation: the dimmest step of the scale.
+    lines.push(`  ${ROLE.meta.punct(`⌃ ${elisionLabel(elidedEarlier, 'earlier')}`)}`);
   }
   const inputRowIndex = lines.length;
   for (const [index, row] of drawnRows.entries()) {
     // Only the draft's OWN first row carries the prompt glyph; a window that
     // starts deeper into the draft renders every row as a continuation.
     if (windowStart + index === 0) {
-      lines.push(`  ${C.accent(promptStr)} ${row.text}`);
+      lines.push(`  ${ROLE.border.focused(promptStr)} ${row.text}`);
     } else {
       lines.push(`  ${' '.repeat(promptLength)}${row.text}`);
     }
   }
   if (elidedLater > 0 && markerSlots > 1) {
-    lines.push(`  ${C.dim(`⌄ ${elisionLabel(elidedLater, 'later')}`)}`);
+    lines.push(`  ${ROLE.meta.punct(`⌄ ${elisionLabel(elidedLater, 'later')}`)}`);
   }
   lines.push(bottomBorder);
   if (chrome.showFooter) {
-    lines.push('  ' + footerSegments.join(C.muted(' · ')));
+    lines.push('  ' + footerSegments.join(ROLE.meta.label(' · ')));
   }
 
   // ── Final clip: every line fits in `columns` visible cells ───
@@ -367,28 +368,32 @@ export function buildPromptLayout({
 }
 
 function buildFooterInfo(stats, modelName, modelInfo, supportsReasoning, effort, mcpInfo) {
-  const infoSegments = [C.warn(`${config.plansMode ? 'plan' : 'build'} (Tab)`)];
-  infoSegments.push(C.muted(`${modelName}${supportsReasoning ? ` (${effort})` : ''}`));
+  // Footer segments are labels/metrics: the middle step of the de-emphasis
+  // scale, joined by the same separator role. The plan/build indicator is a
+  // MODE state (warn while plans mode is on), which is why it keeps that role.
+  const infoSegments = [ROLE.warn(`${config.plansMode ? 'plan' : 'build'} (Tab)`)];
+  infoSegments.push(ROLE.meta.label(`${modelName}${supportsReasoning ? ` (${effort})` : ''}`));
   if (stats) {
     const limit = stats.contextLimit || modelInfo.context;
     const isEstimated = !stats.lastPromptTokens;
     const ctxTokens = stats.lastPromptTokens || stats.estimatedContextTokens || 0;
     if (ctxTokens > 0) {
       const pct = Math.round((ctxTokens / limit) * 100);
-      infoSegments.push(C.muted(`${isEstimated ? '~' : ''}tokens: ${fmtK(ctxTokens)} / ${fmtK(limit)} (${pct}%)`));
+      infoSegments.push(ROLE.meta.label(`${isEstimated ? '~' : ''}tokens: ${fmtK(ctxTokens)} / ${fmtK(limit)} (${pct}%)`));
     }
     if (stats.promptTokens > 0 && stats.cachedPromptTokens > 0) {
       const hitPct = Math.round((stats.cachedPromptTokens / stats.promptTokens) * 100);
-      infoSegments.push(C.muted(`cache hit: ${hitPct}%`));
+      infoSegments.push(ROLE.meta.label(`cache hit: ${hitPct}%`));
     }
   }
-  if (mcpInfo) infoSegments.push(C.muted(`MCP: ${mcpInfo}`));
+  if (mcpInfo) infoSegments.push(ROLE.meta.label(`MCP: ${mcpInfo}`));
   if (config.plansMode) {
     const progress = getPlanProgress();
     if (progress) {
       const done = progress.completed >= progress.total;
       const text = `tasks: ${progress.completed}/${progress.total}`;
-      infoSegments.push(done ? C.success(text) : C.warn(text));
+      // A completed plan IS a success state, so the state role is correct here.
+      infoSegments.push(done ? ROLE.success(text) : ROLE.warn(text));
     }
   }
   return infoSegments;

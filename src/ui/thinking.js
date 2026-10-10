@@ -1,6 +1,6 @@
 // thinking.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, wrapText } from './theme.js';
+import { ROLE, GAP, wrapText } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
 import { clampedCursorUp } from './terminal-cursor.js';
@@ -114,12 +114,16 @@ export function startThinkingStream() {
   // stays until the stream ends. GAP.section provides the single gap after the
   // user divider (vertical rhythm rule).
   if (_startedAsExpanded) {
-    { const _o = `${GAP.section}  ${C.muted('✻')} ${C.muted('Thinking…')}\n`; debugWrite('thinking.start', _o); process.stdout.write(_o); }
+    { const _o = `${GAP.section}  ${ROLE.thinking('✻')} ${ROLE.thinking('Thinking…')}\n`; debugWrite('thinking.start', _o); process.stdout.write(_o); }
     _thinkingHeaderPrinted = true;
     _thinkingHeaderLineCount = 1;
   } else {
     { const _a = GAP.section; debugWrite('thinking.start.collapsed.a', _a); process.stdout.write(_a); }
-    { const _b = `  ${C.ghost('··· thinking')}\n`; debugWrite('thinking.start.collapsed.b', _b); process.stdout.write(_b); }
+    // De-emphasis by ATTRIBUTE (SGR 2 on the terminal's own foreground), not by
+    // a hardcoded near-background gray: this line is the only signal that
+    // reasoning happened, so it must survive every profile's background
+    // (visual-identity § 2; reference `theme/terminal_default.rs:12-18`).
+    { const _b = `  ${ROLE.meta.punct('··· thinking')}\n`; debugWrite('thinking.start.collapsed.b', _b); process.stdout.write(_b); }
   }
 }
 
@@ -149,7 +153,7 @@ function appendThinkingLines(newLines) {
     // text is unchanged the row is already correct, so closing it is enough —
     // re-emitting identical text would be a second occurrence of that line.
     if (newLines[tailIndex] !== _openTailText) {
-      output += '\r\x1B[K' + '  ' + C.muted(newLines[tailIndex]);
+      output += '\r\x1B[K' + '  ' + ROLE.thinking(newLines[tailIndex]);
     }
     if (lastIndex > _flushedLineCount) {
       output += '\n'; // that row is now closed; its successors are new
@@ -161,7 +165,7 @@ function appendThinkingLines(newLines) {
 
   for (let i = next; i < newLines.length; i++) {
     const isOpenTail = i === lastIndex;
-    output += `  ${C.muted(newLines[i])}${isOpenTail ? '' : '\n'}`;
+    output += `  ${ROLE.thinking(newLines[i])}${isOpenTail ? '' : '\n'}`;
   }
 
   debugWrite('thinking.appendOnly', output);
@@ -218,12 +222,12 @@ export function appendThinkingStream(delta) {
 
   // Re-render header
   if (_thinkingHeaderPrinted) {
-    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted('Thinking…')}\n`;
+    output += '\r\x1B[K' + `  ${ROLE.thinking('✻')} ${ROLE.thinking('Thinking…')}\n`;
   }
 
   // Re-render muted lines, each with line-erase prefix
   for (const line of newLines) {
-    output += '\r\x1B[K' + '  ' + C.muted(line) + '\n';
+    output += '\r\x1B[K' + '  ' + ROLE.thinking(line) + '\n';
   }
 
   // If new content has fewer lines, clear the leftover lines
@@ -253,12 +257,13 @@ export function endThinkingStream() {
   const closeId = `thinking:${_thinkingStreamSeq}:close`;
 
   if (!_startedAsExpanded) {
-    // Collapsed: rewrite the ghost indicator line in place as the final
-    // one-liner (`··· thought Ns`). Exactly one row — rhythm preserved, no
-    // cursor-up math beyond the single line itself, so the frontier writes it
-    // verbatim (a one-row block is never wrapped in synchronized output).
+    // Collapsed: rewrite the indicator line in place as the final one-liner
+    // (`··· thought Ns`). Exactly one row — rhythm preserved, no cursor-up math
+    // beyond the single line itself, so the frontier writes it verbatim (a
+    // one-row block is never wrapped in synchronized output). Same DIM rule as
+    // the start line above.
     if (wordCount > 0) {
-      const _o = `\x1B[1A\r\x1B[2K  ${C.ghost(`··· thought ${durationStr}`)}\n`;
+      const _o = `\x1B[1A\r\x1B[2K  ${ROLE.meta.punct(`··· thought ${durationStr}`)}\n`;
       debugWrite('thinking.end.collapsed', _o);
       outputFrontier.commit({ id: closeId, text: _o });
     }
@@ -270,7 +275,7 @@ export function endThinkingStream() {
     let tail = '';
     if (_openTailWritten) tail += '\n';
     debugWrite('thinking.end.appendOnly', tail); process.stdout.write(tail);
-    outputFrontier.commit({ id: closeId, text: `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n` });
+    outputFrontier.commit({ id: closeId, text: `  ${ROLE.thinking('✻')} ${ROLE.thinking(`Thought for ${durationStr}`)}\n` });
   } else if (_thinkingHeaderPrinted) {
     // Expanded and still fitting: keep the streamed text in place and update
     // only the known header row with the final duration. Move back to the end
@@ -282,7 +287,7 @@ export function endThinkingStream() {
     const up = clampedCursorUp(totalLines);
     let output = '';
     if (up > 0) output += `\x1B[${up}A`;
-    output += '\r\x1B[K' + `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    output += '\r\x1B[K' + `  ${ROLE.thinking('✻')} ${ROLE.thinking(`Thought for ${durationStr}`)}\n`;
     if (totalLines > _thinkingHeaderLineCount) {
       output += `\x1B[${totalLines - _thinkingHeaderLineCount}B`;
     }
@@ -319,15 +324,16 @@ export function printThinking(content) {
   let out = '\n\n';
 
   if (!isVerbose) {
-    // Collapsed: single ghost line — thinking is background noise
-    out += `  ${C.ghost(`··· thought ${durationStr}`)}\n`;
+    // Collapsed: single dim line — thinking is background noise, but the fact
+    // that it happened must stay readable on any background.
+    out += `  ${ROLE.meta.punct(`··· thought ${durationStr}`)}\n`;
   } else {
     // Verbose: muted header + full content (no truncation — every line is wrapped)
-    out += `  ${C.muted('✻')} ${C.muted(`Thought for ${durationStr}`)}\n`;
+    out += `  ${ROLE.thinking('✻')} ${ROLE.thinking(`Thought for ${durationStr}`)}\n`;
     for (const rawLine of allLines) {
       for (const wrapped of wrapText(rawLine, innerWidth)) {
         if (wrapped.trim().length > 0) {
-          out += `    ${C.muted(wrapped)}\n`;
+          out += `    ${ROLE.thinking(wrapped)}\n`;
         }
       }
     }

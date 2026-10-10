@@ -31,14 +31,55 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | `C.red` | `#F7768E` (red) | Error, failure, command execution (side effects) |
 | `C.fg` | `#A9B1D6` (grayish blue) | Main content text, listing tools |
 | `C.muted` | `#565F89` (gray) | Box borders, metadata, footers, dividers |
-| `C.ghost` | `#3B4261` (dark gray) | Thinking block — near-invisible by design |
-| `C.dim` | (ANSI dim) | Secondary text (tool args, status headers) |
+| `C.ghost` | `#3B4261` (dark gray) | **Reserved**: decorative marks inside an already-visible line — never text the user must read (see the DIM rule below) |
+| `C.dim` | (ANSI dim) | The dimmest de-emphasis step: punctuation, counts, collapsed reasoning |
+
+### Semantic roles — `ROLE`
+
+`C` answers *which color*; `ROLE` (also in `src/ui/theme.js`) answers *what this
+line is*. Components should name a **role**, not a hue: that is what lets the
+palette be retuned without re-deciding meaning at every call site (references:
+`theme/mod.rs:1` "all colors come from the `Theme` struct", `theme/tokyonight.rs:56-64`).
+**Every role is an alias into `C`** — it must never define a value of its own
+(`test/token-roles.test.js` asserts this member by member).
+
+| Role | Token | Meaning |
+|------|-------|---------|
+| `ROLE.user` | `fg` | the user's own words (message divider text) |
+| `ROLE.agent` | `accent` | the agent's identity label |
+| `ROLE.thinking` | `muted` | reasoning header + body |
+| `ROLE.tool.passive` | `info` | read / recall / fetch — informational |
+| `ROLE.tool.mutate` | `warn` | write / edit / memory proposal — changes state |
+| `ROLE.tool.danger` | `red` | shell execution — side effects |
+| `ROLE.tool.search` | `gold` | grep / find / web search |
+| `ROLE.tool.plain` | `fg` | listing — low impact |
+| `ROLE.tool.workflow` | `accent` | plan / task / MCP / unknown |
+| `ROLE.success` / `ROLE.warn` / `ROLE.running` / `ROLE.error` | `success` / `warn` / `warn` / `red` | **states**: a state color reports a state |
+| `ROLE.diff.{insert,delete,context}` | `success` / `red` / `muted` | diff lines |
+| `ROLE.meta.punct` | `dim` | the dimmest step: counts, elision markers, `(+N chars)`, `↳ N tools` |
+| `ROLE.meta.label` | `muted` | the middle step: labels, footers, separators, args context, metrics, borders |
+| `ROLE.border.{box,focused}` | `muted` / `accent` | box chrome, and the focused element inside it |
 
 **Usage rules:**
 
 - Red is exclusive to errors. Confirmation warnings use `warn`.
 - A single output line uses at most 2 colors besides `fg`/`muted`.
-- Box borders are always `muted`; a box label may use `accent` when it's an active element.
+- Box borders are always `muted` (`ROLE.border.box`); a box label may use `accent` when it's an active element.
+- **De-emphasis is chosen by FUNCTION, not by darkness** (reference
+  `theme/tokyonight.rs:70-74`): punctuation and counts take `ROLE.meta.punct`
+  (SGR DIM); labels, footers, args and borders take `ROLE.meta.label`.
+- **Tertiary text de-emphasizes with the DIM attribute** (`ROLE.meta.punct`, SGR 2)
+  on the terminal's own foreground — never with a hardcoded near-background gray.
+  Many dark profiles set their dark slots very close to the background, so such
+  text disappears entirely (reference `theme/terminal_default.rs:12-18`:
+  *"Do not paint body or status text as `DarkGray`"*). `C.ghost` is **reserved for
+  decorative marks inside an already-visible line** and must never carry text the
+  user has to read.
+- **A state color reports a state, never a metric.** `cache hit: 87%` is a label
+  (`ROLE.meta.label`), not a success; `tasks: 4/4` complete IS a success.
+- **One palette, one source.** No module outside `src/ui/theme.js` may declare a
+  color helper or a truecolor literal — enforced by lint over `src/ui/**`
+  (`no-restricted-syntax`).
 
 ---
 
@@ -51,9 +92,9 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Open boxes** | `boxTopOpen`/`boxBottomOpen` | **Top and bottom borders only** — no left/right rails. Content indents 4 spaces (`BOX_INDENT`). Border ANSI parts are composed separately: never nest a styled label inside `C.muted(...)` or the label's RESET kills the border color |
 | **Input prompt** | `persistentPromptInput` / `buildPromptLayout` | Persistent boxed writing field shared by idle and active turns, with slash-command autocomplete, ↑/↓ menu navigation and multiline editing via `Shift+Enter`; one blank line above the block. The pure layout clips every physical row, preserves a trailing ANSI reset and keeps the cursor within the exact wrapped row. `❯` is reserved for the real input row; the selected autocomplete item uses `●`. Tab accepts that match (or toggles Plans mode without one), while async owners transfer stdin exclusively. A paste repaints the block **once** (bracketed payload, or a burst of ≥3 text keypresses within 2 ms on terminals without bracketed paste) and no cursor-up exceeds the viewport height or is emitted on a non-TTY stdout. The block is **budgeted by the terminal** (`stdout.rows - 1`, recomputed per render) and a draft that does not fit is windowed around the cursor — the drawn frame can always reach its own top, so a stale frame cannot survive. Erase + block + caret are one write wrapped in DEC 2026 synchronized output |
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
-| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
-| **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
-| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic tone of the operation and each physical line remains bounded/sanitized |
+| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: a dim one-liner (`··· thinking` → `··· thought Ns`, `ROLE.meta.punct` — DIM on the terminal's own foreground, never a near-background gray, so the only signal that reasoning happened survives every profile) |
+| **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` (`ROLE.thinking`) + full muted content; collapsed shows the dim one-liner |
+| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic **role** of the operation (`ROLE.tool.*` — the tone vocabulary is `passive/mutate/danger/search/plain/workflow`, never a hue) and each physical line remains bounded/sanitized |
 | **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
 | **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |
@@ -63,7 +104,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Global memory panels** | `printMemoryStatus` / `printMemoryRecords` / `printMemoryDoctor` | Open-box status/list/doctor surfaces. Status shows only mode, session pause, counts, health and revision; content appears only after an explicit list/show/forget preview. Every dynamic field is control-stripped and lists are capped at 50 displayed records |
 | **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
-| **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md` |
+| **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md`. Every metric is `ROLE.meta.label` — a cache-hit rate is information, not a success state |
 
 **Semantic tool colors** (tool lines):
 
@@ -140,7 +181,10 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 
 Before closing any UI change:
 
-- [ ] Used only `C` tokens (no hardcoded colors outside the palette)?
+- [ ] Used only `C`/`ROLE` tokens (no hardcoded colors outside the palette, no local color helper)?
+- [ ] Named a **role** (`ROLE.*`) instead of a hue, and picked the de-emphasis step **by function** (punct vs label)?
+- [ ] Any state color (`success`/`warn`/`error`) actually reports a state, not a metric?
+- [ ] Nothing the user must read is rendered in `C.ghost` or another near-background gray?
 - [ ] Works at 60/80/120+ columns?
 - [ ] Waiting state has feedback? Error uses `red` and success uses `success`?
 - [ ] Correct ANSI reset (no color leaking into the next line)?

@@ -1,6 +1,6 @@
 // response.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
@@ -59,7 +59,8 @@ export function printAssistantResponse(content) {
   if (turnState.toolsRun > 0) {
     const label = turnState.toolsRun === 1 ? '1 tool' : `${turnState.toolsRun} tools`;
     out += GAP.section;
-    out += `  ${C.dim(`↳ ${label}`)}\n`;
+    // A count is meta punctuation: the dimmest step of the scale.
+    out += `  ${ROLE.meta.punct(`↳ ${label}`)}\n`;
     turnState.toolsRun = 0;
   }
 
@@ -68,7 +69,7 @@ export function printAssistantResponse(content) {
 
   // Open box top — ANSI parts composed separately: the accent label's RESET
   // must never kill the muted color of the dashes after it
-  out += `  ${C.muted('╭─')} ${C.bold(C.accent('emile'))} ${C.muted('─'.repeat(Math.max(boxW - 10, 0)))}\n`;
+  out += `  ${ROLE.border.box('╭─')} ${C.bold(ROLE.agent('emile'))} ${ROLE.border.box('─'.repeat(Math.max(boxW - 10, 0)))}\n`;
 
   // Inner top padding — breathing room under the border
   out += '\n';

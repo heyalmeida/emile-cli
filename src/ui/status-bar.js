@@ -1,6 +1,6 @@
 // status-bar.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
@@ -39,16 +39,21 @@ export function printSessionBar({ sessionId, model, messageCount, stats, mcpInfo
   }
 
   // Build segments: session | model | msgs | tokens | cache | MCP
-  const sep = C.muted(' │ ');
+  // All of them are labels/metrics, so they take the middle step of the
+  // de-emphasis scale; a state color reports a STATE, and a cache hit rate is a
+  // metric (visual-identity § 2).
+  const sep = ROLE.meta.label(' │ ');
 
   const segments = [
-    C.muted(shortId),
-    C.accent(shortModel),
-    C.muted(`msgs: ${C.bold(C.fg(String(messageCount)))}`),
+    ROLE.meta.label(shortId),
+    ROLE.agent(shortModel),
+    ROLE.meta.label(`msgs: ${C.bold(ROLE.user(String(messageCount)))}`),
   ];
 
-  if (tokenStr) segments.push(C.muted(tokenStr));
-  if (cacheStr) segments.push(C.success(cacheStr));
+  if (tokenStr) segments.push(ROLE.meta.label(tokenStr));
+  if (cacheStr) segments.push(ROLE.meta.label(cacheStr));
+  // MCP state keeps its informational cyan: Stage A adds no role for it, and a
+  // rename must not become a restyle.
   if (mcpInfo)  segments.push(C.info(`MCP: ${mcpInfo}`));
 
   const bar = segments.join(sep);
@@ -56,6 +61,6 @@ export function printSessionBar({ sessionId, model, messageCount, stats, mcpInfo
 
   console.log();
   // Status bar line with separator above
-  process.stdout.write(C.muted('  ' + '─'.repeat(lineW)) + '\n');
+  process.stdout.write(ROLE.border.box('  ' + '─'.repeat(lineW)) + '\n');
   process.stdout.write('  ' + bar + '\n');
 }
