@@ -38,12 +38,17 @@ function createTerminalEmulator(columns = 80) {
         continue;
       }
       if (chunk[index] === '\x1B') {
-        const match = /^\x1B\[([0-9;]*)([A-Za-z])/.exec(chunk.slice(index));
+        // `?`/`>`/`!` private-mode markers are accepted so the DEC 2026 pair the
+        // lease now wraps every frame transition in is consumed as one sequence
+        // instead of leaking `[?2026h` onto the emulated screen
+        // (specs/2026-10-10-frame-transition-flicker).
+        const match = /^\x1B\[([?>!]?[0-9;]*)([A-Za-z])/.exec(chunk.slice(index));
         if (match) {
           const amount = Number(match[1]) || 0;
           if (match[2] === 'A') state.row = Math.max(0, state.row - amount);
           else if (match[2] === 'B') { state.row += amount; ensureRow(state.row); }
           else if (match[2] === 'C') state.col += amount;
+          else if (match[2] === 'h' || match[2] === 'l') { /* mode set/reset — no cursor effect */ }
           else if (match[2] === 'K') {
             ensureRow(state.row);
             state.lines[state.row] = match[1] === '2' ? '' : state.lines[state.row].slice(0, state.col);
@@ -114,12 +119,19 @@ function stripTerminalCodes(value) {
     .replace(/\x1b8/g, '');
 }
 
+const countOf = (text, needle) => text.split(needle).length - 1;
+
+/** Waits for the coalesced frame redraw (one event-loop turn). */
+function transitionSettled() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 function lastDraw(text) {
   const start = text.lastIndexOf('\x1B7');
   return stripTerminalCodes(start >= 0 ? text.slice(start) : text);
 }
 
-test('the standard full prompt frame is drawn during the turn and survives agent writes', () => {
+test('the standard full prompt frame is drawn during the turn and survives agent writes', async () => {
   const stdin = fakeStdin();
   const restoreStdin = swapStdin(stdin);
   const previousIsTTY = process.stdout.isTTY;
@@ -145,14 +157,32 @@ test('the standard full prompt frame is drawn during the turn and survives agent
     assert.doesNotMatch(initial, /type a message and press Enter to queue/);
     assert.equal(out.text().endsWith('\x1B8'), false, 'the real cursor stays in the prompt instead of returning to the spinner');
 
-    // The agent writes several lines; the cursor moves down on the terminal.
+    // The agent writes several lines inside ONE event-loop turn. Since P1-16
+    // (specs/2026-10-10-frame-transition-flicker) they are one BURST: the frame
+    // is erased once, every line lands inside the same synchronized update, and
+    // the intact prompt is redrawn exactly once — not once per write, which was
+    // the repaint storm the user saw as flicker.
+    const framesBeforeBurst = countOf(out.text(), 'Enter prompt or /help');
+    const updatesBeforeBurst = countOf(out.text(), '\x1b[?2026h');
     process.stdout.write('agent line one\n');
     process.stdout.write('agent line two\n');
     process.stdout.write('agent line three\n');
-    assert.ok(
-      (out.text().match(/Enter prompt or \/help/g) || []).length >= 4,
-      'every agent write redraws the intact prompt without waiting for a keypress',
+    assert.equal(
+      countOf(out.text(), 'Enter prompt or /help'),
+      framesBeforeBurst,
+      'no half-written frame: the redraw is owed, not rushed out mid-burst',
     );
+    assert.equal(countOf(out.text(), '\x1b[?2026h'), updatesBeforeBurst + 1, 'the burst opens exactly one update');
+    await transitionSettled();
+    assert.equal(countOf(out.text(), '\x1b[?2026l'), updatesBeforeBurst + 1, 'and closes it exactly once');
+    assert.equal(
+      countOf(out.text(), 'Enter prompt or /help'),
+      framesBeforeBurst + 1,
+      'every agent write redraws the intact prompt without waiting for a keypress — once per turn',
+    );
+    for (const line of ['agent line one', 'agent line two', 'agent line three']) {
+      assert.equal(countOf(stripTerminalCodes(out.text()), line), 1, `the agent's line lands exactly once: ${line}`);
+    }
 
     // The user types "abc"; the input row must show it without disturbing
     // the agent output above.

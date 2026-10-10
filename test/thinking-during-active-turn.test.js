@@ -27,12 +27,17 @@ function createTerminalEmulator(columns = 80) {
       if (chunk.startsWith('\x1B7', index)) { state.saved = { row: state.row, col: state.col }; index += 2; continue; }
       if (chunk.startsWith('\x1B8', index)) { if (state.saved) ({ row: state.row, col: state.col } = state.saved); index += 2; continue; }
       if (chunk[index] === '\x1B') {
-        const match = /^\x1B\[([0-9;]*)([A-Za-z])/.exec(chunk.slice(index));
+        // Private-mode markers are accepted so the DEC 2026 pair that now wraps
+        // every frame transition is consumed as one sequence instead of leaking
+        // `[?2026h` onto the emulated screen
+        // (specs/2026-10-10-frame-transition-flicker).
+        const match = /^\x1B\[([?>!]?[0-9;]*)([A-Za-z])/.exec(chunk.slice(index));
         if (match) {
           const amount = Number(match[1]) || 0;
           if (match[2] === 'A') state.row = Math.max(0, state.row - amount);
           else if (match[2] === 'B') { state.row += amount; ensureRow(state.row); }
           else if (match[2] === 'C') state.col += amount;
+          else if (match[2] === 'h' || match[2] === 'l') { /* mode set/reset — no cursor effect */ }
           else if (match[2] === 'K') {
             ensureRow(state.row);
             state.lines[state.row] = match[1] === '2' ? '' : state.lines[state.row].slice(0, state.col);
