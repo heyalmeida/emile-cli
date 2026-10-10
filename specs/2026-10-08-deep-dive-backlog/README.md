@@ -36,12 +36,13 @@ Items promoted from the comparison with xAI's production CLI ([deep-dive § 22](
 | Order | Brief | Depends on |
 |---|---|---|
 | 14 | [P0-4 paste-burst redraw clamp](briefs/p0-4-paste-burst-redraw.md) | none (active user-reported bug — first) |
-| 15 | [P0-5 subprocess env scrub](briefs/p0-5-subprocess-env-scrub.md) | none (security, ~20 lines) |
-| 16 | [P1-8 stationarity guard](briefs/p1-8-stationarity-guard.md) | none |
-| 17 | [P1-9 output truncation + listDir cap](briefs/p1-9-output-truncation-caps.md) | none |
-| 18 | [P1-10 tool-result secret redaction](briefs/p1-10-tool-result-redaction.md) | none (touches agent.js — sequence after P1-8/P1-11 to minimize conflicts) |
-| 19 | [P1-11 compression tool-pair repair](briefs/p1-11-compression-sanitize.md) | none |
-| 20 | [P1-12 retry hardening + stream idle watchdog](briefs/p1-12-retry-hardening.md) | none |
+| 15 | [P0-6 null-assistant session poison](briefs/p0-6-assistant-null-poison.md) | none (active user-reported bug — generation guard + load self-heal) |
+| 16 | [P0-5 subprocess env scrub](briefs/p0-5-subprocess-env-scrub.md) | none (security, ~20 lines) |
+| 17 | [P1-8 stationarity guard](briefs/p1-8-stationarity-guard.md) | none |
+| 18 | [P1-9 output truncation + listDir cap](briefs/p1-9-output-truncation-caps.md) | none |
+| 19 | [P1-10 tool-result secret redaction](briefs/p1-10-tool-result-redaction.md) | none (touches agent.js — sequence after P0-6/P1-8/P1-11 to minimize conflicts) |
+| 20 | [P1-11 compression tool-pair repair](briefs/p1-11-compression-sanitize.md) | none (same invariants as P0-6 — dispatch after it) |
+| 21 | [P1-12 retry hardening + stream idle watchdog](briefs/p1-12-retry-hardening.md) | none |
 
 Un-briefed wave-2 backlog (generate a brief when scheduling): P2-12 (atomic saveSession — pair with P0-3), P2-13 (mid-turn steering), P2-14 (cache_control breakpoints), P2-15 (permission rules), P2-16 (lazy skill tool — pair with P1-5), P2-17 (lifecycle hooks).
 
