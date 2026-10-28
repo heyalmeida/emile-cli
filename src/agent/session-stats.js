@@ -22,6 +22,44 @@ export const sessionStats = {
   contextLimit: 128000,
 };
 
+const PERSISTED_STAT_FIELDS = [
+  'promptTokens',
+  'completionTokens',
+  'totalCost',
+  'cachedPromptTokens',
+  'lastPromptTokens',
+  'lastCompletionTokens',
+];
+
+function readNonNegativeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+export function getSessionStatsSnapshot(stats = sessionStats) {
+  const snapshot = { version: 1 };
+  for (const field of PERSISTED_STAT_FIELDS) {
+    snapshot[field] = readNonNegativeNumber(stats[field]) ?? 0;
+  }
+  return snapshot;
+}
+
+export function resetSessionStats() {
+  for (const field of PERSISTED_STAT_FIELDS) sessionStats[field] = 0;
+  sessionStats.estimatedContextTokens = 0;
+  return sessionStats;
+}
+
+export function restoreSessionStats(saved) {
+  resetSessionStats();
+  if (!saved || typeof saved !== 'object') return sessionStats;
+  for (const field of PERSISTED_STAT_FIELDS) {
+    const value = readNonNegativeNumber(saved[field]);
+    if (value !== null) sessionStats[field] = value;
+  }
+  return sessionStats;
+}
+
 /**
  * Calculates the estimated cost of API calls in USD based on model pricing.
  * Prices come from the single MODEL_INFO table in models.js.

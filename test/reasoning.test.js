@@ -27,6 +27,11 @@ test('converts cumulative reasoning snapshots into unseen suffixes', () => {
   assert.equal(getIncrementalText('The user asks', 'asks'), '');
 });
 
+test('drops a shorter stale prefix snapshot after a longer cumulative snapshot', () => {
+  assert.equal(getIncrementalText('The user asks', 'The user'), '');
+  assert.equal(getIncrementalText('The user asks about streaming', 'The user'), '');
+});
+
 test('merges fragmented text while retaining complete structured blocks', () => {
   const preserved = [];
   assert.equal(
@@ -52,6 +57,16 @@ test('deduplicates cumulative structured reasoning details', () => {
     appendReasoningDetails(preserved, [{ type: 'reasoning.text', id: 'text-1', index: 0, text: 'The user asks' }]),
     ' asks',
   );
+  assert.equal(preserved[0].text, 'The user asks');
+});
+
+test('does not re-append a stale structured reasoning prefix', () => {
+  const preserved = [];
+  appendReasoningDetails(preserved, [{ type: 'reasoning.text', id: 'text-1', text: 'The user' }]);
+  appendReasoningDetails(preserved, [{ type: 'reasoning.text', id: 'text-1', text: 'The user asks' }]);
+  const stale = appendReasoningDetails(preserved, [{ type: 'reasoning.text', id: 'text-1', text: 'The user' }]);
+
+  assert.equal(stale, '');
   assert.equal(preserved[0].text, 'The user asks');
 });
 

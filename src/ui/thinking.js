@@ -108,6 +108,7 @@ export function startThinkingStream() {
   _thinkingStreamSeq += 1;
   resetThinkingLineState();
   _startedAsExpanded = config.expandThinking === true;
+  _thinkingStreamSealed = false;
 
   // Expanded (opt-in via /thinking or Ctrl+P): thinking streams visibly as
   // the model reasons. Collapsed (default): a single ghost line that
@@ -297,6 +298,7 @@ export function endThinkingStream() {
 
   resetThinkingLineState();
   _startedAsExpanded = false;
+  _thinkingStreamSealed = false;
 }
 
 /**

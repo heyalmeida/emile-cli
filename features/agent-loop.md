@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-08-25 |
-| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` + `specs/2026-09-01-turn-interrupt-queue` |
+| **Source spec** | `specs/2026-08-25-project-structure` + `specs/2026-08-25-model-system` + `specs/2026-08-30-session-resilience` + `specs/2026-08-31-web-search-tool-reliability` + `specs/2026-09-01-turn-interrupt-queue` + `specs/2026-09-03-live-response-streaming` + `specs/2026-09-03-stale-stream-prefix-dedup` |
 | **PRD RFs served** | RF-01, RF-03, RF-08, RF-10, RF-13, RF-19 |
 | **Owner/Area** | Agent Loop |
 
@@ -34,6 +34,8 @@ free-model fallback and iteration limits protect the turn.
 | **Tools** | Built-in tools, MCP tool bridge and OpenRouter web search when explicitly enabled |
 | **Configuration** | Provider/model/effort in user-global `~/.emile/config.json` and environment variables |
 | **Interrupt/queue** | Esc/Ctrl+C during a turn request a graceful stop; the same full prompt frame queues sequential turns while active stdout is routed above it and the real cursor stays at the draft (`src/agent/turn-control.js`, `src/ui/turn-keys.js`, `src/ui/prompt-input-persistent.js`) |
+| **Streaming feedback** | Text deltas render progressively in the response box; usage-only chunks keep the spinner alive; cancel/error/empty paths finalize without duplicate output. If the frame cannot be redrawn in the current viewport or stdout is non-TTY, it seals and appends each remaining line once |
+| **Stream normalization** | Cumulative and stale shorter-prefix snapshots are deduplicated before reasoning/content rendering and history persistence |
 | **Applicable security gates** | Tool handlers enforce safe mode, dry-run, whitelist and workspace paths |
 
 ## Where It Lives in the Code

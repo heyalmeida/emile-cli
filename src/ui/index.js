@@ -13,7 +13,7 @@ export { printHeader, printStartupScreen } from './header.js';
 export { printConfigBox, printConfig } from './config-panel.js';
 export { printSessionBar } from './status-bar.js';
 export { printUserMessage } from './user-message.js';
-export { printAssistantResponse } from './response.js';
+export { printAssistantResponse, startResponseStream, appendResponseStream, endResponseStream } from './response.js';
 export { startThinkingStream, appendThinkingStream, endThinkingStream, printThinking } from './thinking.js';
 export { printHelp } from './help.js';
 export { printDiffBlock } from './diff-block.js';

@@ -26,6 +26,7 @@ This is a personal project that grew into something useful enough to share. It's
 ## Features
 
 - **Live reasoning streams** — watch the model think in real time before it writes code, with expand/collapse toggle
+- **Progressive response streaming** — assistant text appears inside the response box as provider deltas arrive; the waiting indicator remains visible through metadata-only chunks instead of leaving a silent gap
 - **Built-in file tools** — read, write, edit (diff-based), search, and run shell commands, all with safe-mode gating
 - **MCP integration** — connect external tool servers via Model Context Protocol (stdio, SSE or HTTP transports)
 - **Prompt caching** — Requesty supports automatic prompt caching to reduce cost on repeated context
@@ -123,7 +124,7 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/new` `/clear` | Start a fresh session |
 | `/rewind` | Remove your last message (and the agent's reply) and re-edit it |
 | `/undo [N]` | Revert the last file modification, or the last N changes after confirmation |
-| `/cost` | Show cumulative token usage and estimated cost |
+| `/cost` | Show cumulative token usage and estimated cost for the active saved session |
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
 | `/skills` `/skill` | Search available workspace skills (read-only metadata) |
@@ -259,7 +260,7 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 | `EMILE_WEB_SEARCH` | Enable web search by default | `false` |
 | `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `90` |
 
-### Config file
+### User configuration and credentials
 
 User-wide settings and credentials are persisted in `~/.emile/config.json` (auto-created on first run via the connect wizard, written with mode `0600`), so provider setup follows the user across workspaces. This takes precedence over environment variables. The file is a **version-2 document with one credential slot per provider** (a legacy v1 file migrates on load):
 

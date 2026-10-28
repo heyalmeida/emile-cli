@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | `active` |
 | **Delivery date** | 2026-09-02 |
-| **Source spec** | `specs/2026-09-02-session-lifecycle` |
+| **Source spec** | `specs/2026-09-02-session-lifecycle` + `specs/2026-09-03-session-cost-persistence` |
 | **PRD RFs served** | RF-05 (safe mode), RF-06 (undo), RF-07 (session persistence) |
 | **Owner/Area** | Agent Loop / Session persistence / Tools / Config |
 
@@ -56,6 +56,7 @@ flowchart LR
 | Boot recovery | `src/recovery.js` (`runStartupRecovery` → `RecoveryReport`) |
 | Undo persistence | `src/tools/file-state/undo-stack.js`, `src/tools/file-state/persistence.js`, `src/tools/file-state/path.js` |
 | API key isolation | `src/config.js` (`resolveApiKey`, `saveUserConfig`) |
+| Usage persistence | `src/agent/session-stats.js`, `src/history.js`, `src/cli.js`, `src/commands/handlers.js` |
 | Wiring | `src/cli.js`, `src/agent/agent.js`, `src/history.js` |
 
 ## Known Limitations

@@ -11,6 +11,9 @@ import {
   C,
   GAP,
   printAssistantResponse,
+  startResponseStream,
+  appendResponseStream,
+  endResponseStream,
   printThinking,
   startThinkingStream,
   appendThinkingStream,
@@ -435,8 +438,11 @@ async function runAgentInner({
     let toolCallDeltas = [];
     let reasoningDetails = [];
     let usage = null;
-    let isFirstChunk = true;
+    let hasVisibleOutput = false;
     let thinkingStreamed = false;
+    let thinkingEnded = false;
+    let responseStreamed = false;
+    let responseContainsThinkTag = false;
     // Some providers expose the same reasoning through both the legacy
     // string field and reasoning_details. Choose the first readable channel
     // for display so one provider response cannot be rendered twice.
@@ -453,13 +459,9 @@ async function runAgentInner({
           try { responseStream.controller?.abort?.(); } catch { /* best-effort */ }
           break;
         }
-        if (isFirstChunk) {
-          // Silent stop — the streamed content itself (thinking stream, text,
-          // tool box) is the progress signal; a "response received" line on
-          // every API call is pure noise in long sessions.
-          spinner.stop();
-          isFirstChunk = false;
-        }
+        // Usage-only and otherwise empty chunks do not stop the spinner. The
+        // first meaningful reasoning, text or tool signal below becomes the
+        // user-facing progress transition.
 
         if (chunk.usage) {
           usage = chunk.usage;
@@ -488,7 +490,9 @@ async function runAgentInner({
           const rDelta = getIncrementalText(reasoningContent, rawReasoning);
           if (rDelta) {
             reasoningDisplaySource = 'legacy';
+            hasVisibleOutput = true;
             if (!thinkingStreamed) {
+              spinner.stop();
               startThinkingStream();
               thinkingStreamed = true;
             }
@@ -503,7 +507,9 @@ async function runAgentInner({
           // provider also sends the legacy field, but render only one source.
           if (structuredText && reasoningDisplaySource !== 'legacy') {
             reasoningDisplaySource = 'structured';
+            hasVisibleOutput = true;
             if (!thinkingStreamed) {
+              spinner.stop();
               startThinkingStream();
               thinkingStreamed = true;
             }
@@ -515,10 +521,33 @@ async function runAgentInner({
         const cDelta = getIncrementalText(textContent, delta.content || '');
         if (cDelta) {
           setTerminalActivity('responding');
-          textContent += cDelta;
+          hasVisibleOutput = true;
+          if (thinkingStreamed && !thinkingEnded) {
+            endThinkingStream();
+            thinkingEnded = true;
+          }
+          const nextTextContent = textContent + cDelta;
+          if (nextTextContent.includes('<think>') || nextTextContent.includes('</think>')) {
+            responseContainsThinkTag = true;
+            if (responseStreamed) {
+              endResponseStream();
+              responseStreamed = false;
+            }
+          }
+          if (!responseContainsThinkTag) {
+            if (!responseStreamed) {
+              spinner.stop();
+              startResponseStream();
+              responseStreamed = true;
+            }
+            appendResponseStream(cDelta);
+          }
+          textContent = nextTextContent;
         }
 
         if (delta.tool_calls) {
+          hasVisibleOutput = true;
+          spinner.stop();
           for (const tcDelta of delta.tool_calls) {
             const idx = tcDelta.index ?? 0;
             if (!toolCallDeltas[idx]) {
@@ -546,14 +575,20 @@ async function runAgentInner({
       }
     }
 
-    if (isFirstChunk) {
-      // Stream produced no chunks — clear the spinner silently (the error
-      // path above already reported failures when applicable).
+    if (responseStreamed) {
+      endResponseStream();
+    }
+    if (thinkingStreamed && !thinkingEnded) {
+      endThinkingStream();
+      thinkingEnded = true;
+    }
+
+    if (!hasVisibleOutput) {
+      // A provider can close a stream with only usage metadata or an empty
+      // delta. Clear the spinner and explain the result instead of leaving a
+      // blank line where the user expects the response to begin.
       spinner.stop();
       if (!streamCanceled && !streamErrored && !control?.shouldStop()) {
-        // No chunk arrived, no cancel, no stream error: the model returned
-        // an empty response. Surface a one-liner so the user does not see a
-        // blank line where the spinner used to be.
         process.stdout.write(`${GAP.section}  ${C.muted('· (empty response)')}\n`);
       }
     }
@@ -587,13 +622,16 @@ async function runAgentInner({
 
     if (reasoningContent) {
       if (thinkingStreamed) {
-        endThinkingStream();
+        if (!thinkingEnded) {
+          endThinkingStream();
+          thinkingEnded = true;
+        }
       } else {
         printThinking(reasoningContent);
       }
     }
 
-    if (textContent) {
+    if (textContent && !responseStreamed) {
       printAssistantResponse(textContent);
     }
 

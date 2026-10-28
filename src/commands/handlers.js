@@ -166,6 +166,7 @@ export async function handleSessions(ctx, args = []) {
       const refreshedSessions = ctx.listSessions();
       const matched = refreshedSessions.find(s => s.id === selectedId);
       ctx.setSessionSummary(matched ? matched.summary : '');
+      if (typeof ctx.restoreSessionStats === 'function') ctx.restoreSessionStats(record?.stats);
       ctx.initSessionStats(ctx.config.defaultModel, ctx.config.plansMode, ctx.activeSkills, loaded);
       if (typeof ctx.resumeSession === 'function') {
         await ctx.resumeSession(selectedId, loaded);
@@ -181,6 +182,7 @@ export function handleNewSession(ctx) {
   ctx.setMessages([]);
   ctx.setSessionId(`session_${Date.now()}`);
   ctx.setSessionSummary('');
+  if (typeof ctx.resetSessionStats === 'function') ctx.resetSessionStats();
   if (ctx.config) ctx.config.sessionCwd = ctx.config.workspaceDir;
   console.log(C.success('\n  New session started.'));
 }
@@ -364,6 +366,8 @@ async function handleEnhancedProvider(ctx, provider, args = []) {
       [`${provider}Enabled`]: true,
     });
     (ctx.printWebProviderConfigured || printWebProviderConfigured)(provider);
+  } catch {
+    warnWebCommand(ctx, `Could not protect and save the ${provider} credential. Check the user configuration directory and try again.`);
   } finally {
     setTerminalActivity('waiting');
   }

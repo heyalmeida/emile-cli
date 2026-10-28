@@ -317,11 +317,15 @@ export async function runConnectWizard() {
     return false;
   }
 
-  saveUserConfig({
+  const saved = saveUserConfig({
     provider: providerValue,
     apiKey,
     model: providerDef.defaultModel,
   });
+  if (!saved) {
+    console.log(pc.red('\n  Could not save the protected credential. Check the configuration directory permissions and try again.\n'));
+    return false;
+  }
 
   // Force API client to re-initialize with new keys
   resetClient();
@@ -445,7 +449,10 @@ export async function runModelWizard() {
     finalModel = customModel.trim();
   }
 
-  saveUserConfig({ model: finalModel });
+  if (!saveUserConfig({ model: finalModel })) {
+    console.log(pc.red('\n  Could not save the user configuration.\n'));
+    return;
+  }
 
   console.log(pc.green(`  Model changed to: ${finalModel}`));
   console.log(pc.gray(`  Settings updated in ~/.emile/config.json\n`));

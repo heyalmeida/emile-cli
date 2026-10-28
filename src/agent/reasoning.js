@@ -26,6 +26,9 @@ export function getIncrementalText(previous, incoming) {
   const next = typeof incoming === 'string' ? incoming : '';
   if (!next || next === prior) return '';
   if (!prior || next.startsWith(prior)) return next.slice(prior.length);
+  // Some gateways replay a shorter, already-seen snapshot after a longer
+  // cumulative snapshot. It is stale, not a new fragment.
+  if (next.length < prior.length && prior.startsWith(next)) return '';
   if (prior.endsWith(next)) return '';
 
   // A few gateways resend a small boundary overlap instead of a strict

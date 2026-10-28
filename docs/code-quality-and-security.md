@@ -44,7 +44,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 1. **Fail-closed:** when in doubt, block and ask for confirmation. Safe mode denied = command doesn't run.
 2. **Model output is untrusted input:** validate every path, command and tool-call argument at the handler boundary, regardless of conversation history.
 3. **Never loosen a gate to "make it work":** removing safe mode, dry-run, the whitelist or `resolveSafePath` to work around a bug is forbidden. Fix the bug.
-4. **No secrets in output:** logs, errors, exports and the spinner never show the API key or auth headers; persisted sessions omit `reasoning_content` by default.
+4. **No secrets in output or settings:** logs, errors, exports and the spinner never show the API key or auth headers; the user settings JSON never contains `apiKey`; provider credentials are written only to protected storage; persisted sessions omit `reasoning_content` by default.
 5. **User-facing errors first:** error messages orient the user (what failed, what to do), no stack dumps.
 6. **Network-pipe friction:** safe-mode confirmation explicitly warns when network content is piped into a shell interpreter; it never auto-approves the command.
 7. **No empty `catch`:** every caught exception is handled, logged (verbose) or propagated with context.

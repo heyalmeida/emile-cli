@@ -98,7 +98,7 @@ palette be retuned without re-deciding meaning at every call site (references:
 | **Verb-grouped tool batches** | `groupRows` / `printToolSummary` | A run of **≥ 3 adjacent** calls that are the *same informational operation* (`passive`/`plain`/`search`: read, list, grep, find, web, recall) collapses into ONE row listing up to 3 distinct first-line arguments then `+N more`: `● read  src/a.js, src/b.js, +18 more`. The batch key is role tone + label + MCP-ness, so an interruption or another server splits it. `mutate` (write/edit/memory) and `danger` (exec) **never** group — there the argument is the information — and a run shorter than 3 renders exactly as before. N counts **calls**, and truncation drops arguments but never the marker (reference `scrollback/state/verb_group.rs:1-10`, `blocks/tool/mod.rs:71-145`) |
 | **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
-| **Spinner** | `src/spinner.js` | Braille, dependency-free; stops silently on success (no noise line) |
+| **Spinner** | `src/spinner.js` | Braille, dependency-free; updates immediately on state change, remains active for usage-only chunks, and stops silently when the first visible stream signal or a terminal error/cancel is reached |
 | **Turn keys** | `listenTurnKeys` | Exclusive key listener active while the idle prompt is suspended and the agent works. It renders the same full frame, temporarily routes stdout above it, and leaves the real cursor at the queue draft caret. Esc/Ctrl+C cancel only the turn; Tab/↑/↓ keep slash autocomplete usable; Enter queues bounded/sanitized input. Cleanup erases the frame, restores the previous stdout writer/raw state and returns ownership to the idle prompt |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
@@ -167,6 +167,8 @@ palette be retuned without re-deciding meaning at every call site (references:
 **Resolved in pass 2 (premium):** tool-call box borders (now grid-aligned lines), `✓ N tools completed` footer (now a dim `↳ N tools` header), thinking too visible (now ghost on collapse; expanded by default with opt-out), tool label columns unaligned, full-width response box (now 88-col measure), missing command divider for user messages.
 
 **Resolved in pass 3 (open boxes):** chronically misaligned right box borders (side rails removed entirely — no right-padding math), white top border on the response box (ANSI parts now composed separately).
+
+**Resolved in live response streaming:** assistant text now appears in the response block as content deltas arrive, the waiting spinner survives metadata-only chunks, and response/cancel/error finalization remains single-shot.
 
 **Still open:**
 
