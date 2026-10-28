@@ -18,7 +18,7 @@ Emile connects to configured MCP servers over STDIO, SSE or streamable HTTP and 
 |------|---------|
 | **Configuration** | `mcp.json` server definitions; remote entries use `transport`, `url` and optional `headers` with `${ENV_NAME}` interpolation |
 | **Lifecycle** | First connection requires approval; unexpected closes retry at 500ms, 1s and 2s |
-| **Tool namespace** | `mcp__<server>__<tool>` |
+| **Tool namespace** | Explicit map key `<server>__<tool>` (direct lookup; no `mcp__` prefix) |
 | **Terminal display** | `[mcp:<server>] <tool>` |
 | **Applicable security gates** | Environment allowlist and explicit MCP tool mapping |
 

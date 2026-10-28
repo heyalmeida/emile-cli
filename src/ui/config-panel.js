@@ -1,6 +1,6 @@
 // config-panel.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import readline from 'node:readline';
@@ -36,8 +36,8 @@ export function printConfigBox({ provider, model, cache, effort, plans, dryRun, 
 
   // cache + safe-gate on same row (two-column layout)
   // "off" is a state, not an error — dim it instead of red (visual identity)
-  const cacheVal  = cache    ? C.success('on')  : C.dim('off');
-  const safeVal   = safeMode ? C.success('on')  : C.dim('off');
+  const cacheVal  = cache    ? ROLE.success('on') : ROLE.meta.punct('off');
+  const safeVal   = safeMode ? ROLE.success('on') : ROLE.meta.punct('off');
   const leftCell  = cell('cache', cacheVal);
   const rightCell = C.muted('safe-gate'.padEnd(KEY_W)) + safeVal;
   const leftVis   = stripAnsi(leftCell).length;
@@ -45,7 +45,7 @@ export function printConfigBox({ provider, model, cache, effort, plans, dryRun, 
   process.stdout.write(`${BOX_INDENT}${leftCell}${' '.repeat(colGap)}${rightCell}\n`);
 
   // optional mode rows
-  if (plans)  process.stdout.write(`${BOX_INDENT}${cell('mode', C.warn('plans'))}\n`);
+  if (plans)  process.stdout.write(`${BOX_INDENT}${cell('mode', ROLE.warn('plans'))}\n`);
   if (dryRun) process.stdout.write(`${BOX_INDENT}${cell('mode', C.red('dry-run'))}\n`);
 
   process.stdout.write(boxBottomOpen(boxW) + '\n');

@@ -13,7 +13,7 @@
 - [ ] T0.1 — Read relevant documentation (PRD, architecture, visual identity, ADRs) — *Rule 1 of `.clinerules`*
 - [ ] T0.2 — Confirm this spec and plan are `approved`
 - [ ] T0.3 — Classify risk, map threat surfaces and confirm the plan's gates
-- [ ] T0.4 — Create/switch to the feature branch (e.g., `feat/<spec-name>`) — *Rule 8 of `.clinerules`*
+- [ ] T0.4 — Confirm the current branch is `development` and inspect `git status`; do not switch branches or create a worktree — *Rule 8 of `.clinerules`*
 
 ## Phase 1 — Implementation
 
@@ -37,7 +37,7 @@
 - [ ] T3.3 — Record the entry in `CHANGELOG.md`
 - [ ] T3.4 — Revalidate touched Mermaid blocks
 - [ ] T3.5 — Update the spec status to `implemented`
-- [ ] T3.6 — Switch to `docs/documentation` and commit the documentation sync there (only explicit documentation paths — Rule 8)
+- [ ] T3.6 — Commit the documentation sync on `development` with only explicit documentation paths staged (Rule 8)
 - [ ] T3.7 — Record in the handoff limitations, non-executed verifications and residual risk
 
 ---

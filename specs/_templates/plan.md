@@ -65,9 +65,8 @@
 
 | Item | Answer |
 |------|--------|
-| **Feature branch** | e.g., `feat/ux-ui` (create from `development` if missing — Rule 8 of `.clinerules`) |
-| **Documentation branch** | `docs/documentation` for README, docs, specs, features, CHANGELOG and process rules |
-| **Commit plan** | Code/tests on the product branch; documentation on `docs/documentation`; stage only explicit paths (never `git add .`) |
+| **Working branch** | `development` — do not switch, create a feature branch or use a worktree unless the user explicitly asks (Rule 8 of `.clinerules`) |
+| **Commit plan** | Commit coherent code/tests/docs units directly on `development`; stage only explicit paths (never `git add .` or `git add -A`) |
 
 ## 10. Failures, Partial State and Rollback
 

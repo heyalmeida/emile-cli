@@ -34,13 +34,13 @@ Replace `pc` calls in `agent.js`, `compression.js` and `plans.js` with `C` from 
 | Plans | `src/plans.js` | Use `C` for progress output. |
 | API | `src/api/client.js` | Use canonical `C` palette instead of local ANSI functions. |
 | System prompt | `src/prompt.js` | Translate policy lines to English. |
-| Tests | `test/ui-logging-prompt.test.js` | Regression checks. |
+| Tests | *retired — see the CHANGELOG entry for `chore(lint)`* | Palette import and local color-helper rules are enforced by ESLint (`no-restricted-imports` / `no-restricted-syntax`) on the four runtime modules. |
 
 ## 5. Files to Create/Modify
 
 | Action | Path (expected) | Notes |
 |------|--------------------|-------------|
-| Create | `test/ui-logging-prompt.test.js` | Static import/prompt regression checks. |
+| ~~Create~~ *(retired)* | ~~`test/ui-logging-prompt.test.js`~~ | Static import/prompt regression checks; moved to ESLint rules. The English-only system prompt policy has no automated check and is now a review rule. |
 | Modify | `src/agent/agent.js`, `src/agent/compression.js`, `src/plans.js`, `src/api/client.js` | Palette migration. |
 | Modify | `src/prompt.js` | Language normalization. |
 | Modify | `docs/architecture.md`, `IMPROVEMENTS.md`, `CHANGELOG.md` | Documentation sync. |

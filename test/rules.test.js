@@ -11,6 +11,19 @@ import { stripTerminalControls } from '../src/ui/control.js';
 
 const originalWorkspace = config.workspaceDir;
 
+// Windows without Developer Mode denies symlink creation (EPERM); tests that
+// need one exercise real symlink security behavior, so skip instead of fail.
+const symlinkSkipReason = (() => {
+  try {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-symlink-probe-'));
+    fs.symlinkSync(path.join(base, 'target'), path.join(base, 'link'));
+    fs.rmSync(base, { recursive: true, force: true });
+    return false;
+  } catch (err) {
+    return err.code === 'EPERM' ? 'symlink creation not permitted in this environment' : false;
+  }
+})();
+
 function withWorkspace(fn) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-rules-workspace-'));
   config.workspaceDir = workspace;
@@ -75,7 +88,7 @@ test('refreshes the mtime cache after the user edits the rules file', () => {
   });
 });
 
-test('rejects a supported filename symlinked outside the workspace', () => {
+test('rejects a supported filename symlinked outside the workspace', { skip: symlinkSkipReason }, () => {
   withWorkspace((workspace) => {
     const externalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-rules-external-'));
     try {

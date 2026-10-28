@@ -38,12 +38,15 @@ Every feature file **must reference the source spec** (`Spec` field), guaranteei
 | [Model System](./model-system.md) | active | `feat/model-system` | `specs/2026-08-25-model-system` + `specs/2026-08-25-dynamic-model-catalog` + `specs/2026-08-25-context-aware-compression` + `specs/2026-08-30-plans-compression-resilience` + `specs/2026-08-30-dynamic-model-catalog-ui` + `specs/2026-08-30-model-search-picker` + `specs/2026-08-30-model-context-display` + `specs/2026-08-30-readable-token-units` + `specs/2026-08-30-streaming-input-integrity` + `specs/2026-08-31-web-search-tool-reliability` |
 | [Secure Configuration](./secure-configuration.md) | active | `feat/secure-config` | `specs/2026-09-03-secure-global-config` |
 | [Project Rules (`.emilerules`)](./project-rules.md) | active | `feat/project-rules` | `specs/2026-08-25-rules-system` |
+| [Global Agent Memory](./global-agent-memory.md) | active | `development` | `specs/2026-09-03-global-agent-memory` |
 | [Session Resilience](./session-resilience.md) | active | `feat/session-system` | `specs/2026-08-30-session-resilience` |
 | [Multi-level Undo](./multilevel-undo.md) | active | `feat/cli-commands` | `specs/2026-08-30-multilevel-undo` |
 | [Error UX](./error-ux.md) | active | `feat/ux-ui` | `specs/2026-08-30-error-ux` + `specs/2026-08-31-web-search-tool-reliability` |
 | [MCP Integration](./mcp-integration.md) | active | `feat/mcp-system` | `specs/2026-08-30-mcp-tool-visibility` |
 | [Skills System](./skills-system.md) | active | `feat/skills-system` | `specs/2026-08-30-skill-relevance` |
+| [Provider System](./provider-system.md) | active | `development` | `specs/2026-10-09-provider-system` |
 | [Open-source Quality Gates](./open-source-readiness.md) | active | `chore/quality-gates` | `specs/2026-08-30-open-source-readiness` |
 
-All documentation, including this registry and the source specs, is committed
-on `docs/documentation` rather than on the code branch listed above.
+All implementation and documentation work is committed directly on
+`development`; the code-branch column records the feature's historical delivery
+branch and is not a current workflow instruction.

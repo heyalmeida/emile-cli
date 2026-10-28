@@ -1,12 +1,21 @@
 // response.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { C, ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { sanitizeAssistantOutput } from './sanitize.js';
 import { config } from '../config.js';
 import { getModelInfo } from '../models.js';
 import { turnState } from './turn-state.js';
 import { renderMarkdown } from './markdown.js';
+import { createFrontier } from './commit-frontier.js';
 import readline from 'node:readline';
+
+// A completed response is FINAL the moment it is printed: it is committed once
+// through the frontier (print-once, one write, synchronized on a TTY) instead of
+// being re-emitted line by line. `write` stays a thunk so the ADR-0003 stdout
+// lease in `turn-keys.js` keeps arbitrating this write like any other, and no
+// scrollback block model is needed — the response is a one-shot block, so it
+// takes an allocated id (see `commit-frontier.js`).
+const outputFrontier = createFrontier({ write: (chunk) => process.stdout.write(chunk) });
 
 
 // Opt-in diagnostic: print Assistant response render summary.
@@ -179,24 +188,58 @@ export function printAssistantResponse(content) {
   debugPrintResponse('sanitized', sanitized);
   if (!sanitized) { debugPrintResponse('skip-empty', sanitized); return; }
 
-  const { boxW, wrapW } = getResponseGeometry();
-  printToolCountHeader();
+  const cols  = process.stdout.columns || 80;
+  // Most of the terminal width, capped at 120 columns (premium pass 4:
+  // 88 was too narrow for real code discussions)
+  const boxW  = Math.min(cols - 4, MAX_BOX_W);
+  const wrapW = boxW - BOX_INDENT.length; // content wraps inside the 4-space indent
+
+  // The whole box is assembled first and committed once, so the terminal sees
+  // one finalized block instead of a stream of rows (and the lease, which
+  // repaints the live prompt around every write, is charged once).
+  let out = '';
+
+  // Dim tool-count header — the only status line of the turn (replaces the
+  // old "✓ N tools completed" footer). Consumes the counter.
+  if (turnState.toolsRun > 0) {
+    const label = turnState.toolsRun === 1 ? '1 tool' : `${turnState.toolsRun} tools`;
+    out += GAP.section;
+    // A count is meta punctuation: the dimmest step of the scale.
+    out += `  ${ROLE.meta.punct(`↳ ${label}`)}\n`;
+    turnState.toolsRun = 0;
+  }
 
   // Leading blank line: exactly one gap between this box and the block above
-  console.log();
+  out += '\n';
 
   // Open box top — ANSI parts composed separately: the accent label's RESET
   // must never kill the muted color of the dashes after it
-  process.stdout.write(`  ${C.muted('╭─')} ${C.bold(C.accent('emile'))} ${C.muted('─'.repeat(Math.max(boxW - 10, 0)))}\n`);
+  out += `  ${ROLE.border.box('╭─')} ${C.bold(ROLE.agent('emile'))} ${ROLE.border.box('─'.repeat(Math.max(boxW - 10, 0)))}\n`;
 
   // Inner top padding — breathing room under the border
-  console.log();
+  out += '\n';
 
-  for (const line of formatResponseBody(sanitized, wrapW)) {
-    process.stdout.write(`${BOX_INDENT}${line}\n`);
+  // Pre-wrap each raw paragraph line to wrapW BEFORE markdown rendering
+  const prewrapped = sanitized
+    .split('\n')
+    .flatMap(rawLine => {
+      if (rawLine.trim() === '') return [''];
+      // Don't wrap code fence lines — leave them for markdown renderer
+      if (rawLine.trimStart().startsWith('```')) return [rawLine];
+      return wrapText(rawLine, wrapW);
+    })
+    .join('\n');
+
+  const rendered = renderMarkdown(prewrapped);
+  if (rendered) {
+    for (const line of rendered.split('\n')) {
+      out += `${BOX_INDENT}${line}\n`;
+    }
   }
 
   // Inner bottom padding + open box bottom
-  console.log();
-  process.stdout.write(boxBottomOpen(boxW) + '\n');
+  out += '\n';
+  out += boxBottomOpen(boxW) + '\n';
+
+  outputFrontier.commit(out);
 }

@@ -10,6 +10,7 @@ import { config } from '../src/config.js';
 test('persists a workspace-contained cwd between runCommand calls', async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-cwd-'));
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-cwd-out-'));
+  const isWin = process.platform === 'win32';
   const original = {
     workspaceDir: config.workspaceDir,
     sessionCwd: config.sessionCwd,
@@ -25,18 +26,21 @@ test('persists a workspace-contained cwd between runCommand calls', async () => 
     config.dryRun = false;
     config.commandTimeout = 5000;
 
-    const first = await runCommand({ command: 'mkdir -p site && cd site' });
+    const first = await runCommand({ command: `${isWin ? 'mkdir' : 'mkdir -p'} site && cd site` });
     assert.match(first, /working directory: site/);
     assert.equal(config.sessionCwd, path.join(workspace, 'site'));
     assert.doesNotMatch(first, /__EMILE_CWD_/);
 
-    const second = await runCommand({ command: 'pwd' });
+    // `cd` prints the current directory on cmd; `pwd` on POSIX shells.
+    const second = await runCommand({ command: isWin ? 'cd' : 'pwd' });
     assert.match(second, new RegExp(path.join(workspace, 'site').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 
-    await runCommand({ command: `cd ${outside}` });
+    // `cd /d` handles a different drive on cmd; plain cd is fine within one.
+    await runCommand({ command: isWin ? `cd /d ${outside}` : `cd ${outside}` });
     assert.equal(config.sessionCwd, path.join(workspace, 'site'));
 
-    const failed = await runCommand({ command: 'false' });
+    // Failing command: cmd needs an explicit exit; `false` fails on POSIX.
+    const failed = await runCommand({ command: isWin ? 'cmd /c exit 1' : 'false' });
     assert.match(failed, /Command failed with code 1/);
     assert.match(failed, /working directory: site/);
   } finally {

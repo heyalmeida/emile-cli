@@ -6,6 +6,7 @@ import { listDir as listDirHandler } from './list-dir.js';
 import { findFiles as findFilesHandler } from './find-files.js';
 import { grepSearch as grepSearchHandler } from './grep-search.js';
 import { runCommand as runCommandHandler } from './run-command.js';
+import { proposeMemory as proposeMemoryHandler, recallMemory as recallMemoryHandler } from './memory.js';
 
 export const toolHandlers = {
   readFile: readFileHandler,
@@ -15,4 +16,6 @@ export const toolHandlers = {
   findFiles: findFilesHandler,
   grepSearch: grepSearchHandler,
   runCommand: runCommandHandler,
+  proposeMemory: proposeMemoryHandler,
+  recallMemory: recallMemoryHandler,
 };

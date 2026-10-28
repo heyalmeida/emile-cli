@@ -12,7 +12,7 @@
 
 ## Description
 
-Emile now guarantees that the session survives any exit path (Ctrl+C, SIGTERM, terminal close, unhandled rejection) without corruption. On boot, every persisted session is scanned for `pending` checkpoints and classified before the REPL is shown. The undo stack persists across restarts, and API keys are resolved strictly per provider.
+Emile now guarantees that the session survives any exit path (Ctrl+C, SIGTERM, terminal close, unhandled rejection) without corruption. On boot, persisted sessions in `.emile/history/` are scanned (read-only) and `tool_pending` checkpoints are classified as `recoverable` or `corrupt` before the REPL is shown. The undo stack persists across restarts, and API keys are resolved strictly per provider.
 
 ## How It Works
 
@@ -22,22 +22,20 @@ flowchart TD
     B --> C["stop-input:<br/>disable new turns"]
     C --> D["drain-tools:<br/>await or abort in-flight"]
     D --> E["flush-session:<br/>fsync pending checkpoint"]
-    E --> F["close-mcp:<br/>1s bounded server shutdown"]
+    E --> FM["flush-memory:<br/>bounded best-effort memory flush"]
+    FM --> F["close-mcp:<br/>1s bounded server shutdown"]
     F --> G["restore-terminal:<br/>cooked mode + cursor on"]
     G --> H["process.exit"]
 ```
 
 ```mermaid
 flowchart LR
-    A["Boot"] --> B["Scan .emile/sessions/"]
-    B --> C{"pending checkpoint?"}
+    A["Boot"] --> B["Scan .emile/history/*.json"]
+    B --> C{"tool_pending checkpoint?"}
     C -- "Yes, consistent" --> D["recoverable"]
-    C -- "Yes, user skipped" --> E["abandoned"]
     C -- "Malformed" --> F["corrupt"]
-    F --> G["Move to .emile/sessions/<id>/corrupt/"]
     D --> H["REPL shown"]
-    E --> H
-    G --> H
+    F --> H
 ```
 
 ## Technical Details
@@ -47,14 +45,14 @@ flowchart LR
 | **CLI flags** | `--verbose` (phase timing) |
 | **Slash commands** | `/undo`, `/undo N`, `/delete`, `/sessions` |
 | **Tools** | Existing built-in tools; no new tool surface |
-| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); per-user settings are stored outside the workspace with protected provider credentials; per-session usage stats persist with history; session cwd persisted per session |
+| **Configuration** | `.emile/undo/<sessionId>/` (gitignored); user-global `~/.emile/config.json` mode `0600`; session cwd persisted per session |
 | **Applicable security gates** | `resolveSafePath` (undo files confined to `.emile/undo/`); existing safe mode, dry-run, whitelist unchanged; `resolveApiKey` enforces provider-specific env vars only |
 
 ## Where It Lives in the Code
 
 | Layer | Main paths |
 |--------|---------------------|
-| Shutdown coordinator | `src/lifecycle/` (5 phase modules + barrel) |
+| Shutdown coordinator | `src/lifecycle/` (6 phase modules + barrel) |
 | Boot recovery | `src/recovery.js` (`runStartupRecovery` → `RecoveryReport`) |
 | Undo persistence | `src/tools/file-state/undo-stack.js`, `src/tools/file-state/persistence.js`, `src/tools/file-state/path.js` |
 | API key isolation | `src/config.js` (`resolveApiKey`, `saveUserConfig`) |
@@ -67,16 +65,19 @@ flowchart LR
 - 3 test-isolation failures remain in the automated suite (ESM module cache between test files) — not production bugs (T2.13 in tasks.md).
 - Persisted undo is capped at 50 entries and 2 MB per entry; entries that exceed the size cap are recorded as `oversized: true`.
 - Symlinks inside `.emile/undo/` pointing outside are refused by `persistence.js` via `realpath` check.
-- `chmod 0600` is a no-op on Windows; provider credentials are protected with DPAPI CurrentUser and the settings JSON contains no API key.
-- A `pending` checkpoint left by a process crash between tool completion and checkpoint write is not recoverable by this module; it relies on the existing `specs/2026-08-30-session-resilience` resume path.
+- `chmod 0600` is a no-op on Windows; the write still succeeds with a `--verbose` warning.
+- A `tool_pending` checkpoint left by a process crash between tool completion and checkpoint write is not recoverable by this module; it relies on the existing `specs/2026-08-30-session-resilience` resume path.
 
 ## Change History
 
 | Date | Change | Reference |
 |------|--------|------------|
 | 2026-09-02 | Ordered 5-phase shutdown coordinator with 3 s global cap and `--verbose` timing | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
-| 2026-09-02 | Boot recovery scan classifying sessions as recoverable / abandoned / corrupt | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
+| 2026-09-02 | Boot recovery scan classifying sessions as recoverable / corrupt (read-only) | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | Undo stack persisted under `.emile/undo/<sessionId>/` and rehydrated on boot; cap at 50 enforced | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | Per-provider `resolveApiKey` (no cross-provider fallback); config file mode `0600` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
 | 2026-09-02 | `package.json` engines field `node >=18` | `specs/2026-09-02-session-lifecycle` / CHANGELOG |
-| 2026-09-03 | Persisted per-session token/cost counters and restored them on resume/session switch; `/new` resets usage | `specs/2026-09-03-session-cost-persistence` / CHANGELOG |
+| 2026-09-02 | Moved the protected provider configuration to user-global `~/.emile/config.json` | `76e3f96` / CHANGELOG |
+| 2026-10-10 | Crash path: `uncaughtException`/`unhandledRejection` now route into the same ordered shutdown coordinator (there was no crash hook at all, so an escaped async error skipped every phase), printing one redacted stderr line and exiting 1; the handler cannot throw; the bootstrap catch no longer clears the screen | `specs/2026-10-10-crash-path-coordinator` / CHANGELOG |
+| 2026-10-10 | Recovery/shutdown integrity: the boot scan matches `tool_pending` (it filtered a status no writer produces, so it never fired) and quarantines corrupt records instead of re-reporting them; `markAborted` records an interruption additively so an interrupted turn stays resumable; idle SIGINT runs the live prompt's real teardown (the injected hook used to be a fixed no-op); exit no longer clears the transcript; a second signal force-exits (130/143); session writes are atomic (tmp → fsync → rename) and `flushSync` is a real fsync | `specs/2026-10-10-lifecycle-recovery-integrity` / CHANGELOG |
+| 2026-10-09 | History-shape invariant: an assistant with neither content nor `tool_calls` can no longer be created, persisted or resumed (`isValidAssistantMessage` guards generation in `agent.js`, `preparePersistedMessages` and `getSessionRecord` in `history.js`), so an existing poisoned transcript self-heals on resume without the file being rewritten | `specs/2026-10-09-assistant-null-poison` / CHANGELOG |

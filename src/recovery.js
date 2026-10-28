@@ -1,18 +1,24 @@
 // recovery.js — startup scan of persisted sessions.
 //
-// Scans .emile/history/ for sessions left in 'pending' state (mid-tool crash,
-// hard kill, power loss). Each is classified as:
+// Scans .emile/history/ for sessions left in 'tool_pending' state (mid-tool
+// crash, hard kill, power loss). Each is classified as:
 //   recoverable — valid pending tool batch, all paths still inside workspace
 //   corrupt    — everything else: malformed JSON, missing files, invalid paths
 //
-// The scan runs once on boot, before the REPL is shown. It never throws and
-// never executes a tool. The RecoveryReport is returned to the caller.
+// Corrupt entries are QUARANTINED under .emile/history/corrupt/<id>/<ts>.json so
+// they stop being re-reported on every boot. That move is the scan's only write:
+// it never executes a tool, never rewrites a record and never touches a session
+// that classifies as anything else.
+//
+// The scan runs once on boot, before the REPL is shown. It never throws.
+// The RecoveryReport is returned to the caller.
 //
 // @ts-check
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { resolveSafePath } from './tools/security.js';
+import { moveToCorrupt } from './history.js';
 
 /**
  * @typedef {'recoverable' | 'corrupt'} SessionClassification
@@ -25,6 +31,7 @@ import { resolveSafePath } from './tools/security.js';
  * @property {number} recoverable
  * @property {number} corrupt
  * @property {ClassifiedSession[]} classified
+ * @property {string[]} quarantined
  * @property {Array<{ sessionId: string, error: string }>} scanErrors
  */
 
@@ -76,12 +83,18 @@ function classify(record) {
 
 /**
  * Scan persisted sessions for pending checkpoints and classify each one.
+ *
+ * Only `tool_pending` records are considered: it is the single status a writer
+ * produces for a mid-tool checkpoint (`saveSession`), so filtering anything else
+ * (the phantom `'pending'` this code used to look for) made the scan find
+ * nothing at all.
+ *
  * @param {{ sessionsDir?: string, workspaceDir?: string }} [opts]
  * @returns {Promise<RecoveryReport>}
  */
 export async function runStartupRecovery({ sessionsDir } = {}) {
   const scanDir = sessionsDir || path.join(config.workspaceDir ?? process.cwd(), '.emile', 'history');
-  const report = { sessionsScanned: 0, recoverable: 0, corrupt: 0, classified: [], scanErrors: [] };
+  const report = { sessionsScanned: 0, recoverable: 0, corrupt: 0, classified: [], quarantined: [], scanErrors: [] };
   let entries;
   try { entries = fs.readdirSync(scanDir); } catch { return report; }
 
@@ -92,15 +105,27 @@ export async function runStartupRecovery({ sessionsDir } = {}) {
     report.sessionsScanned++;
     try {
       const record = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      if (record.status !== 'pending') continue;
+      if (record.status !== 'tool_pending') continue;
       const c = classify(record);
       report.classified.push(c);
       report[c.classification]++;
+      if (c.classification === 'corrupt') quarantine(report, sessionId, scanDir);
     } catch (err) {
       report.scanErrors.push({ sessionId, error: err.message });
       report.classified.push({ sessionId, classification: 'corrupt', reason: `scan error: ${err.message}` });
       report.corrupt++;
+      quarantine(report, sessionId, scanDir);
     }
   }
   return report;
+}
+
+/**
+ * Moves one corrupt session out of the scan directory (best-effort) and records
+ * it in the report. `moveToCorrupt` never throws, so a locked or vanished file
+ * only means it stays where it was — still counted as corrupt.
+ */
+function quarantine(report, sessionId, directory) {
+  moveToCorrupt(sessionId, { directory });
+  report.quarantined.push(sessionId);
 }

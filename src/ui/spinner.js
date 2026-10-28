@@ -7,6 +7,7 @@
 //    s.update('responding...');
 //    s.stop('Done', '✓');
 // ──────────────────────────────────────────────────────────────
+import { C, ROLE } from './theme.js';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
@@ -14,7 +15,10 @@ const INTERVAL_MS = 80;
 /** Approved activity copy shown while the first response chunk is pending. */
 export const RESPONSE_WAITING_LABEL = 'Thinking and responding…';
 
-// Tokyo Night amber for thinking, muted gray for other states
+// Colors come from the palette's ROLE layer — this module used to declare its
+// own amber/muted/green/red/info helpers with hardcoded truecolor values, i.e. a
+// SECOND palette that could drift from `C` (visual-identity § 1.1 "one palette,
+// one source of truth"; P1-18 Stage A).
 
 // Opt-in diagnostic: log every stdout write to stderr with the
 // pre/post cursor row. Activated by EMILE_DEBUG_THINKING=1 so the user
@@ -48,14 +52,7 @@ function debugWrite(tag, chunk) {
   process.stderr.write(`[${tag}] r${before}->r${_cursorRow} ${JSON.stringify(display)}\n`);
 }
 
-const ESC = '\x1B';
-function rgb(r, g, b) { return `${ESC}[38;2;${r};${g};${b}m`; }
-const RESET = `${ESC}[0m`;
-const amber = (s) => `${rgb(224,175,104)}${s}${RESET}`;   // #E0AF68
-const muted = (s) => `${rgb(86,95,137)}${s}${RESET}`;     // #565F89
-const green = (s) => `${rgb(158,206,106)}${s}${RESET}`;   // #9ECE6A
-const red   = (s) => `${rgb(247,118,142)}${s}${RESET}`;   // #F7768E
-const info  = (s) => `${rgb(125,207,255)}${s}${RESET}`;   // #7DCFFF
+
 
 export function createSpinner() {
   let interval = null;
@@ -63,10 +60,10 @@ export function createSpinner() {
   let currentLabel = '';
 
   function render() {
-    // Use amber color for "thinking..." label, muted otherwise
+    // The running role while the model reasons, the label step otherwise.
     const isThinking = currentLabel.toLowerCase().includes('thinking');
-    const frame = isThinking ? amber(FRAMES[frameIndex]) : muted(FRAMES[frameIndex]);
-    const label = isThinking ? amber(currentLabel) : muted(currentLabel);
+    const frame = isThinking ? ROLE.running(FRAMES[frameIndex]) : ROLE.meta.label(FRAMES[frameIndex]);
+    const label = isThinking ? ROLE.running(currentLabel) : ROLE.meta.label(currentLabel);
     debugWrite('spinner.tick', `\r\x1B[K  ${frame} ${label}`); process.stdout.write(`\r\x1B[K  ${frame} ${label}`);
     frameIndex = (frameIndex + 1) % FRAMES.length;
   }
@@ -96,11 +93,11 @@ export function createSpinner() {
       }
       let output = '\r\x1B[K';
       if (finalLabel) {
-        const sym = symbol === '✓' ? green('✓')
-                  : symbol === '✗' ? red('✗')
-                  : symbol === 'ℹ' ? info('ℹ')
-                  : muted(symbol);
-        output += `  ${sym} ${muted(finalLabel)}\n`;
+        const sym = symbol === '✓' ? ROLE.success('✓')
+                  : symbol === '✗' ? ROLE.error('✗')
+                  : symbol === 'ℹ' ? C.info('ℹ')
+                  : ROLE.meta.label(symbol);
+        output += `  ${sym} ${ROLE.meta.label(finalLabel)}\n`;
       }
       debugWrite('spinner.stop', output); process.stdout.write(output);
       return this;

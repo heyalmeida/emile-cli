@@ -1,7 +1,7 @@
 # Emile — Product Requirements Document (PRD)
 
 > **Status:** 🟢 Current · **Source of truth for emile-cli's scope and requirements.**
-> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, MCP, optional OpenRouter web search, prompt caching, reasoning control, plans mode and a skills system.
+> Emile is a terminal coding agent, provider-agnostic (OpenAI-compatible), with built-in tools, user-global memory, MCP, optional OpenRouter web search, prompt caching, reasoning control, plans mode and a skills system.
 
 ---
 
@@ -17,6 +17,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | Devs unhappy with vendor lock-in | Claude Code/Codex tie you to one provider | Any OpenAI-compatible API (Requesty, OpenRouter, OpenCode) |
 | Cost-conscious devs | Agents burn tokens with no feedback | `/cost`, real-time context tracking, prompt caching, configurable reasoning effort |
 | Automation-cautious devs | Agents that run commands without asking | Safe mode, dry-run, command whitelist, `/undo` |
+| Devs working across projects | Repeating the same preferences and corrections in every workspace | Confirmed user-global memory with inspection, pause and deletion controls |
 
 ---
 
@@ -36,9 +37,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 - **US-12:** As a dev with several terminal tabs, I want Emile's tab title to show its current activity, so I can tell waiting and active sessions apart without opening each tab.
 - **US-13:** As a dev using a large-context model, I want history compression to respect that model's real window, so useful context is not summarized prematurely.
 - **US-14:** As a dev researching a current implementation or design, I want to opt into provider web search when supported, so the agent can use fresh external information while I remain aware of search costs.
-- **US-15:** As a dev waiting for a model response, I want progressive text and a persistent waiting indicator, so the terminal always shows that the agent is still working.
-- **US-16:** As a dev who launches Emile from different workspaces, I want provider settings to persist per OS user and credentials to stay out of ordinary JSON, so setup is not repeated and secrets are not casually exposed.
-- **US-17:** As a dev resuming a saved conversation, I want `/cost` to include the session's prior turns, so usage and estimated cost remain meaningful after restarting or switching sessions.
+- **US-15:** As a dev working across projects and providers, I want Emile to remember my confirmed preferences, workflow and recurring corrections globally, while letting me inspect, pause and forget them.
 
 ---
 
@@ -58,7 +57,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-08** | Reasoning effort control (`-e` low/medium/high/max/min/none), native Anthropic thinking budgets and searchable model selection (`-m`, `/model`) | ✅ |
 | **RF-09** | Per-provider prompt caching (Requesty) with bypass via `--no-cache` | ✅ |
 | **RF-10** | Plans mode (`-p`): agent previews the task, asks for approval before model execution, drafts a plan, then executes | ✅ |
-| **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `mcp__<server>__<tool>` namespacing, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
+| **RF-11** | MCP integration over STDIO, SSE and streamable HTTP with `<server>__<tool>` explicit-map tool keying, first-connect consent, bounded reconnect and server identity visible in tool output, configured in `mcp.json` | ✅ |
 | **RF-12** | YAML skills system with workspace detection, task-relevance matching and conditional system-prompt injection (`-s` for an explicit subset) | ✅ |
 | **RF-13** | Context and cost tracking: real API token usage with a pre-call estimate fallback, `/cost` | ✅ |
 | **RF-14** | Coherent terminal UI: Tokyo Night palette, boxes, one persistent full prompt across idle/active turns, slash-command autocomplete, multiline keyboard editing and aligned multiline tool output | ✅ (continuous improvement — see [visual identity](visual-identity.md)) |
@@ -68,10 +67,7 @@ Give any developer a **pair programmer that lives in the terminal**: fast, light
 | **RF-18** | Dynamic terminal title driven by real runtime states, with sanitized/allowlisted activity labels and no prompt, command or query leakage | ✅ |
 | **RF-19** | Context-aware history compression at 80% of the active model's catalog window, with full-payload token estimation and growth hysteresis | ✅ |
 | **RF-20** | Explicit, provider-gated OpenRouter web search with bounded result parameters, a visible cost warning and no unsupported tool schema sent to other providers | ✅ |
-| **RF-23** | Enhanced Tavily/Firecrawl web search uses protected per-user credentials, preserves independent provider flags and keeps credentials out of `.emile/web.json` | ✅ |
-| **RF-24** | Per-session token/cost counters persist with session history, restore on resume and reset for a new session; switching sessions does not merge unrelated usage | ✅ |
-| **RF-21** | Progressive assistant response streaming with continuous waiting feedback until visible reasoning, text or tool output, without duplicate final rendering; if the terminal or capture cannot redraw a bounded frame, the renderer seals the frame and appends each remaining line once | ✅ |
-| **RF-22** | Per-user provider settings persist across workspaces; provider credentials are stored separately from settings JSON using OS protection where available, with safe legacy migration and provider-specific resolution | ✅ |
+| **RF-21** | Native user-global agent memory with conservative formation, bounded retrieval, conflict handling, crash-safe local storage and explicit privacy/deletion controls | ✅ Delivered ([spec](../specs/2026-09-03-global-agent-memory/spec.md)) |
 
 ---
 

@@ -68,7 +68,7 @@ export async function compressContextIfNeeded({
   const historyStr = JSON.stringify(messages);
   const modelContextLimit = resolvePositiveNumber(
     contextLimit,
-    resolvePositiveNumber(getModelInfo(model).context, 128_000)
+    resolvePositiveNumber(getModelInfo(model).context, 262_000)
   );
   const estimatedContextTokens = resolvePositiveNumber(
     contextTokens,
@@ -89,7 +89,8 @@ export async function compressContextIfNeeded({
   }
 
   setTerminalActivity('compressing context');
-  process.stdout.write(`[K  ${C.dim('⚙ compressing context...')}
+  process.stdout.write(`
+[K  ${C.dim('⚙ compressing context...')}
 `);
   try {
     const systemMessage = messages[0];
@@ -116,18 +117,21 @@ ${summaryText}
 =================================================` });
     messages.push(...messagesToKeep);
     compressedHistorySizes.set(messages, JSON.stringify(messages).length);
-    process.stdout.write(`[K  ${C.success('✔')} ${C.dim('context compressed')}
+    process.stdout.write(`
+[K  ${C.success('✔')} ${C.dim('context compressed')}
 `);
     return true;
   } catch (compressErr) {
     const fallbackApplied = hardTruncateHistory(messages, modelContextLimit);
     if (fallbackApplied) {
       compressedHistorySizes.set(messages, JSON.stringify(messages).length);
-      process.stdout.write(`[K  ${C.warn('⚠')} ${C.dim('context summary failed; oldest history truncated')}
+      process.stdout.write(`
+[K  ${C.warn('⚠')} ${C.dim('context summary failed; oldest history truncated')}
 `);
       return true;
     }
-    process.stdout.write(`[K  ${C.warn('⚠')} ${C.dim('context compression failed, continuing')}
+    process.stdout.write(`
+[K  ${C.warn('⚠')} ${C.dim('context compression failed, continuing')}
 `);
     return false;
   }

@@ -8,6 +8,20 @@ import { config } from '../src/config.js';
 import { compileMentionAttachments, extractMentionPaths, findMentionCandidates } from '../src/mentions.js';
 
 const originalWorkspace = config.workspaceDir;
+
+// Windows without Developer Mode denies symlink creation (EPERM); tests that
+// need one exercise real symlink security behavior, so skip instead of fail.
+const symlinkSkipReason = (() => {
+  try {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-symlink-probe-'));
+    fs.symlinkSync(path.join(base, 'target'), path.join(base, 'link'));
+    fs.rmSync(base, { recursive: true, force: true });
+    return false;
+  } catch (err) {
+    return err.code === 'EPERM' ? 'symlink creation not permitted in this environment' : false;
+  }
+})();
+
 function withWorkspace(fn) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-mentions-'));
   config.workspaceDir = workspace;
@@ -27,7 +41,7 @@ test('attaches a bounded in-workspace text file', () => withWorkspace(workspace 
   assert.match(result.context, /export const value/);
 }));
 
-test('rejects traversal, absolute, binary and external symlink mentions', () => withWorkspace(workspace => {
+test('rejects traversal, absolute, binary and external symlink mentions', { skip: symlinkSkipReason }, () => withWorkspace(workspace => {
   fs.writeFileSync(path.join(workspace, 'binary.bin'), 'a\0b');
   const external = path.join(os.tmpdir(), `emile-mention-secret-${Date.now()}`);
   fs.writeFileSync(external, 'secret');

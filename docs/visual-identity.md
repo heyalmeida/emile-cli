@@ -31,14 +31,55 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | `C.red` | `#F7768E` (red) | Error, failure, command execution (side effects) |
 | `C.fg` | `#A9B1D6` (grayish blue) | Main content text, listing tools |
 | `C.muted` | `#565F89` (gray) | Box borders, metadata, footers, dividers |
-| `C.ghost` | `#3B4261` (dark gray) | Thinking block — near-invisible by design |
-| `C.dim` | (ANSI dim) | Secondary text (tool args, status headers) |
+| `C.ghost` | `#3B4261` (dark gray) | **Reserved**: decorative marks inside an already-visible line — never text the user must read (see the DIM rule below) |
+| `C.dim` | (ANSI dim) | The dimmest de-emphasis step: punctuation, counts, collapsed reasoning |
+
+### Semantic roles — `ROLE`
+
+`C` answers *which color*; `ROLE` (also in `src/ui/theme.js`) answers *what this
+line is*. Components should name a **role**, not a hue: that is what lets the
+palette be retuned without re-deciding meaning at every call site (references:
+`theme/mod.rs:1` "all colors come from the `Theme` struct", `theme/tokyonight.rs:56-64`).
+**Every role is an alias into `C`** — it must never define a value of its own
+(`test/token-roles.test.js` asserts this member by member).
+
+| Role | Token | Meaning |
+|------|-------|---------|
+| `ROLE.user` | `fg` | the user's own words (message divider text) |
+| `ROLE.agent` | `accent` | the agent's identity label |
+| `ROLE.thinking` | `muted` | reasoning header + body |
+| `ROLE.tool.passive` | `info` | read / recall / fetch — informational |
+| `ROLE.tool.mutate` | `warn` | write / edit / memory proposal — changes state |
+| `ROLE.tool.danger` | `red` | shell execution — side effects |
+| `ROLE.tool.search` | `gold` | grep / find / web search |
+| `ROLE.tool.plain` | `fg` | listing — low impact |
+| `ROLE.tool.workflow` | `accent` | plan / task / MCP / unknown |
+| `ROLE.success` / `ROLE.warn` / `ROLE.running` / `ROLE.error` | `success` / `warn` / `warn` / `red` | **states**: a state color reports a state |
+| `ROLE.diff.{insert,delete,context}` | `success` / `red` / `muted` | diff lines |
+| `ROLE.meta.punct` | `dim` | the dimmest step: counts, elision markers, `(+N chars)`, `↳ N tools` |
+| `ROLE.meta.label` | `muted` | the middle step: labels, footers, separators, args context, metrics, borders |
+| `ROLE.border.{box,focused}` | `muted` / `accent` | box chrome, and the focused element inside it |
 
 **Usage rules:**
 
 - Red is exclusive to errors. Confirmation warnings use `warn`.
 - A single output line uses at most 2 colors besides `fg`/`muted`.
-- Box borders are always `muted`; a box label may use `accent` when it's an active element.
+- Box borders are always `muted` (`ROLE.border.box`); a box label may use `accent` when it's an active element.
+- **De-emphasis is chosen by FUNCTION, not by darkness** (reference
+  `theme/tokyonight.rs:70-74`): punctuation and counts take `ROLE.meta.punct`
+  (SGR DIM); labels, footers, args and borders take `ROLE.meta.label`.
+- **Tertiary text de-emphasizes with the DIM attribute** (`ROLE.meta.punct`, SGR 2)
+  on the terminal's own foreground — never with a hardcoded near-background gray.
+  Many dark profiles set their dark slots very close to the background, so such
+  text disappears entirely (reference `theme/terminal_default.rs:12-18`:
+  *"Do not paint body or status text as `DarkGray`"*). `C.ghost` is **reserved for
+  decorative marks inside an already-visible line** and must never carry text the
+  user has to read.
+- **A state color reports a state, never a metric.** `cache hit: 87%` is a label
+  (`ROLE.meta.label`), not a success; `tasks: 4/4` complete IS a success.
+- **One palette, one source.** No module outside `src/ui/theme.js` may declare a
+  color helper or a truecolor literal — enforced by lint over `src/ui/**`
+  (`no-restricted-syntax`).
 
 ---
 
@@ -49,21 +90,22 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | **Startup screen** | `printStartupScreen` | Brand header in the open-box style: `╭─ ✦ emile ─ v ───` / tagline / `╰────` |
 | **Command divider** | `printUserMessage` | User message as the chapter marker: `── <message> ────` (fg text, muted dashes, truncated); resets the turn's tool counter |
 | **Open boxes** | `boxTopOpen`/`boxBottomOpen` | **Top and bottom borders only** — no left/right rails. Content indents 4 spaces (`BOX_INDENT`). Border ANSI parts are composed separately: never nest a styled label inside `C.muted(...)` or the label's RESET kills the border color |
-| **Input prompt** | `persistentPromptInput` / `buildPromptLayout` | Persistent boxed writing field shared by idle and active turns, with slash-command autocomplete, ↑/↓ menu navigation and multiline editing via `Shift+Enter`; one blank line above the block. The pure layout clips every physical row, preserves a trailing ANSI reset and keeps the cursor within the exact wrapped row. `❯` is reserved for the real input row; the selected autocomplete item uses `●`. Tab accepts that match (or toggles Plans mode without one), while async owners transfer stdin exclusively |
+| **Input prompt** | `persistentPromptInput` / `buildPromptLayout` | Persistent boxed writing field shared by idle and active turns, with slash-command autocomplete, ↑/↓ menu navigation and multiline editing via `Shift+Enter`; one blank line above the block. The pure layout clips every physical row, preserves a trailing ANSI reset and keeps the cursor within the exact wrapped row. `❯` is reserved for the real input row; the selected autocomplete item uses `●`. Tab accepts that match (or toggles Plans mode without one), while async owners transfer stdin exclusively. A paste repaints the block **once** (bracketed payload, or a burst of ≥3 text keypresses within 2 ms on terminals without bracketed paste) and no cursor-up exceeds the viewport height or is emitted on a non-TTY stdout. The block is **budgeted by the terminal** (`stdout.rows - 1`, recomputed per render) and a draft that does not fit is windowed around the cursor — the drawn frame can always reach its own top, so a stale frame cannot survive. Erase + block + caret are one write wrapped in DEC 2026 synchronized output |
 | **Model picker** | `promptModelPicker` | Incremental search surface for `/model`: query line, at most seven result rows, accent focus marker, muted metadata/help, ↑/↓ navigation, Enter selection and Esc cancellation; labels are bounded and sanitized before rendering |
-| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. If the block outgrows a known TTY viewport (or stdout is not a TTY), it switches to append-only sealed output and flushes the final line once. Collapsed via `/thinking`/Ctrl+P: ghost one-liner (`··· thinking` → `··· thought Ns`, `C.ghost`) |
-| **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` + full muted content; collapsed shows the ghost one-liner |
-| **Progressive response block** | `startResponseStream` / `appendResponseStream` / `endResponseStream` | The normal open response box opens on the first visible content delta; each delta is sanitized, Markdown-rendered and redrawn as one bounded frame while it fits the viewport. Non-TTY or overflowing frames seal and append only newly completed lines, flushing the final line once; the box is closed once when the stream ends. The final renderer is skipped to avoid duplicate output |
-| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic tone of the operation and each physical line remains bounded/sanitized |
-| **Tools header** | `printAssistantResponse` / `startResponseStream` | Single dim `↳ N tools` line above the response box — the only status line of a turn; the progressive path consumes the same counter before opening the box |
+| **Thinking stream** | `startThinkingStream` etc. | **Expanded by default**: live muted text whose header finishes as `Thought for Ns`; each redraw is assembled into one terminal write. Collapsed via `/thinking`/Ctrl+P: a dim one-liner (`··· thinking` → `··· thought Ns`, `ROLE.meta.punct` — DIM on the terminal's own foreground, never a near-background gray, so the only signal that reasoning happened survives every profile) |
+| **Reasoning block** | `printThinking` | Uses the same state as the thinking stream: expanded (`/thinking`/Ctrl+P) shows `✻ Thought for Ns` (`ROLE.thinking`) + full muted content; collapsed shows the dim one-liner |
+| **Tool lines** | `printToolSummary` | Grid-aligned rows (no box): `● <label 8ch> <dim arg>`; multiline arguments keep continuation lines under the argument column; bullet+label carry the semantic **role** of the operation (`ROLE.tool.*` — the tone vocabulary is `passive/mutate/danger/search/plain/workflow`, never a hue) and each physical line remains bounded/sanitized |
+| **Verb-grouped tool batches** | `groupRows` / `printToolSummary` | A run of **≥ 3 adjacent** calls that are the *same informational operation* (`passive`/`plain`/`search`: read, list, grep, find, web, recall) collapses into ONE row listing up to 3 distinct first-line arguments then `+N more`: `● read  src/a.js, src/b.js, +18 more`. The batch key is role tone + label + MCP-ness, so an interruption or another server splits it. `mutate` (write/edit/memory) and `danger` (exec) **never** group — there the argument is the information — and a run shorter than 3 renders exactly as before. N counts **calls**, and truncation drops arguments but never the marker (reference `scrollback/state/verb_group.rs:1-10`, `blocks/tool/mod.rs:71-145`) |
+| **Tools header** | `printAssistantResponse` | Single dim `↳ N tools` line above the response box — the only status line of a turn |
 | **Diff block** | `printDiffBlock` | Open box: `┌─ file ───` / `NNNN + line` rows with add/remove colors and truncation / `└────` |
 | **Spinner** | `src/spinner.js` | Braille, dependency-free; updates immediately on state change, remains active for usage-only chunks, and stops silently when the first visible stream signal or a terminal error/cancel is reached |
 | **Turn keys** | `listenTurnKeys` | Exclusive key listener active while the idle prompt is suspended and the agent works. It renders the same full frame, temporarily routes stdout above it, and leaves the real cursor at the queue draft caret. Esc/Ctrl+C cancel only the turn; Tab/↑/↓ keep slash autocomplete usable; Enter queues bounded/sanitized input. Cleanup erases the frame, restores the previous stdout writer/raw state and returns ownership to the idle prompt |
 | **Plan status** | `renderPlanStatus` | Plan state in plans mode |
 | **Rules inspection** | `printRulesInfo` | Read-only `/rules` view; inactive state teaches the user to create their own `.emilerules`; file content has ANSI/OSC controls removed before rendering |
+| **Global memory panels** | `printMemoryStatus` / `printMemoryRecords` / `printMemoryDoctor` | Open-box status/list/doctor surfaces. Status shows only mode, session pause, counts, health and revision; content appears only after an explicit list/show/forget preview. Every dynamic field is control-stripped and lists are capped at 50 displayed records |
 | **Web-search toggle** | `handleWebSearch` | `/websearch` prints a compact enabled/disabled state; enabling prints an amber warning that provider charges may apply, including on free model routes; unsupported providers fail closed |
 | **Terminal window title** | `configureTerminalTitle` / `setTerminalActivity` | Activity-first OSC title: `<activity> · emile · <workspace> · <model>`. States come from the CLI/agent loop (`starting`, `connecting MCP`, `waiting`, `thinking`, `responding`, compression and allowlisted tool descriptions); unsupported terminals get no output |
-| **Status bar / footer** | — | Context (tokens), model and estimated cost, optional `MCP: <server>` token and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md` |
+| **Status bar / footer** | `printSessionBar` (one-shot bar) · `buildPromptFooterSegments` (prompt footer) | What the user actually sees between turns is the **prompt footer**: context (tokens), model, optional `MCP: <server>` and — in plans mode — `tasks: X/Y` (warn while incomplete, success when complete) read live from `task.md`. Every metric is `ROLE.meta.label` — a cache-hit rate is information, not a success state. `printSessionBar` is a standalone one-shot bar (`src/ui/status-bar.js`) that the CLI **no longer calls** (the footer supersedes it); it is kept for the render harness, see § 5 |
 
 **Semantic tool colors** (tool lines):
 
@@ -74,6 +116,8 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | `exec` | `red` | Potential side effects |
 | `grep` / `find` | `gold` | Search |
 | `list` | `fg` | Listing, low impact |
+| `memory` proposal | `warn` | Candidate may mutate global state after validation |
+| `recall` memory | `info` | Read-only lower-priority lookup |
 | Plan tools / MCP / unknown | `accent` | Workflow operations |
 
 **Spacing constants:** `GAP.none` (same group), `GAP.section` (one blank line — between groups), `GAP.command` (between user commands) are exported from `src/ui/index.js`; new components must use them instead of scattered `\n\n`.
@@ -83,6 +127,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 - Usable width: `getW()` = `max(columns - 4, 60)`; boxes with a 2-space indent.
 - **Shared measure:** full-width blocks (response box, command divider) use `MAX_BOX_W = 120` (`min(columns - 4, MAX_BOX_W)`).
 - **Open boxes (mandatory):** every box renders **top and bottom borders only** (`╭─ label ───` / `╰────`) — no left/right `│` rails. Right-padding math is forbidden: it relies on `stripAnsi().length`, which is not the display width for wide/emoji characters and produces misaligned edges.
+- **Elision markers (new vocabulary — viewport-budgeted blocks):** when a block cannot show all of its rows inside the terminal, the hidden rows are reported instead of silently dropped: `⌃ N earlier rows` above the visible window and `⌄ N later rows` below it, in `C.dim`, at the block's two-space gutter, one row per side, and each marker is omitted when its count is zero. Today they are the prompt writing field's window markers (`buildPromptLayout({ maxRows })`); the same glyph pair is the vocabulary for any future budgeted block, and the visible window always contains the focused/cursor row. The point of the budget is structural: the drawn block never exceeds `stdout.rows - 1` rows, so the erase always reaches its own top.
 - Box content indents 4 spaces under the top border (`BOX_INDENT`); the response box additionally has a blank inner row above and below the text.
 - **Border color rule:** compose ANSI parts separately (`muted('╭─') + styledLabel + muted(fill)`); never nest a styled label inside `C.muted(...)` — the label's trailing RESET kills the muted color for the rest of the border (the "white top border" bug).
 - **Vertical rhythm (mandatory):** exactly **1 blank line between every distinct block** (user message, thinking, assistant box, tool lines, diff box, session bar, prompt) and **0 blank lines between items of the same group** (consecutive tool rows). Each block owns one *leading* gap and never prints *trailing* blanks — adjacent blocks therefore always have exactly one gap between them.
@@ -90,6 +135,7 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 - High-risk shell confirmations retain the same clack prompt surface but use a dedicated warning message for network-to-shell pipelines, including the sanitized command preview and the reason for the extra friction.
 - MCP tool summaries use the compact `[mcp:server] tool` identity so third-party execution is visually distinct from built-in tools without exposing tool arguments.
 - First MCP connections use the existing fail-closed `confirm` surface and show only server name, transport, sanitized endpoint and configured tool names; reconnect and transport failures use the amber warning surface without credentials.
+- Memory panels use `min(columns - 4, 76)` with a 20-column defensive floor, so 60/79/80/120-column terminals stay bounded. Exact-ID forget is immediate; query forget, sensitive remember, export and clear use the existing fail-closed confirmation surface. Tool summaries never render proposed evidence, recall queries or recalled content.
 
 ---
 
@@ -100,11 +146,13 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 | Autocomplete | `Tab` accepts the suggestion; ↑/↓ navigate |
 | Model search | Type any substring to filter model id/label case-insensitively; at most seven results remain visible |
 | Web search | `/websearch` toggles only for OpenRouter and displays the cost warning when enabled |
+| Global memory | `/memory` inspects state; ambiguous forget, sensitive remember, export and clear use `confirm` defaulting to no; `/memory pause` and `/memory resume` are session-local |
 | Model selection | `↑/↓` changes focus; `Enter` chooses; `Esc` or `Ctrl+C` cancels without changing config |
 | Multiline prompt | `Shift+Enter` inserts a newline at the cursor; plain `Enter` submits |
 | Cancel draft | `Esc` clears without sending |
 | Exit | `Ctrl+C` immediately; `exit` quits with MCP shutdown |
 | Paste | Bracketed-paste payloads remain editable, including embedded newlines; `Enter` sends the draft |
+| Tall draft | The writing field is budgeted by the terminal: the caret row always stays visible and the hidden rows are reported with the dim `⌃ N earlier rows` / `⌄ N later rows` markers |
 | Risk confirmation | @clack `confirm` defaulting to **no** (fail-closed) |
 | Plans | `Tab` toggles plans mode at the prompt |
 
@@ -129,6 +177,8 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 - Interactive selects lack radio-style active/inactive treatment (bold + accent for the cursor item).
 - `/cost` and stats render as a loose text list, outside the box pattern of the rest of the UI.
 - Narrow widths (<80 cols) verified for pass 1/2 blocks only — a systematic audit of every component is still pending.
+- **`printSessionBar` is dead code**: no CLI path calls it (only the `test-ui.js` harness and its own tests), so the standalone session bar never reaches the screen — the prompt footer carries the same state. Either wire it back (e.g. as the turn-status line, P1-18 Stage D) or retire it; until then, this row describes a surface the user does not see.
+- Tool **arguments** are still de-emphasized with `C.dim` while the role rule sends labels to `ROLE.meta.label` — a deliberate deferral from P1-18 Stage A (a restyle, not a rename), pending the Stage E text-rendering pass.
 
 ---
 
@@ -136,7 +186,10 @@ Defined in `src/ui/theme.js` and exported by `src/ui/index.js` (true-color with 
 
 Before closing any UI change:
 
-- [ ] Used only `C` tokens (no hardcoded colors outside the palette)?
+- [ ] Used only `C`/`ROLE` tokens (no hardcoded colors outside the palette, no local color helper)?
+- [ ] Named a **role** (`ROLE.*`) instead of a hue, and picked the de-emphasis step **by function** (punct vs label)?
+- [ ] Any state color (`success`/`warn`/`error`) actually reports a state, not a metric?
+- [ ] Nothing the user must read is rendered in `C.ghost` or another near-background gray?
 - [ ] Works at 60/80/120+ columns?
 - [ ] Waiting state has feedback? Error uses `red` and success uses `success`?
 - [ ] Correct ANSI reset (no color leaking into the next line)?

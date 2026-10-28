@@ -12,17 +12,20 @@
 //     verbose: !!options.verbose,
 //     shutdownMcp,   // from the dynamic import of mcp.js
 //     flushSync,    // from history.js
+//     flushMemory,  // from memory/index.js
 //     markAborted,  // from history.js
 //   });
 //
 // @ts-check
 import { C } from '../ui/theme.js';
 import { setPromptShutdown, isShuttingDown, setActiveTool, clearActiveTool } from './stop-input.js';
+import { installCrashHandlers } from './crash.js';
 
 const PHASES = [
   import('./stop-input.js').then(m => m.phase()),
   import('./drain-tools.js').then(m => m.phase()),
   import('./flush-session.js').then(m => m.phase()),
+  import('./flush-memory.js').then(m => m.phase()),
   import('./close-mcp.js').then(m => m.phase()),
   import('./restore-terminal.js').then(m => m.phase()),
 ];
@@ -30,12 +33,26 @@ const PHASES = [
 /** Module-level: set on first signal, checked on subsequent signals. */
 let _reEntrant = false;
 
+/** Exit code for a signal, matching the shell convention. */
+const exitCodeFor = (reason) => (reason === 'SIGINT' ? 130 : reason === 'SIGTERM' ? 143 : 1);
+
+/** Exit seam: the second signal leaves synchronously, without running a phase. */
+let forceExit = (reason) => process.exit(exitCodeFor(reason));
+
+/** Test seam: swap the exit function; returns a restore callback. */
+export function setForceExit(fn) {
+  const previous = forceExit;
+  forceExit = fn;
+  return () => { forceExit = previous; };
+}
+
 /**
- * Re-entrancy guard: subsequent signals after the first one become no-ops.
- * @returns {boolean} true if shutdown is already running
+ * Re-entrancy guard: the first signal starts the phase loop, a second one is
+ * escalated to a synchronous force-exit. The latch is set before any `await`, so
+ * two signals in the same tick can never both start the loop.
  */
-function guard() {
-  if (_reEntrant) return true;
+function guard(reason) {
+  if (_reEntrant) { forceExit(reason); return true; }
   _reEntrant = true;
   return false;
 }
@@ -43,23 +60,31 @@ function guard() {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Wire all shutdown handlers (SIGINT, SIGTERM, SIGHUP) and inject
- * the prompt shutdown function so phase 1 can call it.
+ * Wire all shutdown handlers (SIGINT, SIGTERM, SIGHUP) and inject the prompt
+ * shutdown so phase 1 can release the stdin lease.
  *
- * @param {{ verbose: boolean, shutdownMcp: () => Promise<void>, flushSync: () => void, markAborted: (id: string, reason: string) => void }} opts
+ * `markAborted(reason)` records the live session as interrupted — the caller owns
+ * the session identity and no-ops when no turn is in flight. `shutdownPrompt()`
+ * is optional so the coordinator works before a prompt exists.
+ *
+ * @param {{
+ *   verbose: boolean,
+ *   shutdownMcp: () => Promise<void>,
+ *   flushSync: () => void,
+ *   flushMemory?: () => Promise<object>,
+ *   markAborted?: (reason: string) => void,
+ *   shutdownPrompt?: () => void,
+ * }} opts
  */
-export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markAborted }) {
-  // Phase 1 needs to call the prompt shutdown.
-  setPromptShutdown(() => {
-    // The actual shutdown is deferred: the prompt handles its own cleanup
-    // when the isShuttingDown() flag is true. This hook is a no-op here.
-  });
+export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, flushMemory, markAborted, shutdownPrompt }) {
+  // Without an injected implementation there is nothing to tear down.
+  setPromptShutdown(typeof shutdownPrompt === 'function' ? shutdownPrompt : () => {});
 
   const coordinator = async (reason) => {
-    if (guard()) return;
+    if (guard(reason)) return;
 
     const start = Date.now();
-    const ctx = { verbose, shutdownMcp, flushSync, markAborted };
+    const ctx = { verbose, shutdownMcp, flushSync, flushMemory, markAborted };
 
     for (const phasePromise of PHASES) {
       const phase = await phasePromise;
@@ -94,12 +119,16 @@ export function installShutdownHandlers({ verbose, shutdownMcp, flushSync, markA
       console.log(C.dim(`  [lifecycle] shutdown complete in ${total}ms`));
     }
 
-    process.exit(reason === 'SIGINT' ? 130 : reason === 'SIGTERM' ? 143 : 1);
+    process.exit(exitCodeFor(reason));
   };
 
   process.on('SIGINT',  () => coordinator('SIGINT'));
   process.on('SIGTERM', () => coordinator('SIGTERM'));
   process.on('SIGHUP',  () => coordinator('SIGHUP'));
+
+  // Crashes take the same ordered path (P1-15): a thrown error that escapes the
+  // agent's own try/catch must not skip the session/memory/MCP teardown.
+  installCrashHandlers({ coordinator });
 
   // Exit handler: restore terminal on any exit path that bypassed the
   // coordinator (e.g. process.exit() called directly). Runs sync.

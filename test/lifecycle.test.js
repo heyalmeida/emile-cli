@@ -35,6 +35,16 @@ test('flush-session phase has correct name and bounded sliceMs', async () => {
   assert.equal(typeof p.run, 'function');
 });
 
+test('flush-memory is bounded and awaits the injected flush', async () => {
+  const { phase } = await import('../src/lifecycle/flush-memory.js');
+  const p = phase();
+  let called = false;
+  assert.equal(p.name, 'flush-memory');
+  assert.ok(p.sliceMs > 0 && p.sliceMs <= 2000);
+  await p.run({ verbose: false, flushMemory: async () => { called = true; return { changed: true }; } });
+  assert.equal(called, true);
+});
+
 test('close-mcp phase has correct name and bounded sliceMs', async () => {
   const { phase } = await import('../src/lifecycle/close-mcp.js');
   const p = phase();

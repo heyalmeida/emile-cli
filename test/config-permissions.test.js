@@ -3,34 +3,59 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'child_process';
-import { pathToFileURL } from 'url';
+import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const PROJECT = process.cwd();
+// ESM dynamic imports need a file:// URL; a bare Windows path (C:\...) is
+// rejected with ERR_UNSUPPORTED_ESM_URL_SCHEME.
+const PROJECT_URL = pathToFileURL(PROJECT).href;
 
 /**
  * Runs a test script in a fresh Node.js subprocess. The script is written to a
- * temp directory whose CWD is used for config.js — so config.js reads a clean
- * temp .emile/config.json, never touching the user's real config.
+ * temp directory. Since config now lives in ~/.emile/ (global), we create
+ * a fake HOME directory with a .emile/config.json for each test.
  */
-function runSubprocess(testScript) {
+async function runSubprocess(testScript) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `emile-test-${Date.now()}-`));
-  fs.mkdirSync(path.join(tmp, '.emile'), { recursive: true });
-  fs.writeFileSync(path.join(tmp, '.emile', 'config.json'),
+  const fakeHome = path.join(tmp, 'home');
+  fs.mkdirSync(path.join(fakeHome, '.emile'), { recursive: true });
+  // Create a dummy global config that won't interfere with tests
+  fs.writeFileSync(path.join(fakeHome, '.emile', 'config.json'),
     JSON.stringify({ provider: 'unknown', apiKey: 'unused' }));
 
   const scriptPath = path.join(tmp, 'test.mjs');
-  const projectUrl = pathToFileURL(PROJECT).href;
-  fs.writeFileSync(scriptPath, testScript({ project: projectUrl }));
+  const stdoutPath = path.join(tmp, 'stdout.txt');
+  const stderrPath = path.join(tmp, 'stderr.txt');
+  fs.writeFileSync(scriptPath, testScript({ project: PROJECT_URL, fakeHome }));
 
   try {
-    const r = execFileSync(process.execPath, [scriptPath], {
-      cwd: tmp,
-      env: { ...process.env, EMILE_CONFIG_DIR: path.join(tmp, 'user-config') },
+    return await new Promise(resolve => {
+      const stdoutFd = fs.openSync(stdoutPath, 'w');
+      const stderrFd = fs.openSync(stderrPath, 'w');
+      const child = spawn(process.execPath, [scriptPath], {
+        cwd: tmp,
+        env: {
+          ...process.env,
+          HOME: fakeHome,
+          // os.homedir() on Windows reads USERPROFILE, not HOME.
+          USERPROFILE: fakeHome,
+        },
+        stdio: ['ignore', stdoutFd, stderrFd],
+      });
+      fs.closeSync(stdoutFd);
+      fs.closeSync(stderrFd);
+      let spawnError = null;
+      child.once('error', error => { spawnError = error; });
+      child.once('close', code => {
+        const stdout = fs.readFileSync(stdoutPath, 'utf8').trim();
+        const stderr = fs.readFileSync(stderrPath, 'utf8').trim();
+        if (spawnError) resolve({ ok: false, out: stdout, err: spawnError.message });
+        else resolve(code === 0
+          ? { ok: true, out: stdout }
+          : { ok: false, out: stdout, err: `Node exited ${code}\n${stderr}` });
+      });
     });
-    return { ok: true, out: r.toString().trim() };
-  } catch (err) {
-    return { ok: false, out: err.stdout?.toString().trim() ?? '', err: err.message };
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -38,35 +63,36 @@ function runSubprocess(testScript) {
 
 // ── resolveApiKey ─────────────────────────────────────────────────────────
 
-test('resolveApiKey: requesty uses REQUESTY_API_KEY', () => {
-  const { out } = runSubprocess(({ project }) => [
+test('resolveApiKey: requesty uses REQUESTY_API_KEY', async () => {
+  const { ok, out, err } = await runSubprocess(({ project }) => [
     `process.env.REQUESTY_API_KEY = 'req-key-xyz';`,
     `const {resolveApiKey} = await import('${project}/src/config.js');`,
     `console.log(resolveApiKey('requesty'));`,
   ].join('\n'));
-  assert.equal(out, 'req-key-xyz');
+  assert.equal(ok, true, err);
+  assert.equal(out, 'req-key-xyz', err);
 });
 
-test('resolveApiKey: openrouter uses OPENROUTER_API_KEY', () => {
-  const { out } = runSubprocess(({ project }) => [
+test('resolveApiKey: openrouter uses OPENROUTER_API_KEY', async () => {
+  const { out, err } = await runSubprocess(({ project }) => [
     `process.env.OPENROUTER_API_KEY = 'or-key-xyz';`,
     `const {resolveApiKey} = await import('${project}/src/config.js');`,
     `console.log(resolveApiKey('openrouter'));`,
   ].join('\n'));
-  assert.equal(out, 'or-key-xyz');
+  assert.equal(out, 'or-key-xyz', err);
 });
 
-test('resolveApiKey: opencode-go uses OPENCODE_API_KEY', () => {
-  const { out } = runSubprocess(({ project }) => [
+test('resolveApiKey: opencode-go uses OPENCODE_API_KEY', async () => {
+  const { out, err } = await runSubprocess(({ project }) => [
     `process.env.OPENCODE_API_KEY = 'oc-key-xyz';`,
     `const {resolveApiKey} = await import('${project}/src/config.js');`,
     `console.log(resolveApiKey('opencode-go'));`,
   ].join('\n'));
-  assert.equal(out, 'oc-key-xyz');
+  assert.equal(out, 'oc-key-xyz', err);
 });
 
-test('resolveApiKey: returns empty string when no matching env', () => {
-  const { out } = runSubprocess(({ project }) => [
+test('resolveApiKey: returns empty string when no matching env', async () => {
+  const { out } = await runSubprocess(({ project }) => [
     `delete process.env.REQUESTY_API_KEY;`,
     `delete process.env.OPENROUTER_API_KEY;`,
     `delete process.env.OPENCODE_API_KEY;`,
@@ -77,29 +103,33 @@ test('resolveApiKey: returns empty string when no matching env', () => {
 });
 
 // ── Config file mode 0600 ─────────────────────────────────────────────────
+// POSIX-only: Windows has no chmod(2); libuv reports 0666 regardless.
 
-test('saveUserConfig writes user config with mode 0600', { skip: process.platform === 'win32' }, () => {
-  const { out } = runSubprocess(({ project }) => [
+test('saveUserConfig writes config.json with mode 0600', { skip: process.platform === 'win32' ? '0600 file mode is POSIX-only' : false }, async () => {
+  const { out, err } = await runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
+    `import os from 'node:os';`,
     `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const mode = fs.statSync('user-config/config.json').mode & 0o777;`,
+    `const configPath = os.homedir() + '/.emile/config.json';`,
+    `const mode = fs.statSync(configPath).mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
-  assert.equal(mode, 0o600, `user config mode should be 0600, got ${mode?.toString(8)}`);
+  assert.equal(mode, 0o600, err || `config file mode should be 0600, got ${mode?.toString(8)}`);
 });
 
-test('saveUserConfig chmods existing user config to 0600', { skip: process.platform === 'win32' }, () => {
-  const { out } = runSubprocess(({ project }) => [
+test('saveUserConfig chmods existing 0644 config to 0600', { skip: process.platform === 'win32' ? '0600 file mode is POSIX-only' : false }, async () => {
+  const { out, err } = await runSubprocess(({ project, fakeHome }) => [
     `import fs from 'node:fs';`,
-    `fs.mkdirSync('user-config', { recursive: true });`,
-    `fs.writeFileSync('user-config/config.json', '{}', { mode: 0o644 });`,
+    `import os from 'node:os';`,
+    `const configPath = os.homedir() + '/.emile/config.json';`,
+    `fs.writeFileSync(configPath, '{}', { mode: 0o644 });`,
     `const {saveUserConfig} = await import('${project}/src/config.js');`,
     `saveUserConfig({ apiKey: 'test' });`,
-    `const mode = fs.statSync('user-config/config.json').mode & 0o777;`,
+    `const mode = fs.statSync(configPath).mode & 0o777;`,
     `console.log(mode);`,
   ].join('\n'));
   const mode = parseInt(out, 10);
-  assert.equal(mode, 0o600, `user config should be 0600 after chmod, got ${mode?.toString(8)}`);
+  assert.equal(mode, 0o600, err || `config should be 0600 after chmod, got ${mode?.toString(8)}`);
 });

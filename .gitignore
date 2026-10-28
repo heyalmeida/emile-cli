@@ -136,6 +136,18 @@ dist
 .pnp.*
 
 # Project Files
+# `.agents/skills/` is the canonical workspace skills root the CLI reads
+# (src/skills.js) and a bring-your-own directory: the user's kit stays local.
+# Git cannot re-include a file whose parent directory is excluded, so the one
+# vendored starter skill the code requires (clean-code) is kept versioned with
+# an explicit parent-chain negation instead of excluding the whole tree.
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/clean-code/
 .agent/
 .emile/
+.clinerules
 grok-build/
+integrations/
+skills-lock.json

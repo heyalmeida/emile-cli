@@ -61,7 +61,7 @@
 - [x] T2.2 — `test/recovery.test.js` (≤ 200 LOC): `recoverable` / `corrupt` / `abandoned`, malformed JSON, missing files, symlink escape.
 - [x] T2.3 — `test/undo-persistence.test.js` (≤ 200 LOC): cap overflow discards oldest, rehydrate after restart, symlink refusal, atomic append, per-session isolation, `/delete` clears.
 - [x] T2.4 — `test/config-permissions.test.js` (≤ 200 LOC): per-provider resolution, empty string on mismatch, 0600 on POSIX, warning on Windows (mocked).
-- [x] T2.5 — `test/structure.test.js` (≤ 150 LOC): every file under `src/lifecycle/` and `src/tools/file-state/` is ≤ 150 LOC.
+- [x] T2.5 — `test/structure.test.js` (≤ 150 LOC): every file under `src/lifecycle/` and `src/tools/file-state/` is ≤ 150 LOC. *Superseded: this test was retired and the gate moved to the ESLint `max-lines` rule (see `.eslintrc.json` `overrides`); the same limit is now enforced at `npm run lint` for every matching file.*
 - [x] T2.6 — `node --check` on every touched `.js` file. Record the command and output.
 - [x] T2.7 — `npm run lint`. Record the output.
 - [x] T2.8 — `npm test`. Record the output.

@@ -63,6 +63,19 @@ describe('resolveSafePath', () => {
   let tmpWorkspace;
   let tmpOutside;
 
+  // Windows without Developer Mode denies symlink creation (EPERM); tests
+  // that need one exercise real symlink security behavior, so skip instead.
+  const symlinkSkipReason = (() => {
+    try {
+      const base = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-symlink-probe-'));
+      fs.symlinkSync(path.join(base, 'target'), path.join(base, 'link'));
+      fs.rmSync(base, { recursive: true, force: true });
+      return false;
+    } catch (err) {
+      return err.code === 'EPERM' ? 'symlink creation not permitted in this environment' : false;
+    }
+  })();
+
   beforeEach(() => {
     tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-ws-'));
     tmpOutside = fs.mkdtempSync(path.join(os.tmpdir(), 'emile-out-'));
@@ -89,7 +102,7 @@ describe('resolveSafePath', () => {
     assert.throws(() => resolveSafePath('/etc/passwd'), /Access denied/);
   });
 
-  test('rejects symlink escape — existing symlink pointing outside', () => {
+  test('rejects symlink escape — existing symlink pointing outside', { skip: symlinkSkipReason }, () => {
     const secretFile = path.join(tmpOutside, 'secret.txt');
     fs.writeFileSync(secretFile, 'top secret');
     const link = path.join(tmpWorkspace, 'innocent.txt');
@@ -98,7 +111,7 @@ describe('resolveSafePath', () => {
     assert.throws(() => resolveSafePath('innocent.txt'), /Access denied/);
   });
 
-  test('rejects symlinked directory escape', () => {
+  test('rejects symlinked directory escape', { skip: symlinkSkipReason }, () => {
     const outsideDir = path.join(tmpOutside, 'dir');
     fs.mkdirSync(outsideDir);
     fs.writeFileSync(path.join(outsideDir, 'f.txt'), 'x');
@@ -119,7 +132,7 @@ describe('resolveSafePath', () => {
     assert.equal(resolved, path.resolve(tmpWorkspace, 'a/b/c/new.txt'));
   });
 
-  test('rejects a new file inside a symlinked directory pointing outside', () => {
+  test('rejects a new file inside a symlinked directory pointing outside', { skip: symlinkSkipReason }, () => {
     fs.symlinkSync(tmpOutside, path.join(tmpWorkspace, 'out-dir'));
     assert.throws(() => resolveSafePath('out-dir/new-file.txt'), /Access denied/);
   });

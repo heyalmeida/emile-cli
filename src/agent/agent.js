@@ -4,7 +4,7 @@ import { createChatCompletion, formatApiError, getProviderToolDefinitions } from
 import { toolDefinitions, toolHandlers, clearFileCache } from '../tools/index.js';
 import { getMcpToolDefinitions, handleMcpToolCall, isMcpTool } from '../mcp.js';
 import { promptPlanApproval } from '../plans.js';
-import { config } from '../config.js';
+import { config, readPositiveInt, DEFAULT_MAX_LOOP_ITERATIONS } from '../config.js';
 import { sessionStats, calculateCost, calculateContextUsage, getContextLimit } from './session-stats.js';
 import { compressContextIfNeeded } from './compression.js';
 import {
@@ -27,7 +27,11 @@ import { createSpinner, RESPONSE_WAITING_LABEL } from '../ui/spinner.js';
 import { appendReasoningDetails, getIncrementalText } from './reasoning.js';
 import { filterSkillsByRelevance } from '../skills.js';
 import { compileMentionAttachments } from '../mentions.js';
+import { isValidAssistantMessage } from '../history.js';
 import { setActiveTool, clearActiveTool } from '../lifecycle/index.js';
+import { MEMORY_TOOL_NAMES } from '../memory/constants.js';
+import { appendMemoryContext } from '../memory/context.js';
+import { flushGlobalMemory, getGlobalMemoryContext } from '../memory/index.js';
 
 // Opt-in diagnostic: log every reasoning/content delta that arrives
 // from the model so we can confirm whether the provider is actually
@@ -65,7 +69,9 @@ export function normalizeToolExecutionResult(result) {
     const attachments = Array.isArray(result.attachments)
       ? result.attachments.filter(item => item?.type === 'image_url' && item?.image_url?.url).slice(0, 3)
       : [];
-    return { content: result.content, attachments };
+    const normalized = { content: result.content, attachments };
+    if (typeof result.persistContent === 'string') normalized.persistContent = result.persistContent;
+    return normalized;
   }
   if (typeof result === 'string') return { content: result, attachments: [] };
   return { content: JSON.stringify(result ?? null), attachments: [] };
@@ -85,7 +91,7 @@ export function createTransientWebReferenceMessage(attachments, model) {
   };
 }
 
-async function executeToolWithSignal(toolCall, signal) {
+async function executeToolWithSignal(toolCall, signal, handlerContext = {}) {
   const { name, arguments: argsString } = toolCall.function;
   let args = {};
   try { args = JSON.parse(argsString); } catch { return normalizeToolExecutionResult('Error: Failed to parse tool arguments.'); }
@@ -95,12 +101,8 @@ async function executeToolWithSignal(toolCall, signal) {
       // the MCP client's HTTP layer. Pass only if the handler signature accepts it.
       return normalizeToolExecutionResult(await handleMcpToolCall(name, args));
     } else if (toolHandlers[name]) {
-      // Pass { signal } only if the handler accepts it (defensive).
       const handler = toolHandlers[name];
-      const acceptsSignal = handler.length > 1;
-      return normalizeToolExecutionResult(acceptsSignal
-        ? await handler(args, { signal })
-        : await handler(args));
+      return normalizeToolExecutionResult(await handler(args, { signal, ...handlerContext }));
     } else if (webToolHandlers[name]) {
       return normalizeToolExecutionResult(await webToolHandlers[name](args));
     }
@@ -108,6 +110,21 @@ async function executeToolWithSignal(toolCall, signal) {
   } catch (err) {
     return normalizeToolExecutionResult(`Error executing tool: ${err.message}`);
   }
+}
+
+function sanitizeMemoryToolCall(toolCall) {
+  if (!MEMORY_TOOL_NAMES.has(toolCall?.function?.name)) return toolCall;
+  return { ...toolCall, function: { ...toolCall.function, arguments: '{"omitted":true}' } };
+}
+
+function projectTransientMessages(messages, memoryUserMessage, memoryBlock, transientToolContent) {
+  return messages.map(message => {
+    if (message === memoryUserMessage && memoryBlock && typeof message.content === 'string') {
+      return { ...message, content: appendMemoryContext(message.content, memoryBlock) };
+    }
+    const transient = message?.role === 'tool' ? transientToolContent.get(message.tool_call_id) : null;
+    return transient ? { ...message, content: transient } : message;
+  });
 }
 
 function isValidPendingToolCall(toolCall) {
@@ -194,6 +211,9 @@ async function runAgentInner({
   createCompletion = createChatCompletion,
   requestPlanApproval = promptPlanApproval,
   control = null,
+  memorySessionId = null,
+  memoryRoot = undefined,
+  loadMemoryContext = getGlobalMemoryContext,
 }) {
   // Clear file read cache at the beginning of each turn/interaction
   clearFileCache();
@@ -219,13 +239,47 @@ async function runAgentInner({
     messages[0].content = systemPrompt;
   }
 
+  // Extract recent user messages for memory evidence validation.
+  //
+  // The model may legitimately cite a span from a few turns back when the
+  // user asks it to memorize something that was mentioned earlier in the
+  // conversation (e.g. "extract info from the text I pasted at the start").
+  // A 5-message window was too narrow: the cited span could fall outside it
+  // and every proposeMemory would be rejected with invalid-source. We keep
+  // a bounded window by total character count (~16k chars, enough for ~20
+  // turns of typical user input) so the window is wide enough to cover
+  // long multi-turn grounding requests but still bounded.
+  const MEMORY_EVIDENCE_WINDOW_CHARS = 16_000;
+  const allUserTexts = messages
+    .filter(m => m.role === 'user' && typeof m.content === 'string')
+    .map(m => m.content);
+  const recentUserMessages = [];
+  let recentChars = 0;
+  for (let index = allUserTexts.length - 1; index >= 0; index -= 1) {
+    const text = allUserTexts[index];
+    if (recentChars + text.length > MEMORY_EVIDENCE_WINDOW_CHARS && recentUserMessages.length > 0) break;
+    recentUserMessages.unshift(text);
+    recentChars += text.length;
+  }
+
+  let memoryUserMessage = null;
+  let memoryBlock = '';
   if (initialPrompt) {
     const mentions = compileMentionAttachments(initialPrompt);
     for (const warning of mentions.warnings) console.log(C.warn(`  ${warning}`));
-    messages.push({ role: 'user', content: `${initialPrompt}${mentions.context}` });
+    memoryUserMessage = { role: 'user', content: `${initialPrompt}${mentions.context}` };
+    messages.push(memoryUserMessage);
+    if (memorySessionId) {
+      try {
+        const memoryContext = await loadMemoryContext(initialPrompt, { root: memoryRoot, dryRun: config.dryRun });
+        memoryBlock = memoryContext.text || '';
+      } catch { /* memory is optional; the coding turn must continue */ }
+    }
   }
 
-  const localTools = toolDefinitions;
+  const localTools = memorySessionId
+    ? toolDefinitions
+    : toolDefinitions.filter(tool => !MEMORY_TOOL_NAMES.has(tool?.function?.name));
   const mcpTools = getMcpToolDefinitions();
   const providerTools = getProviderToolDefinitions({
     provider: config.provider,
@@ -238,7 +292,9 @@ async function runAgentInner({
   // token unit and context window match the status bar. Recalculate after a
   // successful compression because `messages` is mutated in place.
   const contextLimit = getContextLimit(model);
-  let contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages });
+  const transientMemoryToolContent = new Map();
+  const projectedMessages = () => projectTransientMessages(messages, memoryUserMessage, memoryBlock, transientMemoryToolContent);
+  let contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages: projectedMessages() });
   const contextCompressed = await compressContextIfNeeded({
     model,
     messages,
@@ -247,7 +303,7 @@ async function runAgentInner({
     createCompletion,
   });
   if (contextCompressed) {
-    contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages });
+    contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages: projectedMessages() });
   }
   sessionStats.estimatedContextTokens = contextUsage.estimatedTokens;
   sessionStats.contextLimit = contextLimit;
@@ -258,7 +314,7 @@ async function runAgentInner({
   // IMPROVEMENTS.md §3.1: a model stuck in a tool-calling loop must not run
   // until the context window fills. Iterations counted per user request
   // (turn), not per API call chunk.
-  const MAX_LOOP_ITERATIONS = config.maxLoopIterations || 40;
+  const MAX_LOOP_ITERATIONS = readPositiveInt(config.maxLoopIterations, DEFAULT_MAX_LOOP_ITERATIONS);
   let iterationCount = 0;
 
   // Active model — may fall back to openrouter/free if paid model errors
@@ -307,9 +363,10 @@ async function runAgentInner({
     let responseStream;
     try {
       const transientWebReference = createTransientWebReferenceMessage(pendingWebAttachments, activeModel);
+      const memoryProjectedMessages = projectedMessages();
       const requestMessages = transientWebReference
-        ? [...messages, transientWebReference]
-        : messages;
+        ? [...memoryProjectedMessages, transientWebReference]
+        : memoryProjectedMessages;
       if (pendingWebAttachments.length > 0 && !transientWebReference) {
         const lastToolMessage = [...messages].reverse().find(message => message?.role === 'tool');
         if (lastToolMessage && typeof lastToolMessage.content === 'string' &&
@@ -355,7 +412,7 @@ async function runAgentInner({
         });
         forcedCompressionDone = true;
         if (compressed) {
-          contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages });
+          contextUsage = calculateContextUsage({ systemPrompt, tools: allTools, messages: projectedMessages() });
           sessionStats.estimatedContextTokens = contextUsage.estimatedTokens;
           continue;
         }
@@ -510,11 +567,7 @@ async function runAgentInner({
       // A cancel that aborted the request mid-stream is not an error — it is
       // handled below via streamCanceled/shouldStop with a proper notice.
       spinner.stop();
-      if (control?.shouldStop()) {
-        streamCanceled = true;
-      } else {
-        streamErrored = true;
-      }
+      streamErrored = true;
       if (!control?.shouldStop()) {
         // Surface the failure — a silent swallow made mid-response failures
         // look like empty replies. Partial reasoning/text still renders below.
@@ -629,6 +682,11 @@ async function runAgentInner({
       }
     }
 
+    const executableToolCalls = assistantMessage.tool_calls || [];
+    if (executableToolCalls.length > 0) {
+      assistantMessage.tool_calls = executableToolCalls.map(sanitizeMemoryToolCall);
+    }
+
     // Turn control: a cancel that arrived during the stream stops the turn
     // here. Tool calls from a partially received response are dropped (their
     // arguments may be incomplete); text-only partial replies are kept.
@@ -637,17 +695,23 @@ async function runAgentInner({
       if (assistantMessage.tool_calls) {
         process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — pending tool calls discarded.')}\n`);
       } else {
-        messages.push(assistantMessage);
+        // Same shape rule as the normal path: a canceled turn that produced no
+        // text has nothing valid to contribute and must not enter history.
+        if (isValidAssistantMessage(assistantMessage)) messages.push(assistantMessage);
         process.stdout.write(`\r\x1B[K  ${C.warn('⏹')} ${C.dim('Turn canceled — partial response kept.')}\n`);
       }
       break;
     }
 
-    messages.push(assistantMessage);
+    // Never push an assistant turn with neither content nor tool_calls: the
+    // provider rejects it on EVERY later request (400 needs content or
+    // tool_calls), which is neither retryable nor an overflow, so one dead
+    // stream would permanently poison the session (deep-dive § 10, P0-6).
+    if (isValidAssistantMessage(assistantMessage)) messages.push(assistantMessage);
 
     // Process tool calls as a batch — no clack spinner, just text output
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      const toolCalls = assistantMessage.tool_calls;
+    if (executableToolCalls.length > 0) {
+      const toolCalls = executableToolCalls;
 
       await persistToolCheckpoint(checkpointSession, messages, {
         status: 'tool_pending',
@@ -685,7 +749,9 @@ async function runAgentInner({
 
         let toolResult;
         try {
-          toolResult = await executeToolWithSignal(toolCall, toolAbort.signal);
+          toolResult = await executeToolWithSignal(toolCall, toolAbort.signal, {
+            memory: { root: memoryRoot, currentUserText: [initialPrompt, ...recentUserMessages], sessionId: memorySessionId },
+          });
         } finally {
           clearActiveTool();
         }
@@ -693,8 +759,9 @@ async function runAgentInner({
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: toolResult.content,
+          content: toolResult.persistContent || toolResult.content,
         });
+        if (toolResult.persistContent) transientMemoryToolContent.set(toolCall.id, toolResult.content);
         if (toolResult.attachments.length > 0) {
           pendingWebAttachments.push(...toolResult.attachments);
           pendingWebAttachments = pendingWebAttachments.slice(0, 3);
@@ -727,6 +794,9 @@ export async function runAgent(options) {
   try {
     return await runAgentInner(options);
   } finally {
+    if (options.memorySessionId) {
+      try { await flushGlobalMemory({ root: options.memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+    }
     setTerminalActivity('waiting');
   }
 }

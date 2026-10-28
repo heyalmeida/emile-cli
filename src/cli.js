@@ -7,7 +7,7 @@ import { normalizeWorkspaceCwd } from './tools/security.js';
 // All user-facing output goes through the C palette exported by ui.js —
 // the single source of colors per the visual identity doc (the legacy
 // picocolors remap was removed in the TUI overhaul pass 1).
-import { C, stripTerminalControls, listenTurnKeys } from './ui/index.js';
+import { C, stripTerminalControls, listenTurnKeys, formatQueuePreview } from './ui/index.js';
 
 import {
   printStartupScreen,
@@ -19,7 +19,6 @@ import {
   persistentPromptInput,
 } from './ui/index.js';
 import { createSpinner } from './ui/spinner.js';
-import { clear } from 'node:console';
 
 
 program
@@ -29,10 +28,13 @@ program
   .option('-m, --model <model>', 'Requesty/OpenRouter model to use', config.defaultModel)
   .option('-e, --effort <level>', 'Reasoning effort (low, medium, high, max, min, none)', config.defaultEffort)
   .option('-p, --plans', 'Execute agent in plans mode', false)
-  .option('--no-cache', 'Bypass prompt caching', false)
+  // Negation flags: commander treats the third argument as the default of the
+  // POSITIVE option (`cache`, `safe`) — it must be true, otherwise the feature
+  // is permanently off and `--no-cache`/`--no-safe` become no-ops.
+  .option('--no-cache', 'Bypass prompt caching', true)
   .option('-s, --skills <list>', 'Comma-separated active skills (default: all)', 'all')
   .option('-H, --history', 'Select and resume a past conversation history', false)
-  .option('--no-safe', 'Bypass command execution safe gate', false)
+  .option('--no-safe', 'Bypass command execution safe gate', true)
   .option('--dry-run', 'Simulate changes and command execution', false)
   .option('--web-search', 'Allow OpenRouter web search (additional provider charges may apply)', config.webSearch)
   .option('--export-thinking', 'Include model reasoning in /export output', false)
@@ -55,11 +57,13 @@ export async function main() {
   const { runAgent, resumePendingTools, sessionStats, initSessionStats, getSessionStatsSnapshot, resetSessionStats, restoreSessionStats, createTurnControl } = await import('./agent/index.js');
   const { countCompletedTurns, refreshSessionSummary } = await import('./agent/session-summary.js');
   const { saveSession, listSessions, loadSession, getSessionRecord, deleteSession, cleanSessions, flushSync, markAborted } = await import('./history.js');
-  const { installShutdownHandlers } = await import('./lifecycle/index.js');
+  const { installShutdownHandlers, isShuttingDown } = await import('./lifecycle/index.js');
   const { runStartupRecovery } = await import('./recovery.js');
   const { runConnectWizard, runModelWizard, runRulesCommand } = await import('./commands.js');
   const { dispatchCommand } = await import('./commands/index.js');
   const { undoStack } = await import('./tools/index.js');
+  const { initializeGlobalMemory, flushGlobalMemory, acceptPendingGlobalMemories, rejectPendingGlobalMemories, listPendingMemories, isMemorySkipConfirm, setMemorySkipConfirm } = await import('./memory/index.js');
+  const { runMemoryConfirmModal } = await import('./ui/index.js');
 
   // Set runtime configurations
   config.dryRun = !!options.dryRun;
@@ -70,6 +74,18 @@ export async function main() {
   if (Number.isFinite(maxSessionSize) && maxSessionSize > 0) config.maxSessionSize = maxSessionSize;
   const maxLoopIterations = Number(options.maxLoopIterations);
   if (Number.isFinite(maxLoopIterations) && maxLoopIterations > 0) config.maxLoopIterations = maxLoopIterations;
+
+  let memoryRoot = undefined;
+  try {
+    const memory = await initializeGlobalMemory({ dryRun: config.dryRun });
+    memoryRoot = memory.root;
+    if (verbose) {
+      const replay = memory.replayed ? `, replayed ${memory.replayed}` : '';
+      console.log(C.muted(`  [memory] ${memory.state.mode}, ${memory.health}${replay}`));
+    }
+  } catch {
+    if (verbose) console.log(C.warn('  [memory] unavailable; continuing without persistent memory'));
+  }
 
   // Load persisted enhanced-web settings and credentials (.emile/web.json)
   // into the runtime config — without this, keys configured via /tavily or
@@ -131,31 +147,55 @@ export async function main() {
   }
 
   // ── Recovery scan: inspect persisted sessions for pending checkpoints ────
-  // Runs before the REPL; never blocks startup. In --verbose, log the report.
+  // Runs before the REPL; never blocks startup. Corrupt records are quarantined
+  // by the scan itself, so the report below tells the user what happened and
+  // what to do next — and prints nothing when there is nothing to say.
   const recoveryReport = await runStartupRecovery();
+  if (recoveryReport.recoverable > 0) {
+    const noun = recoveryReport.recoverable === 1 ? 'session' : 'sessions';
+    console.log(C.success(`\n  ${recoveryReport.recoverable} recoverable ${noun} — resume with /switch or the resume prompt.`));
+  }
+  if (recoveryReport.corrupt > 0) {
+    const moved = recoveryReport.quarantined.length;
+    console.log(C.warn(`\n  ${recoveryReport.corrupt} corrupt session record${recoveryReport.corrupt === 1 ? '' : 's'}${moved > 0 ? ` — moved to .emile/history/corrupt/` : ' — could not be moved'}.`));
+  }
   if (verbose && recoveryReport.sessionsScanned > 0) {
     console.log(C.muted(`  [recovery] scanned ${recoveryReport.sessionsScanned} sessions`));
-    if (recoveryReport.recoverable > 0) console.log(C.success(`  [recovery] ${recoveryReport.recoverable} recoverable pending`));
-    if (recoveryReport.corrupt > 0)   console.log(C.warn(`  [recovery] ${recoveryReport.corrupt} corrupt`));
-    if (recoveryReport.abandoned > 0) console.log(C.muted(`  [recovery] ${recoveryReport.abandoned} abandoned`));
     if (recoveryReport.scanErrors.length > 0) console.log(C.warn(`  [recovery] ${recoveryReport.scanErrors.length} scan errors`));
   }
 
   // ── Clean screen & unified header moved below, after interactive setup prompts ──
   // (so the plan-confirmation and history-selection prompts are cleared away)
 
+  // Live state the shutdown coordinator needs. Declared here (before the
+  // coordinator is installed) so its closures never depend on a later `let`.
+  let liveSessionId = '';
+  let turnInFlight = false;
+  let livePromptApi = null;
+
   // Wire the lifecycle coordinator after MCP init. The coordinator handles
   // SIGINT/SIGTERM/SIGHUP in order: stop-input → drain-tools →
-  // flush-session → close-mcp → restore-terminal.
+  // flush-session → flush-memory → close-mcp → restore-terminal.
   installShutdownHandlers({
     verbose,
     shutdownMcp,
     flushSync,
-    markAborted: (id, reason) => markAborted(id),
+    flushMemory: () => flushGlobalMemory({ root: memoryRoot, dryRun: config.dryRun }),
+    // Record an interrupted turn WITHOUT destroying its resumability. No-ops when
+    // no turn is in flight (idle SIGINT must not invent an aborted turn).
+    markAborted: (reason) => {
+      if (!turnInFlight || !liveSessionId) return;
+      markAborted(liveSessionId, reason);
+    },
+    // Idle SIGINT must release the stdin lease: the prompt's own teardown
+    // removes its keypress listener, restores raw mode and disables bracketed
+    // paste. Safe before the prompt exists.
+    shutdownPrompt: () => { try { livePromptApi?.shutdown?.(); } catch { /* stdin may be gone */ } },
   });
 
   let messages = [];
   let sessionId = `session_${Date.now()}`;
+  liveSessionId = sessionId;
   let sessionSummary = '';
   let isResumed = false;
   let restoredSessionStats = null;
@@ -184,6 +224,7 @@ export async function main() {
       if (loaded) {
         messages = loaded;
         sessionId = selectedId;
+        liveSessionId = sessionId;
         const record = getSessionRecord(selectedId);
         config.sessionCwd = normalizeWorkspaceCwd(record?.sessionCwd) || config.workspaceDir;
         const refreshedSessions = listSessions();
@@ -249,6 +290,14 @@ export async function main() {
     const record = getSessionRecord(loadedSessionId);
     if (!record || record.status !== 'tool_pending') return;
 
+    // An interrupted turn keeps its `tool_pending` checkpoint (markAborted is
+    // additive), so it is fully resumable — the user just gets told why the
+    // transcript stops where it does.
+    if (record.aborted) {
+      const reason = record.abortReason ? ` (${record.abortReason})` : '';
+      console.log(C.muted(`\n  This turn was interrupted${reason} — resuming its pending tool calls.\n`));
+    }
+
     const recovery = await resumePendingTools({
       messages: loadedMessages,
       pendingToolCalls: record.pendingToolCalls,
@@ -275,8 +324,11 @@ export async function main() {
       checkpointSession: async (checkpointMessages, metadata) => {
         persistSession(loadedSessionId, sessionSummary, checkpointMessages, metadata);
       },
+      memorySessionId: loadedSessionId,
+      memoryRoot,
     });
     sessionId = loadedSessionId;
+    liveSessionId = sessionId;
     await finalizeSessionTurn();
   };
 
@@ -326,6 +378,8 @@ export async function main() {
       messages,
       initialPrompt: promptInput,
       checkpointSession,
+      memorySessionId: sessionId,
+      memoryRoot,
     });
 
     if (!sessionSummary) {
@@ -349,14 +403,17 @@ export async function main() {
     // through turn control; Enter appends a FIFO prompt for the next turn.
     const runAgentTurn = async (initialPrompt) => {
       const control = createTurnControl();
+      // Tells the shutdown coordinator there IS a turn worth recording as aborted.
+      turnInFlight = true;
       const keys = listenTurnKeys({
         control,
         promptOptions: { stats: sessionStats, mcpInfo },
         onLine: (line) => {
           pendingQueue.push(line);
-          const preview = line.replace(/\s+/g, ' ');
+          // The preview is display-only and carries a `(+N chars)` marker when
+          // the line is longer, so it can never imply the whole text was taken.
           process.stdout.write(
-            `\r\x1B[K  ${C.muted(`queued: ${preview.slice(0, 90)}${preview.length > 90 ? '…' : ''}`)}\n`
+            `\r\x1B[K  ${C.muted(`queued: ${formatQueuePreview(line)}`)}\n`
           );
         },
       });
@@ -371,10 +428,30 @@ export async function main() {
           initialPrompt,
           control,
           checkpointSession,
+          memorySessionId: sessionId,
+          memoryRoot,
         });
       } finally {
         keys.stop();
+        turnInFlight = false;
       }
+    };
+
+    const maybeRunMemoryConfirmModal = async () => {
+      if (isMemorySkipConfirm()) return;
+      const pending = listPendingMemories({ root: memoryRoot, dryRun: config.dryRun }).records;
+      if (pending.length === 0) return;
+      try {
+        const result = await runMemoryConfirmModal(pending, {
+          onAccept: async (ids) => {
+            try { await acceptPendingGlobalMemories(ids, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+          },
+          onReject: async (ids) => {
+            try { await rejectPendingGlobalMemories(ids, { root: memoryRoot, dryRun: config.dryRun }); } catch { /* best-effort */ }
+          },
+        });
+        if (result.action === 'accept-all') setMemorySkipConfirm(true);
+      } catch { /* best-effort */ }
     };
 
     const commandContext = {
@@ -410,6 +487,7 @@ export async function main() {
         promptApi?.setInput(nextPrefill);
       },
       resumeSession: resumeLoadedSession,
+      memoryRoot,
     };
 
     let prefill = '';
@@ -431,6 +509,7 @@ export async function main() {
             sessionSummary = next.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
           }
           await finalizeSessionTurn();
+          await maybeRunMemoryConfirmModal();
         } catch (err) {
           console.error(C.red(`\n  Error: ${err.message}\n`));
         }
@@ -444,7 +523,8 @@ export async function main() {
       stats: sessionStats,
       sessionId,
       mcpInfo,
-      onReady: (api) => { promptApi = api; },
+      ctx: { config, memoryRoot },
+      onReady: (api) => { promptApi = api; livePromptApi = api; },
       async onSubmit(submitted) {
         const clean = String(submitted || '').trim();
         if (!clean) return 'next';
@@ -459,6 +539,7 @@ export async function main() {
             sessionSummary = clean.substring(0, 50).replace(/\r?\n/g, ' ') + '...';
           }
           await finalizeSessionTurn();
+          await maybeRunMemoryConfirmModal();
           await drainQueue();
         } catch (err) {
           console.error(C.red(`\n  Error: ${err.message}\n`));
@@ -468,7 +549,12 @@ export async function main() {
     });
     isRunning = false;
 
-    clear();
+    // When the prompt resolved because the shutdown coordinator tore it down
+    // (idle SIGINT), the coordinator owns the exit: printing a farewell, wiping
+    // the screen or closing MCP here would race its remaining phases and destroy
+    // the transcript the user was reading.
+    if (isShuttingDown()) return;
+
     console.log(C.muted('\n  Goodbye, see you later! \n'));
     setTerminalActivity('');
     await shutdownMcp();

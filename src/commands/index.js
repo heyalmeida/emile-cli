@@ -2,6 +2,7 @@
 // The REPL owns lifecycle/input handling; command behavior lives in handlers.js.
 import {
   handleConnect,
+  handleProvider,
   handleModel,
   handleSessions,
   handleNewSession,
@@ -18,9 +19,11 @@ import {
   handleRules,
   handleSkills,
 } from './handlers.js';
+import { handleForget, handleMemory, handleRemember } from './memory.js';
 
 const COMMANDS = new Map([
   ['/connect', handleConnect],
+  ['/provider', handleProvider],
   ['/model', handleModel],
   ['/switch', handleSessions],
   ['/sessions', handleSessions],
@@ -39,6 +42,9 @@ const COMMANDS = new Map([
   ['/rules', handleRules],
   ['/skills', handleSkills],
   ['/skill', handleSkills],
+  ['/memory', handleMemory],
+  ['/remember', handleRemember],
+  ['/forget', handleForget],
 ]);
 
 /**
@@ -61,3 +67,5 @@ export function hasCommand(input) {
 export function listCommands() {
   return [...COMMANDS.keys()];
 }
+
+export { matchCommands, buildHelpTable, listRootCommands } from './registry.js';

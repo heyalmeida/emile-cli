@@ -1,6 +1,6 @@
 // user-message.js — ui/ module tree (extracted from the former src/ui.js monolith).
 // See docs/architecture.md for the module map.
-import { C, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
+import { ROLE, GAP, MAX_BOX_W, BOX_INDENT, getW, stripAnsi, wrapText, fmtK, boxTopOpen, boxBottomOpen } from './theme.js';
 import { config } from '../config.js';
 import { turnState } from './turn-state.js';
 import { getModelInfo } from '../models.js';
@@ -36,9 +36,9 @@ export function printUserMessage(text) {
   if (shown) {
     const used = shown.length + 4; // '── ' + ' '
     const rest = Math.max(width - used, 0);
-    process.stdout.write(`  ${C.muted('── ')}${C.fg(shown)} ${C.muted('─'.repeat(rest))}\n`);
+    process.stdout.write(`  ${ROLE.meta.label('── ')}${ROLE.user(shown)} ${ROLE.meta.label('─'.repeat(rest))}\n`);
   } else {
-    process.stdout.write(`  ${C.muted('─'.repeat(width))}\n`);
+    process.stdout.write(`  ${ROLE.meta.label('─'.repeat(width))}\n`);
   }
   // No trailing blank — the next block (thinking, tools, response) owns the
   // single leading gap (vertical rhythm rule).

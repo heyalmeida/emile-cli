@@ -71,7 +71,7 @@ npm install
 node bin/emile.js --verbose   # run from source with debug output
 ```
 
-**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard or provider-specific env vars (`EMILE_PROVIDER`, `*_API_KEY`). The wizard stores settings in the OS user configuration directory and protects provider credentials separately; the workspace `.emile/` directory is runtime state and remains gitignored.
+**There is no build step** — the project runs pure ES modules. Configure provider/key via the wizard, env vars (`EMILE_PROVIDER`, `*_API_KEY`) or user-global `~/.emile/config.json`. Confirmed user memory lives separately in `~/.emile/memory/v1/`; workspace runtime data stays in the gitignored `.emile/` directory.
 
 ---
 
@@ -91,6 +91,7 @@ npm audit                      # when there is a new dependency
 ```
 
 - **Tools/execution (high risk):** mandatory negative scenarios — command outside the whitelist, `../` path, dry-run writes nothing, failure becomes an error to the model.
+- **Global agent memory (high risk):** follow ADR-0004 and its implemented spec; cover dedicated-root confinement, corrupt/torn state, concurrent locks, source/privacy validation, transient context/history redaction, instruction precedence and complete application-level deletion.
 - **UI:** verify 60/80/120 columns, no ANSI leakage, [design system](./docs/visual-identity.md#6-visual-review-checklist) checklist.
 - **Without recorded evidence, the change is not tested** — describe in the PR the commands run, results and limitations.
 
@@ -124,5 +125,5 @@ A contribution is only ready when:
 - [ ] Affected documentation was synced (Rule 2 of `.clinerules`)
 - [ ] New/changed features have a `features/` registry entry (Rule 7)
 - [ ] `CHANGELOG.md` received the entry
-- [ ] Code was committed on its product branch and documentation was committed separately on `docs/documentation` (Rule 8)
+- [ ] Code and documentation were committed directly on `development` in coherent, explicitly staged units (Rule 8)
 - [ ] No Critical/High finding was left untreated

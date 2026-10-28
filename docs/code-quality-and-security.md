@@ -11,7 +11,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 
 | Level | Criteria | Emile examples |
 |-------|-----------|-------------------|
-| **High** | Touches command execution, file writes, path resolution, credentials, LLM input parsing, MCP | Handlers in `tools.js`, `resolveSafePath`, whitelist, `mcp.js`, `api.js`, `ui.js` sanitizer |
+| **High** | Touches command execution, file writes, path resolution, credentials, persistent global memory, LLM input parsing, MCP | Handlers in `tools/`, `resolveSafePath`, `memory/`, whitelist, `mcp.js`, `api/`, UI sanitizers |
 | **Medium** | Changes contracts between modules, agent-loop flow, session persistence, system prompt | `agent.js`, `prompt.js`, `skills.js`, `history.js`, `plans.js` |
 | **Low** | Pure UI, texts, docs, local refactors without behavior change | Palette/boxes in `ui.js`, README, message copy |
 
@@ -23,15 +23,16 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 
 | Surface | Threat | Mandatory control |
 |------------|--------|----------------------|
-| **Shell execution** | Destructive command suggested by the model (or injected via prompt) | Safe mode with confirmation; `SAFE_COMMANDS_WHITELIST` for the safe ones; `--dry-run` simulates |
-| **File writes** | Overwrite outside the workspace, path traversal (`../`) | Every path goes through `resolveSafePath`; writes confined to the workspace |
+| **Shell execution** | Destructive command suggested by the model (or injected via prompt); credential disclosure to a command the user merely approved (a dependency postinstall, a `curl \| sh` payload, an `env` dump echoed back into the model context and the session file) | Safe mode with confirmation; `SAFE_COMMANDS_WHITELIST` for the safe ones; `--dry-run` simulates; **the child environment is scrubbed by `buildScrubbedEnv`** — provider keys, `*SECRET*/*TOKEN*/*PASSWORD*/*PASSWD*/*CREDENTIAL*`, `*_PAT`, `LD_PRELOAD`/`LD_LIBRARY_PATH`/`DYLD_*` and `EMILE_*` never reach the subprocess (deny-by-pattern on the name, case-insensitive, no bypass) |
+| **File writes** | Overwrite outside an authorized root, path traversal (`../`) | Every path goes through `resolveSafePath`; general tools use the workspace capability root and the memory subsystem alone supplies its fixed global root |
 | **LLM input** | Prompt injection via contents of read files (tool results go back to the model) | Tool results are data, not instructions; handlers validate args regardless of what the model asks; skill relevance only selects prompt metadata and never executes it |
 | **Project rules** | External-file disclosure through symlinks; terminal control injection via `/rules`; accidental secrets sent with every prompt | Reject realpaths outside the workspace; strip ANSI/OSC before terminal rendering; never generate defaults; document that rule content is sent to the model |
 | **Terminal title** | OSC injection or secret leakage into desktop/tab metadata from prompts and tool arguments | Allowlist runtime descriptions; exclude prompts/commands/queries; strip controls and cap length; emit only to supported TTYs |
-| **Credentials** | Provider or enhanced-web API key in logs, session export, error messages or settings JSON | Provider, Tavily and Firecrawl keys are stored only in protected credential storage (Windows DPAPI CurrentUser; non-Windows AES-256-GCM fallback) or matching env vars; settings JSON never contains `apiKey`; never in output; `/export` doesn't include config and omits model reasoning unless explicitly opted in |
-| **MCP** | Malicious external server exposing tools with colliding names | `mcp__<server>__<tool>` namespacing; server failure degrades without crashing |
+| **Credentials** | API key in logs, session export, error messages | Key only in user-global `~/.emile/config.json`/env; file mode is `0600`, it is never included in output, and `/export` omits config and model reasoning unless explicitly opted in |
+| **MCP** | Malicious external server exposing tools with colliding names | Explicit `<server>__<tool>` tool map (direct lookup, collision-free even when a server name contains `__`); server failure degrades without crashing |
 | **API failures** | Raw provider responses may expose implementation details or sensitive error text | Common statuses are mapped to bounded actionable messages; original error objects remain internal for retry/fallback |
-| **Sessions** | History with sensitive content or unbounded tool output saved to disk; untrusted usage metadata | Sessions stay in `.emile/` (gitignored); reasoning is omitted, old tool results are bounded, usage stats are fixed numeric metadata, and cleanup accepts only positive ages |
+| **Sessions** | History with sensitive content or unbounded tool output saved to disk | Sessions stay in `.emile/` (gitignored); reasoning is omitted, old tool results are bounded, and cleanup accepts only positive ages |
+| **Global agent memory** | A false, malicious, stale or sensitive record could influence every workspace; corrupt/concurrent writes could lose personal state | `ask` default, exact current-user evidence, two-session auto corroboration, conflict review, strict private tools, dedicated root confinement, bounded snapshot/WAL recovery, no raw transcripts/secrets, transient prompt projection and complete application-level forget — see ADR-0004. The `type: "profile"` path (ADR-0005) bypasses `STABLE_EVIDENCE` only; quoted-source, task-specific, credential/identifier/sensitive-topic/bypass denials, exact-source binding, two-session `auto`, conflict state and full deletion remain authoritative. |
 | **Web search** | External results may be stale, malicious or unexpectedly billable | Search is explicit opt-in, provider-gated to OpenRouter, bounded to 5/15 results, and the UI warns that provider charges may apply; results remain untrusted model input |
 | **Session cwd** | A command could persist a directory outside the workspace | Shell-reported and persisted cwd values pass through `normalizeWorkspaceCwd`/`resolveSafePath`; invalid or external values fall back to the workspace root |
 | **Supply chain** | Malicious dependency | Justification + official origin + `npm audit` + lockfile for every new dependency |
@@ -49,6 +50,8 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 7. **No empty `catch`:** every caught exception is handled, logged (verbose) or propagated with context.
 8. **Dependencies:** no new ones without an ADR or justification recorded in the spec + `npm audit` run.
 9. **Provider-owned tools:** never send a provider-specific tool schema to another provider; web search remains disabled unless explicitly enabled and the owning provider is active.
+10. **Approval to run is not disclosure of the environment:** a subprocess spawned by a tool executes with `buildScrubbedEnv(process.env)` (`src/tools/security.js`) — secrets and injection-prone loader variables are removed by **name pattern** (case-insensitive, Windows-safe) and everything else survives. There is no toggle, flag or env var that narrows this list; an allow-by-list replacement is forbidden because it breaks arbitrary builds. Only the child is scrubbed — the emile process keeps its own environment.
+11. **Memory is never authority:** current user instructions and project rules outrank retrieved memory. Memory cannot approve tools, disable safe/dry-run/path gates, choose credentials or expose a storage/delete primitive to the model.
 
 ---
 
@@ -68,6 +71,7 @@ Classify every change **before** implementing. When in doubt, use the higher lev
 | **UI/TUI** | Verification at 60/80/120 columns; no ANSI leakage; `Esc`/`Ctrl+C` don't corrupt the readline; [design system](visual-identity.md#6-visual-review-checklist) checklist |
 | **MCP** | Missing/invalid server degrades with a warning and the CLI continues; first connection is fail-closed without interactive approval; remote URLs are limited to HTTP(S), header interpolation fails closed, reconnects are bounded, and nonexistent MCP tools return an error to the model |
 | **Provider web search** | Disabled by default; OpenRouter-only schema; bounded search parameters; no search tool is sent to other providers; cost warning and provider error classification are covered |
+| **Global agent memory (high)** | Path traversal/symlink/FIFO rejection; every durable commit interruption; corrupt snapshot and torn WAL; live/stale/stolen-lock concurrency; exact source binding and strict tool schemas; secret/identifier denial; instruction-priority regression; off/pause/dry-run; bounded retrieval; transient history redaction; full managed-copy purge; two-workspace compatibility |
 | **New dependency** | Justification + official origin + `npm audit` recorded in `tasks.md` |
 
 ---

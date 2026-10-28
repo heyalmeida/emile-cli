@@ -3,7 +3,8 @@
 // Model discovery belongs to commands.js/models.js. This module owns only
 // the terminal interaction and the deterministic filtering used by it.
 import readline from 'node:readline';
-import { C } from './theme.js';
+import { C, ROLE } from './theme.js';
+import { writeCursorUp } from './terminal-cursor.js';
 
 export const MODEL_PICKER_LIMIT = 7;
 
@@ -112,38 +113,40 @@ export function promptSearchPicker(options, {
       const visibleOptions = matchingOptions.slice(scrollOffset, scrollOffset + modelWindow);
 
       const lines = [
-        `${C.accent('?')} ${C.bold(sanitizeModelPickerText(message, Math.max(20, columns - 15)))}`,
-        `  ${C.muted('Search:')} ${C.fg(truncateForTerminal(query || 'type a model name', columns))}`,
+        `${ROLE.border.focused('?')} ${C.bold(sanitizeModelPickerText(message, Math.max(20, columns - 15)))}`,
+        `  ${ROLE.meta.label('Search:')} ${ROLE.user(truncateForTerminal(query || 'type a model name', columns))}`,
       ];
 
       if (total === 0) {
-        lines.push(`  ${C.warn(sanitizeModelPickerText(emptyMessage, Math.max(20, columns - 4)))}`);
+        lines.push(`  ${ROLE.warn(sanitizeModelPickerText(emptyMessage, Math.max(20, columns - 4)))}`);
       } else {
         for (const [offset, option] of visibleOptions.entries()) {
           const index = scrollOffset + offset;
           const selected = index === selectedIndex;
           const label = truncateForTerminal(option.label || option.value, columns);
-          const marker = selected ? C.accent('❯') : C.muted('·');
-          lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
+          const marker = selected ? ROLE.border.focused('❯') : ROLE.meta.label('·');
+          lines.push(`  ${marker} ${selected ? C.bold(ROLE.border.focused(label)) : ROLE.user(label)}`);
         }
         if (customOption) {
           const selected = selectedIndex === matchingOptions.length;
           const label = truncateForTerminal(customOption.label || customOption.value, columns);
-          const marker = selected ? C.accent('❯') : C.muted('·');
-          lines.push(`  ${marker} ${selected ? C.bold(C.accent(label)) : C.fg(label)}`);
+          const marker = selected ? ROLE.border.focused('❯') : ROLE.meta.label('·');
+          lines.push(`  ${marker} ${selected ? C.bold(ROLE.border.focused(label)) : ROLE.user(label)}`);
         }
       }
 
       if (matchingOptions.length > modelWindow) {
         const from = scrollOffset + 1;
         const to = Math.min(scrollOffset + modelWindow, matchingOptions.length);
-        lines.push(`  ${C.muted(`Showing ${from}–${to} of ${matchingOptions.length} ${sanitizeModelPickerText(itemLabel, 20)} — ↑↓ scroll · type to filter`)}`);
+        lines.push(`  ${ROLE.meta.label(`Showing ${from}–${to} of ${matchingOptions.length} ${sanitizeModelPickerText(itemLabel, 20)} — ↑↓ scroll · type to filter`)}`);
       }
-      lines.push(`  ${C.dim('↑↓ select  Enter choose  Esc cancel')}`);
+      lines.push(`  ${ROLE.meta.punct('↑↓ select  Enter choose  Esc cancel')}`);
 
-      if (lastRenderedHeight > 0) {
-        process.stdout.write(`\x1B[${lastRenderedHeight}A`);
-      }
+      // Viewport-clamped: the list is bounded (MODEL_PICKER_LIMIT), but a
+      // terminal shrunk between two renders must not be asked for a climb it
+      // cannot make — the frame would be repainted below the previous one
+      // (deep-dive § 7.2, the duplication family).
+      writeCursorUp(lastRenderedHeight);
       for (const line of lines) {
         process.stdout.write(`\r\x1B[K${line}\n`);
       }

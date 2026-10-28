@@ -90,7 +90,7 @@ Add `"engines": { "node": ">=18" }`. Single field change; no `engines` removal e
 | **File writes and `resolveSafePath`** | `persistence.js` writes only under `.emile/undo/<sessionId>/`. `path.js::isInsideUndoDir` checks `realpath` containment; any symlink that escapes is refused. `recovery.js` **never writes** to user files. |
 | **LLM inputs (prompt injection / tool args)** | `recovery.js` validates checkpoint JSON shape and does not pass it to any model call. `persistence.js` stores tool-argument paths verbatim; they are only re-evaluated when `/undo` reverts a write, which calls the existing `writeFile` handler. |
 | **Secrets (API keys, sessions, exports)** | `resolveApiKey` does not log keys. The verbose-mode `chmod` warning logs the **path** of the config file, not its contents. `/export` is unchanged. |
-| **Controls and negative tests** | `test/structure.test.js` (AC-11) checks every new module is ≤ 150 LOC and has a single responsibility (verified by an `eslint-plugin-boundaries` style check or a hand-written AST scan in the test). `test/lifecycle.test.js` covers re-entrancy, phase timeout, and signal ordering. `test/recovery.test.js` covers corrupt/legacy/recoverable classifications. `test/undo-persistence.test.js` covers cap overflow, rehydrate, and symlink refusal. `test/config-permissions.test.js` covers per-provider resolution and 0600 (mocked on Windows). |
+| **Controls and negative tests** | The ≤ 150 LOC gate (AC-11) is enforced by the ESLint `max-lines` rule in `.eslintrc.json`, replacing the retired `test/structure.test.js`; a single responsibility remains a review rule, not an automated one. `test/lifecycle.test.js` covers re-entrancy, phase timeout, and signal ordering. `test/recovery.test.js` covers corrupt/legacy/recoverable classifications. `test/undo-persistence.test.js` covers cap overflow, rehydrate, and symlink refusal. `test/config-permissions.test.js` covers per-provider resolution and 0600 (mocked on Windows). |
 
 ## 4. Impacted Modules
 
@@ -148,7 +148,7 @@ No new public API on the agent surface.
 | Create | `test/recovery.test.js` | Classifications |
 | Create | `test/undo-persistence.test.js` | Cap, rehydrate, symlink refusal |
 | Create | `test/config-permissions.test.js` | Per-provider, 0600 |
-| Create | `test/structure.test.js` | LOC + responsibility check |
+| Create | ~~`test/structure.test.js`~~ *(retired — superseded by the ESLint `max-lines` rule)* | LOC gate |
 | Modify | `docs/architecture.md` | New module rows |
 | Modify | `docs/IMPROVEMENTS.md` | Mark §§1.4, 1.5, 2.1, 3.3 as ✅ |
 | Modify | `CHANGELOG.md` | `[Unreleased]` entries |
@@ -175,7 +175,7 @@ No new public API on the agent surface.
 | AC-08 | Unit (`config-permissions.test.js`) | `tasks.md` Phase 2 |
 | AC-09 | Unit (`config-permissions.test.js`) + manual `ls -l` | `tasks.md` Phase 2 |
 | AC-10 | Manual `npm install` on Node 16 (in CI matrix if available) | `tasks.md` Phase 2 |
-| AC-11 | Unit (`structure.test.js`) | `tasks.md` Phase 2 |
+| AC-11 | Lint (ESLint `max-lines`) | `tasks.md` Phase 2 |
 | AC-12 | Unit (`lifecycle.test.js`) with a fake clock | `tasks.md` Phase 2 |
 
 Mandatory gates for every commit (per `docs/code-quality-and-security.md` §4):
@@ -211,5 +211,5 @@ Mandatory gates for every commit (per `docs/code-quality-and-security.md` §4):
 | A signal handler cannot run async work in older Node versions | Low | Node ≥ 18 supports async signal handlers; the README already requires it. The coordinator also installs a `process.on('exit')` (sync) as a safety net. |
 | `chmod 0600` rejected on some shared filesystems | Low | The function logs in `--verbose` and continues; the file is still written. |
 | `realpath` traversal check in `persistence.js` could false-positive on bind mounts | Low | Containment is checked with `path.relative` after `realpath`; `..` segments at the boundary are treated as outside. |
-| The refactor of `file-state.js` regresses an existing read-cache test | Medium | `test/structure.test.js` only enforces the new constraints; the existing `test/` is run after the refactor and any regression is fixed in the same commit. |
+| The refactor of `file-state.js` regresses an existing read-cache test | Medium | The LOC gate only constrains module size; the existing `test/` is run after the refactor and any regression is fixed in the same commit. |
 | `recovery.js` adds boot latency | Low | The scan is a directory read + JSON parse per session. With 50 sessions and the existing JSON size cap, it completes in tens of ms. |

@@ -4,7 +4,7 @@
 
 **A terminal-based AI coding agent that lives in your workspace.**
 
-Connects to any OpenAI-compatible LLM provider (Requesty, OpenRouter, OpenCode) with built-in tools, MCP integration, prompt caching, reasoning control, and a Claude Code–style streaming UI.
+Connects to LLM gateways (Requesty, OpenRouter, OpenCode Zen, OpenCode Go) out of the box, and to any **custom endpoint** speaking Anthropic Messages, OpenAI Chat Completions or OpenAI Responses through `/connect`, with built-in tools, MCP integration, prompt caching, reasoning control, and a Claude Code–style streaming UI.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/Node-%3E%3D18-green.svg)](https://nodejs.org)
@@ -28,14 +28,15 @@ This is a personal project that grew into something useful enough to share. It's
 - **Live reasoning streams** — watch the model think in real time before it writes code, with expand/collapse toggle
 - **Progressive response streaming** — assistant text appears inside the response box as provider deltas arrive; the waiting indicator remains visible through metadata-only chunks instead of leaving a silent gap
 - **Built-in file tools** — read, write, edit (diff-based), search, and run shell commands, all with safe-mode gating
-- **MCP integration** — connect external tool servers via Model Context Protocol (STDIO transport)
-- **Prompt caching** — Requesty provider supports cache headers to reduce cost on repeated context
-- **Reasoning effort control** — dial reasoning depth from `low` to `max` per session or per run
+- **MCP integration** — connect external tool servers via Model Context Protocol (stdio, SSE or HTTP transports)
+- **Prompt caching** — Requesty supports automatic prompt caching to reduce cost on repeated context
+- **Reasoning effort control** — dial reasoning depth from `min` to `max` (plus `none`) per session or per run
 - **Plans mode** — agent drafts an implementation plan and waits for your approval before touching files
-- **Skills system** — 40+ YAML-based skill modules (architecture, TDD, React patterns, security, etc.) that auto-inject into the system prompt when relevant
+- **Skills system** — skills are YAML-frontmatter `SKILL.md` files you place under `.agents/skills/` in your workspace; the agent auto-detects relevant ones from your project and task, or you activate a list explicitly with `-s` (no skills are bundled — bring your own)
 - **User-authored project rules** — optional `.emilerules` preferences, with compatible `AGENTS.md`/`.clinerules`/`.cursorrules` fallbacks
+- **User-global agent memory** — confirmed preferences, workflow conventions and recurring corrections follow you across workspaces and providers, with conservative learning and explicit inspection/deletion controls
 - **Session persistence** — conversations are saved per workspace; resume, switch, export to Markdown, or rewind to edit your last message
-- **Opt-in web search** — OpenRouter's provider-operated web search can be enabled per run or with `/websearch`; search charges may apply even on free model routes
+- **Opt-in web search** — OpenRouter's provider-operated web search (native mode) can be enabled per run or with `/websearch`; search charges may apply even on free model routes. An enhanced mode adds billable Tavily and Firecrawl tools, configured via `/tavily` and `/firecrawl`
 - **Context tracking and adaptive compression** — real token usage in the footer; history compresses at 80% of the active model's catalog window
 - **Claude Code–style UI** — boxed writing field, autocomplete for slash commands, `Esc` to cancel a draft, Tokyo Night color palette throughout
 - **Dynamic terminal title** — the tab reports real activity such as thinking, responding, context compression and safe tool summaries
@@ -72,7 +73,7 @@ On first run, `emile` will walk you through a setup wizard to pick a provider an
 ```bash
 export EMILE_PROVIDER=requesty
 export REQUESTY_API_KEY=your-key-here
-export EMILE_DEFAULT_MODEL=anthropic/claude-3.5-sonnet
+export EMILE_DEFAULT_MODEL=anthropic/claude-3-5-sonnet
 export EMILE_DEFAULT_EFFORT=low
 export EMILE_WEB_SEARCH=false   # set true only when OpenRouter search is wanted
 ```
@@ -85,6 +86,7 @@ emile "Add input validation to src/api.js"
 emile -m openai/gpt-4o -e high "Refactor the auth module"
 emile -p "Build a REST API for a todo app"   # plans mode
 emile -H                          # resume a previous session
+```
 
 ---
 
@@ -92,18 +94,18 @@ emile -H                          # resume a previous session
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-m, --model <model>` | Model ID (provider-prefixed, e.g. `anthropic/claude-3.5-sonnet`) | `anthropic/claude-3.5-sonnet` |
+| `-m, --model <model>` | Model ID (provider-prefixed, e.g. `anthropic/claude-3-5-sonnet`) | `anthropic/claude-3-5-sonnet` |
 | `-e, --effort <level>` | Reasoning effort: `low`, `medium`, `high`, `max`, `min`, `none` | `low` |
 | `-p, --plans` | Enable plans mode (agent drafts a plan before executing) | `false` |
 | `--no-cache` | Bypass prompt caching | caching on |
-| `-s, --skills <list>` | Comma-separated skills to activate (default: auto-detected and task-relevant) | `all` |
+| `-s, --skills <list>` | Comma-separated skills to activate; explicit lists bypass task-relevance filtering | `all` (auto-detect from workspace + task relevance) |
 | `-H, --history` | Select and resume a past session | `false` |
 | `--no-safe` | Bypass the safe-execution gate for shell commands | safe mode on |
 | `--dry-run` | Simulate file changes and command execution without writing | `false` |
 | `--web-search` | Enable OpenRouter web search; additional provider charges may apply | `false` |
 | `--export-thinking` | Include model reasoning in `/export` output (explicit opt-in) | `false` |
 | `--max-session-size <bytes>` | Maximum size of each persisted session snapshot; old tool results are trimmed when needed | `10485760` |
-| `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `40` |
+| `--max-loop-iterations <n>` | Maximum agent tool-loop iterations per turn (safety cap) | `90` |
 | `--verbose` | Show setup and MCP initialization logs | `false` |
 
 ---
@@ -114,8 +116,9 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 
 | Command | Description |
 |---------|-------------|
-| `/connect` | Reconfigure API provider and key |
-| `/model` | Search and switch the active model; type to filter or use ↑/↓ to scroll the full live list |
+| `/connect` | Credential manager for providers: keep/update/remove an already-configured provider without retyping keys, add a gateway, or register a **custom endpoint** (any API URL — Anthropic messages `/v1/messages`, Chat completions `/chat/completions` or Responses `/responses`) |
+| `/provider` | Switch between configured providers in two keystrokes; each keeps its own key and last-used model (masked listing; never prompts for a password) |
+| `/model` | Search and switch the active model; type to filter or use ↑/↓ to scroll the full live list; custom endpoints offer the saved model or manual entry |
 | `/switch` `/sessions` | Resume a previous session |
 | `/sessions clean <days>` | Delete saved sessions older than the specified number of days |
 | `/new` `/clear` | Start a fresh session |
@@ -124,9 +127,15 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 | `/cost` | Show cumulative token usage and estimated cost for the active saved session |
 | `/export [--export-thinking]` | Export the current session as Markdown; include reasoning only with explicit opt-in |
 | `/rules` | Inspect the active user-authored project rules source |
+| `/skills` `/skill` | Search available workspace skills (read-only metadata) |
+| `/memory [status\|list\|show\|mode\|pause\|resume\|accept\|reject\|doctor\|export\|clear]` | Inspect and control user-global memory; mode defaults to `ask` |
+| `/remember <preference or workflow>` | Store an explicit validated global memory; sensitive topics require confirmation |
+| `/forget <id or query>` | Forget one exact record or preview and confirm every ambiguous match |
 | `/thinking` | Toggle reasoning visibility (expanded by default; collapsed shows a ghost one-liner) |
-| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `40`); persists in the per-user configuration |
-| `/websearch` | Toggle OpenRouter provider web search; warns about possible additional charges |
+| `/maxloop <n>` | Set the agent tool-loop iteration cap (default `90` — `DEFAULT_MAX_LOOP_ITERATIONS` in `src/config.js`); persists in `~/.emile/config.json` |
+| `/websearch on\|off\|status\|native\|enhanced` | Control web search: `native` (OpenRouter provider search) or `enhanced` (Tavily/Firecrawl tools); warns about possible additional charges |
+| `/tavily on\|off\|status` | Enable/inspect the Tavily `searchWeb` tool (needs a Tavily key) |
+| `/firecrawl on\|off\|status` | Enable/inspect the Firecrawl `browsePage` tool (needs a Firecrawl key) |
 | `/help` | Show the in-app command reference |
 | `exit` | Quit the CLI |
 
@@ -143,13 +152,11 @@ Inside the interactive REPL, type `/` to see autocomplete. Available commands:
 
 **While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
 
-**While the agent is working** the same full prompt remains visible and writable: spinner, reasoning and response output stay above it, while the blinking cursor remains at the active draft. `Tab` completes slash commands, `Esc` or `Ctrl+C` cancel the current turn without closing the CLI, and text confirmed with `Enter` is queued for the next turn. Queued `/` lines run as slash commands between turns.
-
 ---
 
 ## Built-in tools
 
-The agent has direct access to these file-system and shell tools. All write operations are gated by safe mode (use `--no-safe` to bypass at your own risk).
+The agent has direct access to these file-system, shell and memory tools. Workspace writes and shell execution retain their existing path, dry-run and safe-mode gates.
 
 | Tool | What it does |
 |------|-------------|
@@ -159,32 +166,43 @@ The agent has direct access to these file-system and shell tools. All write oper
 | `listDir` | List directory contents |
 | `findFiles` | Find files by glob pattern |
 | `grepSearch` | Search file contents with regex |
-| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning |
+| `runCommand` | Execute shell commands (safe-mode gated, dry-run aware) with a workspace-contained session cwd; network-to-shell pipes receive an explicit injection warning, and the subprocess runs with a scrubbed environment (no provider key, `*SECRET*/*TOKEN*/*PASSWORD*/*CREDENTIAL*/*_PAT` name, `LD_PRELOAD`/`LD_LIBRARY_PATH`/`DYLD_*` loader variable or `EMILE_*` config reaches it — unrelated variables such as `PATH` survive) |
+| `proposeMemory` | Private candidate-only tool bound to an exact span of the current user message; it cannot activate, overwrite or delete memory |
+| `recallMemory` | Private read-only search over active global memory; results remain bounded lower-priority context |
 
-External tools from MCP servers are exposed alongside these with an `mcp__<server>__<tool>` naming convention.
+External tools from MCP servers are exposed alongside these with an `<server>__<tool>` naming convention.
 
-When enabled, OpenRouter web search is sent as a provider-operated server tool;
-it is not sent to Requesty or other providers. Search results are returned by
+When web search is on in `native` mode, OpenRouter web search is sent as a
+provider-operated server tool; it is not sent to Requesty or other providers. Search results are returned by
 the provider and should be treated as untrusted external data.
+
+When web search is on in `enhanced` mode (and the corresponding provider is enabled with a key), two additional billable tools are exposed:
+
+| Tool | What it does |
+|------|-------------|
+| `searchWeb` | Search the live web through Tavily — ranked sources, bounded images, basic/advanced depth |
+| `browsePage` | Render one public HTTP(S) page through Firecrawl as bounded Markdown (optionally a screenshot for visual analysis) |
 
 ---
 
 ## Skills system
 
-Skills are YAML-frontmatter markdown files in `.agent/skills/`. Each skill defines a `name`, `description`, and `keywords`. When the agent detects a keyword match in your prompt, the skill's body is injected into the system prompt — giving the model domain-specific guidance without bloating context on every turn.
+## Skills system
 
-The project ships with 40+ built-in skills:
+Skills are YAML-frontmatter markdown files in `.agents/skills/<name>/SKILL.md` in
+your workspace. That directory is the one canonical skills root — the `.agents/`
+spelling the wider agent-CLI ecosystem uses, so Emile reads the same folder you
+maintain. Each skill defines a `name`, `description`, and `keywords`. Only the
+`clean-code` starter is versioned with this repository; everything else is yours
+to bring.
 
-```
-architecture        clean-code          tdd-workflow        code-review-checklist
-react-patterns      nextjs-best-practices   tailwind-patterns   frontend-design
-python-patterns     nodejs-best-practices   database-design     api-patterns
-testing-patterns    systematic-debugging    performance-profiling   vulnerability-scanner
-deployment-procedures   server-management  bash-linux          powershell-windows
-seo-fundamentals    i18n-localization   mobile-design       game-development
-mcp-builder         plan-writing        documentation-templates  brainstorming
-parallel-agents     intelligent-routing  red-team-tactics   behavioral-modes
-```
+By default (`-s all`) the agent scans your workspace (e.g. `package.json`
+dependencies, `Dockerfile`, `requirements.txt`) and your current task, then
+activates only the matching skills — so their guidance is injected into the
+system prompt on demand instead of bloating context on every turn. Use
+`/skills` to search what is available. Explicit lists bypass the relevance
+filter. Each skill body is truncated at 8k characters, with a 24k cap on the
+total skills block.
 
 Activate a subset with `-s`:
 
@@ -192,7 +210,7 @@ Activate a subset with `-s`:
 emile -s clean-code,tdd-workflow,react-patterns "Refactor the dashboard components"
 ```
 
-Add your own by dropping a `SKILL.md` into `.agent/skills/your-skill/`:
+Add your own by dropping a `SKILL.md` into `.agents/skills/your-skill/`:
 
 ```yaml
 ---
@@ -207,7 +225,7 @@ Your markdown instructions here...
 
 ## MCP integration
 
-`emile` supports Model Context Protocol servers via STDIO transport. Configure servers in `mcp.json` at your project root:
+`emile` supports Model Context Protocol servers via stdio, SSE or HTTP transports. Configure servers in `mcp.json` at your project root — e.g. a local server via stdio:
 
 ```json
 {
@@ -221,7 +239,7 @@ Your markdown instructions here...
 }
 ```
 
-On startup, the CLI connects to each configured server, discovers its tools, and exposes them to the agent alongside the built-in tools. MCP tool calls are namespaced as `mcp__<server>__<tool>` to avoid collisions.
+On startup, the CLI connects to each configured server, discovers its tools, and exposes them to the agent alongside the built-in tools. MCP tool calls are namespaced as `<server>__<tool>` to avoid collisions.
 
 ---
 
@@ -234,24 +252,48 @@ On startup, the CLI connects to each configured server, discovers its tools, and
 | `EMILE_PROVIDER` | API provider: `requesty`, `openrouter`, `opencode`, `opencode-go` | `requesty` |
 | `REQUESTY_API_KEY` | API key for Requesty | — |
 | `OPENROUTER_API_KEY` | API key for OpenRouter | — |
-| `OPENCODE_API_KEY` | API key for OpenCode | — |
-| `EMILE_DEFAULT_MODEL` | Default model ID | `anthropic/claude-3.5-sonnet` |
+| `OPENCODE_API_KEY` | API key for OpenCode Zen and OpenCode Go | — |
+| `TAVILY_API_KEY` | Tavily key for the enhanced `searchWeb` tool | — |
+| `FIRECRAWL_API_KEY` | Firecrawl key for the enhanced `browsePage` tool | — |
+| `EMILE_DEFAULT_MODEL` | Default model ID | `anthropic/claude-3-5-sonnet` |
 | `EMILE_DEFAULT_EFFORT` | Default reasoning effort | `low` |
-| `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `40` |
-| `EMILE_CONFIG_DIR` | Override the per-user configuration directory (isolated runs/tests) | OS user config directory |
+| `EMILE_WEB_SEARCH` | Enable web search by default | `false` |
+| `EMILE_MAX_LOOP_ITERATIONS` | Maximum agent tool-loop iterations per turn | `90` |
 
 ### User configuration and credentials
 
-Provider/model settings are persisted in an OS user configuration directory and loaded on every startup, so the connect wizard is not required again when Emile is launched from another workspace. Provider API keys are never written to the settings JSON:
+User-wide settings and credentials are persisted in `~/.emile/config.json` (auto-created on first run via the connect wizard, written with mode `0600`), so provider setup follows the user across workspaces. This takes precedence over environment variables. The file is a **version-2 document with one credential slot per provider** (a legacy v1 file migrates on load):
 
-- **Windows:** credentials are encrypted with DPAPI for the current Windows user.
-- **macOS/Linux:** credentials are encrypted with AES-256-GCM in a separate credentials file; the fallback key file is owner-only where the platform supports POSIX modes. This protects the JSON/settings surface but is not equivalent to an OS keychain because the same OS user can access both files.
+```json
+{
+  "version": 2,
+  "activeProvider": "requesty",
+  "providers": {
+    "requesty":   { "apiKey": "your-key-here", "lastModel": "anthropic/claude-3-5-sonnet" },
+    "openrouter": { "apiKey": "another-key", "lastModel": "google/gemini-2.5-pro" },
+    "lm-studio":  { "apiKey": "", "baseURL": "http://localhost:1234/v1",
+                    "format": "chat-completions", "reasoningStyle": "chat_template_kwargs",
+                    "label": "LM Studio", "lastModel": "qwen2.5-coder-32b" }
+  },
+  "effort": "low",
+  "webSearch": false,
+  "maxLoopIterations": 90
+}
+```
 
-The workspace `.emile/` directory remains for sessions, undo history, MCP consent, enhanced web-search flags and other local runtime state. Tavily and Firecrawl credentials configured through `/tavily` and `/firecrawl` are also stored in protected credential storage, not in `.emile/web.json`. The exact user-config path can be overridden with `EMILE_CONFIG_DIR` for isolated environments and tests. Environment variables remain supported as a non-persistent fallback.
+Gateway slots carry `apiKey` + `lastModel`; custom endpoint slots also carry `baseURL`, `format` (`anthropic-messages` | `chat-completions` | `responses`) and, for `chat-completions`, an optional `reasoningStyle` naming the body key this endpoint uses for the reasoning effort (`reasoning_effort`, `reasoning`, `thinking`, `enable_thinking`, `chat_template_kwargs`, `effort`, `reasoningEffort` or `both`). Custom endpoints accept `http://` only for `localhost`/`127.0.0.1`. Keys are never shown beyond their last 4 characters in any listing.
+
+Workspace-scoped sessions, undo state and web configuration remain under the project's gitignored `.emile/` directory. `.agents/skills/` is your local skills root and is gitignored too — the repository versions only the `clean-code` starter skill inside it; the former `.agent/` directory is gitignored as well and is no longer read.
 
 ### Project rules
 
 To apply your own always-on preferences to a workspace, create `.emilerules` at its root. Emile does not generate default rules: the file belongs to you and its contents are sent to the active model on every session. Do not place secrets in it. If `.emilerules` is absent, Emile can reuse user-maintained `AGENTS.md`, `.clinerules`, or `.cursorrules` files, in that order. Use `/rules` to see which source is active.
+
+### User-global memory
+
+Emile keeps one provider-independent memory under `~/.emile/memory/v1/`; it is never copied into individual projects and does not depend on MCP. First use creates a schema-versioned store in `ask` mode with restrictive directory/file permissions where the platform supports them. The canonical state is JSON plus a short write-ahead log; `MEMORY.md` is a generated bounded overview, not an instruction file.
+
+Use `/remember` for an explicit preference, `/memory list` to inspect it, and `/forget` or confirmed `/memory clear` to remove Emile-managed copies. `/memory mode auto` only promotes inferred candidates after equivalent evidence from two distinct sessions; `/memory pause` disables reads and writes for the current process. Credentials and high-risk identifiers are rejected, sensitive topics require explicit confirmation, and `--dry-run` never mutates memory. Current user instructions and project rules always outrank memory.
 
 ### Supported providers
 
@@ -262,7 +304,7 @@ To apply your own always-on preferences to a workspace, create `.emilerules` at 
 | OpenCode | `https://opencode.ai/zen/v1` | Curated gateway; live model list searchable from `/model` |
 | OpenCode Go | `https://opencode.ai/zen/go/v1` | Curated open-source models; live model list searchable from `/model` |
 
-Any OpenAI-compatible endpoint works — the client uses the `openai` SDK under the hood.
+Any OpenAI-compatible endpoint works via `/connect` → **Custom endpoint**: the four gateways above are just presets. Custom slots speak three wire formats — Anthropic Messages (`/v1/messages`), OpenAI Chat Completions (`/chat/completions`, via the `openai` SDK) and OpenAI Responses (`/responses`) — and their streamed output is normalized internally, so the agent loop behaves identically. Local servers on `http://localhost`/`127.0.0.1` need no key. Switch between all configured providers with `/provider`.
 
 ---
 
@@ -273,23 +315,28 @@ emile-cli/
 ├── bin/
 │   └── emile.js            # Entry point
 ├── src/
-│   ├── cli.js              # Command parsing, REPL loop, slash commands
+│   ├── cli.js              # Command parsing, REPL loop
 │   ├── config.js           # Config load/save, env var resolution
-│   ├── models.js           # Dynamic OpenRouter model catalog + static fallback
+│   ├── models.js           # Model catalogs (OpenRouter, OpenCode Zen/Go) + static fallback
 │   ├── ui/model-picker.js  # Bounded incremental /model search UI
 │   ├── prompt.js           # System prompt assembly
 │   ├── rules.js            # Optional user-authored project rules discovery
-│   ├── skills.js           # YAML skill parsing + keyword matching
+│   ├── skills.js           # YAML skill parsing + workspace detection + relevance matching
 │   ├── plans.js            # Plans mode: draft, approval, status
 │   ├── history.js          # Session persistence (save/restore/list)
 │   ├── mcp.js              # MCP server lifecycle + tool bridging
-│   ├── commands.js         # Connect/model wizards
+│   ├── recovery.js         # Startup recovery of interrupted sessions
+│   ├── commands.js         # Connect/provider/model wizards (incl. custom endpoints)
+│   ├── commands/           # Slash-command registry, dispatch and handlers
 │   ├── agent/              # Agent loop, session stats, history compression
-│   ├── api/                # OpenAI-compatible client + retry
+│   ├── api/                # Provider client + per-format transports (chat-completions, anthropic-messages, responses) + retry
+│   ├── lifecycle/          # Ordered shutdown phases (drain, flushes, close, restore)
+│   ├── memory/             # Global formation, retrieval and crash-safe storage
 │   ├── tools/              # Tool schemas, security gates, per-tool handlers
+│   ├── web/                # Enhanced web tools (Tavily/Firecrawl) + security gates
 │   └── ui/                 # Terminal rendering (theme, boxes, prompt, thinking…)
-├── .agent/skills/          # Skill modules (YAML frontmatter + markdown)
-├── .emile/                 # Workspace runtime state: sessions, undo, MCP consent (gitignored)
+├── .agents/skills/         # Your workspace skills (gitignored; add your own SKILL.md)
+├── .emile/                 # Runtime config + session storage (gitignored)
 ├── mcp.json                # MCP server configuration
 └── package.json
 ```
@@ -355,7 +402,7 @@ This project follows formal Software Engineering practices (documentation as the
 | [Code Improvements](./docs/IMPROVEMENTS.md) | Prioritized codebase improvement backlog (robustness, security, testing) | 🟢 Current |
 | [Decisions (ADRs)](./docs/adr/) | Architecture decisions (stack, quality gates, active prompt output) | 🟢 Current |
 
-> The [`.agent/`](./.agent/) directory contains generic AI agent kit configuration (agents, skills, workflows) — it is not product documentation.
+> `.agents/skills/` is the workspace skills root the CLI reads (`src/skills.js`), and `.agent/` is the former spelling it no longer scans — both are local, gitignored directories, not product documentation.
 
 ---
 
@@ -363,9 +410,9 @@ This project follows formal Software Engineering practices (documentation as the
 
 This is a personal project, but issues and pull requests are welcome. See the [contribution guide](./CONTRIBUTING.md) for the full SDD workflow, branch/commit conventions, and quality gates. Quick pointers:
 
-- **New skill**: Add `.agent/skills/your-skill/SKILL.md` with valid YAML frontmatter
-- **New tool**: Add a definition + handler to `src/tools.js` following the existing pattern
-- **New provider**: Add a `baseURL` branch in `src/api.js` and an env var in `src/config.js`
+- **New skill**: Add `.agents/skills/your-skill/SKILL.md` with valid YAML frontmatter
+- **New tool**: Add a definition to `src/tools/definitions.js` and a handler under `src/tools/handlers/`, following the existing pattern
+- **New provider**: Add a `baseURL` branch in `src/api/client.js` and an env var in `src/config.js`
 - **Bug fix**: Open an issue with reproduction steps, or submit a PR with a clear description
 
 ### Development

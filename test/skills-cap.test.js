@@ -9,7 +9,7 @@ import { compileSkills } from '../src/skills.js';
 import { config } from '../src/config.js';
 
 function writeSkill(workspace, name, content) {
-  const dir = path.join(workspace, '.agent', 'skills', name);
+  const dir = path.join(workspace, '.agents', 'skills', name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'SKILL.md'), content, 'utf8');
 }
